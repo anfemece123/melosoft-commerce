@@ -1,0 +1,288 @@
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Outlet, matchPath, useLocation, useNavigationType } from 'react-router-dom';
+import { CartDrawer } from '@/components/public/cart/CartDrawer';
+import { StorefrontFooter } from '@/components/public/storefront/StorefrontFooter';
+import { StorefrontHeader } from '@/components/public/storefront/StorefrontHeader';
+import { StorefrontPageLoader } from '@/components/public/storefront/StorefrontPageLoader';
+import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
+import { storesService } from '@/features/stores/storesService';
+import {
+  canUseWebOrders,
+  getCatalogLabel,
+  getCatalogSearchPlaceholder,
+  type PublicCommerceConfig,
+} from '@/lib/commerce/commerceConfig.utils';
+import { CartProvider, useCart } from '@/lib/cart/cartContext';
+import type { PublicStorePage } from '@/types/common.types';
+import { readCachedPublicStoreBranding, writeCachedPublicStoreBranding } from '@/lib/storefront/publicStoreBrandingCache';
+import { PublicStoreBrandingProvider } from './PublicStoreBrandingContext';
+import { PublicLocationProvider } from '@/lib/locations/locationContext';
+import { PublicRouteReadyProvider } from './PublicRouteReadyContext';
+import { readPublicScrollPosition, writePublicScrollPosition } from '@/lib/storefront/publicScrollRestoration';
+import { useSelectedLocation } from '@/lib/locations/locationContext';
+
+export function PublicLayout() {
+  const location = useLocation();
+  const matchedRoute = [
+    matchPath('/s/:storeSlug/p/:productSlug', location.pathname),
+    matchPath('/s/:storeSlug/o/:offerSlug', location.pathname),
+    matchPath('/s/:storeSlug/policies', location.pathname),
+    matchPath('/s/:storeSlug', location.pathname),
+  ].find(Boolean);
+  const storeSlug = matchedRoute?.params.storeSlug ?? null;
+
+  const [branding, setBranding] = useState<PublicStorePage | null>(() =>
+    storeSlug ? readCachedPublicStoreBranding(storeSlug) : null
+  );
+  const [loading, setLoading] = useState(Boolean(storeSlug && !branding));
+
+  useEffect(() => {
+    if (!storeSlug) {
+      setBranding(null);
+      setLoading(false);
+      return;
+    }
+
+    const resolvedStoreSlug = storeSlug;
+    const cachedBranding = readCachedPublicStoreBranding(resolvedStoreSlug);
+    if (cachedBranding) {
+      setBranding(cachedBranding);
+      setLoading(false);
+    } else {
+      setBranding(null);
+      setLoading(true);
+    }
+
+    let cancelled = false;
+
+    async function loadBranding() {
+      try {
+        const data = await storesService.getPublicStoreBySlug(resolvedStoreSlug);
+        if (cancelled) return;
+        setBranding(data);
+        writeCachedPublicStoreBranding(resolvedStoreSlug, data);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadBranding();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [storeSlug]);
+
+  if (storeSlug && loading && !branding) {
+    return <div className="min-h-screen bg-white" />;
+  }
+
+  return (
+    <PublicStoreBrandingProvider value={{ storeSlug, branding, loading }}>
+      {storeSlug ? (
+        <PublicLocationProvider storeSlug={storeSlug}>
+          <CartProvider storeSlug={storeSlug}>
+            <PublicStoreShell storeSlug={storeSlug} branding={branding} loading={loading} />
+          </CartProvider>
+        </PublicLocationProvider>
+      ) : (
+        <div className="min-h-screen bg-gray-50">
+          <Outlet />
+        </div>
+      )}
+    </PublicStoreBrandingProvider>
+  );
+}
+
+function PublicStoreShell({
+  storeSlug,
+  branding,
+  loading,
+}: {
+  storeSlug: string;
+  branding: PublicStorePage | null;
+  loading: boolean;
+}) {
+  const location = useLocation();
+  const navigationType = useNavigationType();
+  const { totalItems } = useCart();
+  const { locations } = useSelectedLocation();
+  const [cartOpen, setCartOpen] = useState(false);
+  const [routeReady, setRouteReady] = useState(false);
+  const routeKey = `${location.pathname}${location.search}${location.hash}`;
+  const pendingScrollModeRef = useRef<'restore' | 'top'>('top');
+
+  const commerceConfig: PublicCommerceConfig = {
+    catalogType: branding?.catalogType ?? null,
+    commerceMode: branding?.commerceMode ?? null,
+    allowsPickup: branding?.allowsPickup ?? null,
+    allowsLocalDelivery: branding?.allowsLocalDelivery ?? null,
+    allowsNationalShipping: branding?.allowsNationalShipping ?? null,
+    whatsappCheckoutEnabled: branding?.whatsappCheckoutEnabled ?? null,
+    webOrderEnabled: branding?.webOrderEnabled ?? null,
+    cashOnDeliveryEnabled: branding?.cashOnDeliveryEnabled ?? null,
+    onlineCheckoutEnabled: branding?.onlineCheckoutEnabled ?? null,
+    localDeliveryNotes: branding?.localDeliveryNotes ?? null,
+    shippingNotes: branding?.shippingNotes ?? null,
+  };
+  const theme = buildStorefrontTheme({
+    mode: branding?.themeMode,
+    primaryColor: branding?.primaryColor,
+    secondaryColor: branding?.secondaryColor,
+    accentColor: branding?.accentColor,
+    backgroundColor: branding?.backgroundColor,
+    textColor: branding?.textColor,
+    buttonRadius: branding?.buttonRadius,
+  });
+  const hasHeroRoute = Boolean(matchPath('/s/:storeSlug', location.pathname));
+  const hasHero = hasHeroRoute && branding?.heroEnabled !== false;
+  const searchPlaceholder = getCatalogSearchPlaceholder(commerceConfig);
+  const catalogLabel = getCatalogLabel(commerceConfig);
+  const showCart = canUseWebOrders(commerceConfig);
+  const whatsappHref = branding?.whatsappNumber
+    ? `https://wa.me/${branding.whatsappNumber.replace(/\D/g, '')}`
+    : null;
+
+  useEffect(() => {
+    if (!('scrollRestoration' in window.history)) return;
+    const previous = window.history.scrollRestoration;
+    window.history.scrollRestoration = 'manual';
+    return () => {
+      window.history.scrollRestoration = previous;
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    setRouteReady(false);
+    pendingScrollModeRef.current =
+      location.state?.restoreScroll === true || navigationType === 'POP'
+        ? 'restore'
+        : 'top';
+
+    if (location.state?.restoreScroll !== true && navigationType !== 'POP') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    }
+  }, [location.state, routeKey, navigationType]);
+
+  useEffect(() => {
+    let ticking = false;
+
+    function persistScrollPosition() {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(() => {
+        writePublicScrollPosition(routeKey, window.scrollY);
+        ticking = false;
+      });
+    }
+
+    persistScrollPosition();
+    window.addEventListener('scroll', persistScrollPosition, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', persistScrollPosition);
+      writePublicScrollPosition(routeKey, window.scrollY);
+    };
+  }, [routeKey]);
+
+  useEffect(() => {
+    function handleBeforeUnload() {
+      writePublicScrollPosition(routeKey, window.scrollY);
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [routeKey]);
+
+  useEffect(() => {
+    if (!routeReady) return;
+
+    let timeoutId: number | null = null;
+
+    const restore = (attempt = 0) => {
+      if (pendingScrollModeRef.current === 'restore') {
+        const restoreKey = typeof location.state?.restoreScrollKey === 'string'
+          ? location.state.restoreScrollKey
+          : routeKey;
+        const scrollTop = readPublicScrollPosition(restoreKey);
+        const maxScrollableTop = Math.max(
+          0,
+          document.documentElement.scrollHeight - window.innerHeight
+        );
+
+        if (scrollTop > maxScrollableTop && attempt < 12) {
+          timeoutId = window.setTimeout(() => restore(attempt + 1), 60);
+          return;
+        }
+
+        window.scrollTo({
+          top: Math.min(scrollTop, maxScrollableTop),
+          left: 0,
+          behavior: 'auto',
+        });
+      } else {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      }
+    };
+
+    const frameId = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => restore());
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [location.state, routeKey, routeReady]);
+
+  return (
+    <PublicRouteReadyProvider value={{ setRouteReady }}>
+      <div className="min-h-screen" style={{ backgroundColor: theme.background }}>
+        {branding ? (
+          <StorefrontHeader
+            theme={theme}
+            storeName={branding.storeName}
+            storeSlug={storeSlug}
+            logoUrl={branding.logoUrl}
+            searchPlaceholder={searchPlaceholder}
+            catalogLabel={catalogLabel}
+            whatsappHref={whatsappHref}
+            hasHero={hasHero}
+            showCart={showCart}
+            cartCount={totalItems}
+            onCartOpen={() => setCartOpen(true)}
+          />
+        ) : null}
+
+        {loading && branding ? (
+          <StorefrontPageLoader branding={branding} label="Preparando la experiencia de esta empresa." />
+        ) : (
+          <Outlet />
+        )}
+
+        {branding ? (
+          <StorefrontFooter
+            theme={theme}
+            branding={branding}
+            locations={locations}
+          />
+        ) : null}
+
+        {branding ? (
+          <CartDrawer
+            open={cartOpen}
+            onClose={() => setCartOpen(false)}
+            theme={theme}
+            storeName={branding.storeName}
+            storeSlug={storeSlug}
+            whatsappNumber={branding.whatsappNumber}
+            allowsPickup={branding.allowsPickup}
+            allowsLocalDelivery={branding.allowsLocalDelivery}
+          />
+        ) : null}
+      </div>
+    </PublicRouteReadyProvider>
+  );
+}
