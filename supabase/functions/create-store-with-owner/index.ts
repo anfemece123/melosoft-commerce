@@ -40,7 +40,8 @@ interface CreateStoreWithOwnerPayload {
   name: string;
   slug: string;
   slogan: string | null;
-  businessType: string;
+  businessVertical: string;
+  businessSubcategory: string;
   description: string;
   logoUrl: string | null;
   supportEmail: string | null;
@@ -81,58 +82,104 @@ interface CommerceDefaults {
   allows_local_delivery: boolean;
   allows_national_shipping: boolean;
   whatsapp_checkout_enabled: boolean;
+  web_order_enabled: boolean;
   online_checkout_enabled: boolean;
+  cash_on_delivery_enabled: boolean;
   default_order_method: string;
+  order_flow_type: string;
+  has_inventory: boolean;
+  has_variants: boolean;
+  has_leads: boolean;
 }
 
-function getCommerceDefaults(businessType: string): CommerceDefaults {
-  if (businessType === 'restaurante') {
-    return {
-      business_category: 'restaurant',
-      catalog_type: 'menu',
-      commerce_mode: 'local_delivery_and_pickup',
-      delivery_mode: 'local_delivery',
-      allows_pickup: true,
-      allows_local_delivery: true,
-      allows_national_shipping: false,
-      whatsapp_checkout_enabled: true,
-      online_checkout_enabled: false,
-      default_order_method: 'whatsapp',
-    };
+function getCommerceDefaults(businessVertical: string): CommerceDefaults {
+  switch (businessVertical) {
+    case 'food_restaurant':
+      return {
+        business_category: 'restaurant',
+        catalog_type: 'menu',
+        commerce_mode: 'local_delivery_and_pickup',
+        delivery_mode: 'local_delivery',
+        allows_pickup: true,
+        allows_local_delivery: true,
+        allows_national_shipping: false,
+        whatsapp_checkout_enabled: true,
+        web_order_enabled: true,
+        online_checkout_enabled: false,
+        cash_on_delivery_enabled: true,
+        default_order_method: 'whatsapp',
+        order_flow_type: 'restaurant',
+        has_inventory: false,
+        has_variants: false,
+        has_leads: false,
+      };
+    case 'catalog_quote':
+      return {
+        business_category: 'other',
+        catalog_type: 'physical_products',
+        commerce_mode: 'catalog_only',
+        delivery_mode: 'none',
+        allows_pickup: false,
+        allows_local_delivery: false,
+        allows_national_shipping: false,
+        whatsapp_checkout_enabled: true,
+        web_order_enabled: false,
+        online_checkout_enabled: false,
+        cash_on_delivery_enabled: false,
+        default_order_method: 'whatsapp',
+        order_flow_type: 'quote',
+        has_inventory: false,
+        has_variants: false,
+        has_leads: true,
+      };
+    case 'real_estate':
+      return {
+        business_category: 'other',
+        catalog_type: 'physical_products',
+        commerce_mode: 'catalog_only',
+        delivery_mode: 'none',
+        allows_pickup: false,
+        allows_local_delivery: false,
+        allows_national_shipping: false,
+        whatsapp_checkout_enabled: true,
+        web_order_enabled: false,
+        online_checkout_enabled: false,
+        cash_on_delivery_enabled: false,
+        default_order_method: 'whatsapp',
+        order_flow_type: 'lead',
+        has_inventory: false,
+        has_variants: false,
+        has_leads: true,
+      };
+    default: // retail_products
+      return {
+        business_category: 'retail',
+        catalog_type: 'physical_products',
+        commerce_mode: 'national_shipping',
+        delivery_mode: 'national_shipping',
+        allows_pickup: true,
+        allows_local_delivery: true,
+        allows_national_shipping: true,
+        whatsapp_checkout_enabled: true,
+        web_order_enabled: true,
+        online_checkout_enabled: false,
+        cash_on_delivery_enabled: false,
+        default_order_method: 'whatsapp',
+        order_flow_type: 'ecommerce',
+        has_inventory: true,
+        has_variants: false,
+        has_leads: false,
+      };
   }
-  if (businessType === 'barberia' || businessType === 'salud') {
-    return {
-      business_category: 'services',
-      catalog_type: 'services',
-      commerce_mode: 'local_orders',
-      delivery_mode: 'none',
-      allows_pickup: false,
-      allows_local_delivery: false,
-      allows_national_shipping: false,
-      whatsapp_checkout_enabled: true,
-      online_checkout_enabled: false,
-      default_order_method: 'whatsapp',
-    };
+}
+
+function verticalToLegacyBusinessType(vertical: string): string {
+  switch (vertical) {
+    case 'food_restaurant': return 'restaurante';
+    case 'catalog_quote': return 'otro';
+    case 'real_estate': return 'otro';
+    default: return 'otro'; // retail_products → no single legacy type; use 'otro'
   }
-  const categoryMap: Record<string, string> = {
-    moda: 'fashion',
-    belleza: 'beauty',
-    tecnologia: 'technology',
-    mascotas: 'pets',
-    hogar: 'home',
-  };
-  return {
-    business_category: categoryMap[businessType] ?? 'other',
-    catalog_type: 'physical_products',
-    commerce_mode: 'catalog_only',
-    delivery_mode: 'none',
-    allows_pickup: false,
-    allows_local_delivery: false,
-    allows_national_shipping: false,
-    whatsapp_checkout_enabled: true,
-    online_checkout_enabled: false,
-    default_order_method: 'whatsapp',
-  };
 }
 
 // ── CORS ──────────────────────────────────────────────────────
@@ -242,7 +289,7 @@ Deno.serve(async (req) => {
 
   const required: (keyof CreateStoreWithOwnerPayload)[] = [
     'ownerFullName', 'ownerEmail', 'ownerPhone',
-    'name', 'slug', 'businessType', 'description', 'whatsappNumber',
+    'name', 'slug', 'businessVertical', 'businessSubcategory', 'description', 'whatsappNumber',
     'country', 'city', 'currency', 'mode', 'themePreset',
   ];
   for (const field of required) {
@@ -336,7 +383,9 @@ Deno.serve(async (req) => {
       name: payload.name,
       slug: payload.slug,
       slogan: payload.slogan ?? null,
-      business_type: payload.businessType,
+      business_type: verticalToLegacyBusinessType(payload.businessVertical),
+      business_vertical: payload.businessVertical,
+      business_subcategory: payload.businessSubcategory || null,
       description: payload.description,
       logo_url: payload.logoUrl ?? null,
       support_email: payload.supportEmail ?? null,
@@ -442,7 +491,7 @@ Deno.serve(async (req) => {
   // by the on_store_created trigger (migration 004).
 
   // ── Create commerce settings ─────────────────────────────
-  const commerceDefaults = getCommerceDefaults(payload.businessType);
+  const commerceDefaults = getCommerceDefaults(payload.businessVertical);
   const { error: commerceError } = await adminClient
     .from('store_commerce_settings')
     .insert({

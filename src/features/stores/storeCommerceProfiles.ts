@@ -1,12 +1,14 @@
 import type {
   BusinessCategory,
   BusinessType,
+  BusinessVertical,
   CatalogType,
   CommerceMode,
   DeliveryMode,
+  OrderFlowType,
   OrderMethod,
 } from '@/types/common.types';
-import type { StoreCommerceSettingsUpdate } from './storeCommerce.types';
+import type { StoreCommerceSettings, StoreCommerceSettingsUpdate } from './storeCommerce.types';
 
 export interface CommerceProfile {
   category: BusinessCategory;
@@ -40,20 +42,19 @@ export const COMMERCE_PROFILES: Record<BusinessCategory, CommerceProfile> = {
     allowWebsiteOrders: true,
     allowCashOnDelivery: true,
   },
-  services: {
-    category: 'services',
-    label: 'Servicios',
-    description: 'Venta por contacto directo. La contratación se concreta por WhatsApp, sin checkout ni envíos.',
-    lockedCatalogType: 'services',
-    allowedCatalogTypes: ['services'],
-    allowedCommerceModes: ['catalog_only'],
-    allowedDeliveryModes: ['none'],
-    allowPickup: false,
-    allowLocalDelivery: false,
-    allowNationalShipping: false,
+  retail: {
+    category: 'retail',
+    label: 'Venta de productos',
+    description: 'Catálogo de productos con carrito, checkout y opciones de envío local y nacional.',
+    allowedCatalogTypes: ['physical_products'],
+    allowedCommerceModes: ['catalog_only', 'local_orders', 'local_delivery_and_pickup', 'national_shipping', 'mixed'],
+    allowedDeliveryModes: ['none', 'pickup_only', 'local_delivery', 'national_shipping', 'local_and_national'],
+    allowPickup: true,
+    allowLocalDelivery: true,
+    allowNationalShipping: true,
     allowWhatsappOrders: true,
-    allowWebsiteOrders: false,
-    allowCashOnDelivery: false,
+    allowWebsiteOrders: true,
+    allowCashOnDelivery: true,
   },
   fashion: {
     category: 'fashion',
@@ -69,25 +70,11 @@ export const COMMERCE_PROFILES: Record<BusinessCategory, CommerceProfile> = {
     allowWebsiteOrders: true,
     allowCashOnDelivery: true,
   },
-  retail: {
-    category: 'retail',
-    label: 'Productos físicos',
-    description: 'Catálogo de productos con operación local y/o nacional.',
-    allowedCatalogTypes: ['physical_products'],
-    allowedCommerceModes: ['catalog_only', 'local_orders', 'local_delivery_and_pickup', 'national_shipping', 'mixed'],
-    allowedDeliveryModes: ['none', 'pickup_only', 'local_delivery', 'national_shipping', 'local_and_national'],
-    allowPickup: true,
-    allowLocalDelivery: true,
-    allowNationalShipping: true,
-    allowWhatsappOrders: true,
-    allowWebsiteOrders: true,
-    allowCashOnDelivery: true,
-  },
   beauty: {
     category: 'beauty',
     label: 'Belleza',
-    description: 'Puede vender productos físicos o agendar servicios por WhatsApp.',
-    allowedCatalogTypes: ['physical_products', 'services'],
+    description: 'Venta de productos de belleza y cosméticos. Domicilio local y retiro en tienda.',
+    allowedCatalogTypes: ['physical_products'],
     allowedCommerceModes: ['catalog_only', 'local_orders', 'local_delivery_and_pickup'],
     allowedDeliveryModes: ['none', 'pickup_only', 'local_delivery'],
     allowPickup: true,
@@ -139,6 +126,23 @@ export const COMMERCE_PROFILES: Record<BusinessCategory, CommerceProfile> = {
     allowWebsiteOrders: true,
     allowCashOnDelivery: true,
   },
+  services: {
+    // Legacy: kept for DB compatibility with stores created before 034 migration.
+    // New stores do NOT use this category.
+    category: 'services',
+    label: 'Catálogo',
+    description: 'Solo catálogo público. Los clientes contactan por WhatsApp.',
+    lockedCatalogType: 'services',
+    allowedCatalogTypes: ['services'],
+    allowedCommerceModes: ['catalog_only'],
+    allowedDeliveryModes: ['none'],
+    allowPickup: false,
+    allowLocalDelivery: false,
+    allowNationalShipping: false,
+    allowWhatsappOrders: true,
+    allowWebsiteOrders: false,
+    allowCashOnDelivery: false,
+  },
   other: {
     category: 'other',
     label: 'General',
@@ -155,6 +159,10 @@ export const COMMERCE_PROFILES: Record<BusinessCategory, CommerceProfile> = {
   },
 };
 
+// ── Legacy business_type → business_category mapping ─────────
+// Only used as fallback in StoreSettingsPage for stores without
+// store_commerce_settings. New stores always use business_vertical.
+
 export function mapBusinessTypeToBusinessCategory(businessType: BusinessType | null | undefined): BusinessCategory {
   switch (businessType) {
     case 'restaurante':
@@ -162,7 +170,6 @@ export function mapBusinessTypeToBusinessCategory(businessType: BusinessType | n
     case 'moda':
       return 'fashion';
     case 'belleza':
-    case 'barberia':
       return 'beauty';
     case 'tecnologia':
       return 'technology';
@@ -170,8 +177,10 @@ export function mapBusinessTypeToBusinessCategory(businessType: BusinessType | n
       return 'pets';
     case 'hogar':
       return 'home';
+    // barberia and salud mapped to retail — services vertical is no longer assigned to these
     case 'salud':
-      return 'services';
+    case 'barberia':
+      return 'retail';
     default:
       return 'other';
   }
@@ -180,6 +189,122 @@ export function mapBusinessTypeToBusinessCategory(businessType: BusinessType | n
 export function getCommerceProfile(category: BusinessCategory): CommerceProfile {
   return COMMERCE_PROFILES[category] ?? COMMERCE_PROFILES.other;
 }
+
+// ── Business vertical presets ────────────────────────────────
+
+export interface BusinessVerticalPreset {
+  businessCategory: BusinessCategory;
+  catalogType: CatalogType;
+  commerceMode: CommerceMode;
+  deliveryMode: DeliveryMode;
+  webOrderEnabled: boolean;
+  onlineCheckoutEnabled: boolean;
+  cashOnDeliveryEnabled: boolean;
+  whatsappCheckoutEnabled: boolean;
+  allowsPickup: boolean;
+  allowsLocalDelivery: boolean;
+  allowsNationalShipping: boolean;
+  orderFlowType: OrderFlowType;
+  hasInventory: boolean;
+  hasVariants: boolean;
+  hasLeads: boolean;
+}
+
+export const BUSINESS_VERTICAL_PRESETS: Record<BusinessVertical, BusinessVerticalPreset> = {
+  food_restaurant: {
+    businessCategory: 'restaurant',
+    catalogType: 'menu',
+    commerceMode: 'local_delivery_and_pickup',
+    deliveryMode: 'local_delivery',
+    webOrderEnabled: true,
+    onlineCheckoutEnabled: false,
+    cashOnDeliveryEnabled: true,
+    whatsappCheckoutEnabled: true,
+    allowsPickup: true,
+    allowsLocalDelivery: true,
+    allowsNationalShipping: false,
+    orderFlowType: 'restaurant',
+    hasInventory: false,
+    hasVariants: false,
+    hasLeads: false,
+  },
+  retail_products: {
+    businessCategory: 'retail',
+    catalogType: 'physical_products',
+    commerceMode: 'national_shipping',
+    deliveryMode: 'national_shipping',
+    webOrderEnabled: true,
+    onlineCheckoutEnabled: false,
+    cashOnDeliveryEnabled: false,
+    whatsappCheckoutEnabled: true,
+    allowsPickup: true,
+    allowsLocalDelivery: true,
+    allowsNationalShipping: true,
+    orderFlowType: 'ecommerce',
+    hasInventory: true,
+    hasVariants: false,
+    hasLeads: false,
+  },
+  catalog_quote: {
+    businessCategory: 'other',
+    catalogType: 'physical_products',
+    commerceMode: 'catalog_only',
+    deliveryMode: 'none',
+    webOrderEnabled: false,
+    onlineCheckoutEnabled: false,
+    cashOnDeliveryEnabled: false,
+    whatsappCheckoutEnabled: true,
+    allowsPickup: false,
+    allowsLocalDelivery: false,
+    allowsNationalShipping: false,
+    orderFlowType: 'quote',
+    hasInventory: false,
+    hasVariants: false,
+    hasLeads: true,
+  },
+  real_estate: {
+    businessCategory: 'other',
+    catalogType: 'physical_products',
+    commerceMode: 'catalog_only',
+    deliveryMode: 'none',
+    webOrderEnabled: false,
+    onlineCheckoutEnabled: false,
+    cashOnDeliveryEnabled: false,
+    whatsappCheckoutEnabled: true,
+    allowsPickup: false,
+    allowsLocalDelivery: false,
+    allowsNationalShipping: false,
+    orderFlowType: 'lead',
+    hasInventory: false,
+    hasVariants: false,
+    hasLeads: true,
+  },
+};
+
+// ── Order flow type resolution ───────────────────────────────
+
+export function getOrderFlowType(settings: StoreCommerceSettings | null): OrderFlowType {
+  if (!settings) return 'ecommerce';
+  if (settings.orderFlowType) return settings.orderFlowType;
+  // Fallback for stores that pre-date the 034 migration
+  return settings.businessCategory === 'restaurant' || settings.catalogType === 'menu'
+    ? 'restaurant'
+    : 'ecommerce';
+}
+
+// ── Default hero CTA by vertical ────────────────────────────
+
+export function getDefaultHeroCta(vertical: BusinessVertical | null | undefined): string {
+  switch (vertical) {
+    case 'food_restaurant': return 'Ver menú';
+    case 'retail_products': return 'Ver productos';
+    case 'catalog_quote': return 'Ver catálogo';
+    case 'real_estate': return 'Ver propiedades';
+    default: return 'Ver productos';
+  }
+}
+
+// ── Commerce settings normalization ─────────────────────────
 
 export interface NormalizableCommerceSettings {
   businessCategory: BusinessCategory;
@@ -214,20 +339,22 @@ export function normalizeCommerceSettings<T extends NormalizableCommerceSettings
   const allowsNationalShipping = profile.allowNationalShipping ? values.allowsNationalShipping : false;
   let whatsappCheckoutEnabled = profile.allowWhatsappOrders ? values.whatsappCheckoutEnabled : false;
   let webOrderEnabled = profile.allowWebsiteOrders ? values.webOrderEnabled : false;
-  // online_checkout_enabled is reserved for Wompi (Fase 7) — always false here
-  const onlineCheckoutEnabled = false;
+  const onlineCheckoutEnabled = profile.allowWebsiteOrders && webOrderEnabled
+    ? values.onlineCheckoutEnabled
+    : false;
   const cashOnDeliveryEnabled = profile.allowCashOnDelivery && webOrderEnabled
     ? values.cashOnDeliveryEnabled
     : false;
 
-  // Allow both to be false only in explicit catalog_only mode
   if (!whatsappCheckoutEnabled && !webOrderEnabled && commerceMode !== 'catalog_only') {
     if (profile.allowWhatsappOrders) whatsappCheckoutEnabled = true;
     else if (profile.allowWebsiteOrders) webOrderEnabled = true;
   }
 
   let defaultOrderMethod: OrderMethod;
-  if (webOrderEnabled) {
+  if (webOrderEnabled && onlineCheckoutEnabled && !cashOnDeliveryEnabled) {
+    defaultOrderMethod = 'online_checkout';
+  } else if (webOrderEnabled) {
     defaultOrderMethod = 'web_order';
   } else {
     defaultOrderMethod = 'whatsapp';

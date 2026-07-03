@@ -10,8 +10,8 @@ export function getPostLoginRedirect(
 
   const active = memberships.filter((m) => m.status === 'active');
   if (active.length === 0) return '/access-denied';
+  if (active.length === 1) return `/admin/stores/${active[0].storeId}`;
 
-  // Prefer owner role, fallback to first active membership
-  const target = active.find((m) => m.role === 'owner') ?? active[0];
-  return `/admin/stores/${target.storeId}`;
+  // Multiple stores → let the user pick
+  return '/admin/my-stores';
 }

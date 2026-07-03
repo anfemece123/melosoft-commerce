@@ -11,7 +11,7 @@ export interface PendingLocationChange {
 
 export function useLocationChangeWithCheck() {
   const { locations, selectedLocation, setSelectedLocation } = useSelectedLocation();
-  const { items, removeItem } = useCart();
+  const { items, removeItemsByProductIds } = useCart();
   const [pendingChange, setPendingChange] = useState<PendingLocationChange | null>(null);
   const [checking, setChecking] = useState(false);
 
@@ -42,9 +42,7 @@ export function useLocationChangeWithCheck() {
 
   function confirmLocationChange(): void {
     if (!pendingChange) return;
-    for (const item of pendingChange.result.unavailableItems) {
-      removeItem(item.productId);
-    }
+    removeItemsByProductIds(pendingChange.result.unavailableItems.map((item) => item.productId));
     setSelectedLocation(pendingChange.location);
     setPendingChange(null);
   }

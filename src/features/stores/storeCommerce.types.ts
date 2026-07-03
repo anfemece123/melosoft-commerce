@@ -3,6 +3,7 @@ import type {
   CatalogType,
   CommerceMode,
   DeliveryMode,
+  OrderFlowType,
   OrderMethod,
 } from '@/types/common.types';
 
@@ -23,6 +24,10 @@ export interface StoreCommerceSettings {
   defaultOrderMethod: OrderMethod;
   localDeliveryNotes: string | null;
   shippingNotes: string | null;
+  orderFlowType: OrderFlowType;
+  hasInventory: boolean;
+  hasVariants: boolean;
+  hasLeads: boolean;
   createdAt: string;
   updatedAt: string;
 }

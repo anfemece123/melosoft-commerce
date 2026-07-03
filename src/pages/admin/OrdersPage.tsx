@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { ShoppingCart, RefreshCw, Utensils, Package, AlertCircle, Calendar } from 'lucide-react';
+import { ShoppingCart, RefreshCw, Utensils, Package, AlertCircle, Calendar, LayoutGrid, List } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
@@ -9,6 +9,7 @@ import { ordersService, type OrdersDateParams } from '@/features/orders/ordersSe
 import { useOrdersRealtime } from '@/features/orders/useOrdersRealtime';
 import { usePendingOrdersBadge } from '@/features/orders/usePendingOrdersBadge';
 import { storeCommerceService } from '@/features/stores/storeCommerceService';
+import { getOrderFlowType } from '@/features/stores/storeCommerceProfiles';
 import { locationsService } from '@/features/locations/locationsService';
 import { notify } from '@/lib/notifications';
 import type { OrderStatus } from '@/types/common.types';
@@ -17,9 +18,12 @@ import type { StoreLocation } from '@/features/locations/locations.types';
 import { RestaurantOrdersBoard } from './orders/RestaurantOrdersBoard';
 import { RetailOrdersTable } from './orders/RetailOrdersTable';
 
-// ── Date range helpers ────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────
 
 type DateRangeKey = 'today' | 'yesterday' | 'last7' | 'this_month' | 'custom';
+type ViewMode = 'board' | 'table';
+
+// ── Date range helpers ────────────────────────────────────────
 
 const DATE_RANGE_OPTIONS: Array<{ key: DateRangeKey; label: string }> = [
   { key: 'today',      label: 'Hoy' },
@@ -83,9 +87,8 @@ function getDateLabel(key: DateRangeKey, customFrom: string, customTo: string): 
   }
 }
 
-function isRestaurantMode(settings: StoreCommerceSettings | null): boolean {
-  if (!settings) return false;
-  return settings.businessCategory === 'restaurant' || settings.catalogType === 'menu';
+function viewStorageKey(storeId: string) {
+  return `melosoft_orders_view_${storeId}`;
 }
 
 // ── Component ─────────────────────────────────────────────────
@@ -101,6 +104,17 @@ export function OrdersPage() {
   const [locations, setLocations] = useState<StoreLocation[]>([]);
   const [bootstrapped, setBootstrapped] = useState(false);
 
+  // Read persisted view immediately so there is no flicker on revisit
+  const [viewMode, setViewMode] = useState<ViewMode | null>(() => {
+    if (!storeId) return null;
+    const saved = localStorage.getItem(viewStorageKey(storeId));
+    return saved === 'board' || saved === 'table' ? saved : null;
+  });
+
+  // Shared filters — persist across board↔table switches
+  const [sharedSearch, setSharedSearch] = useState('');
+  const [sharedLocationId, setSharedLocationId] = useState('');
+
   // Date range state
   const [dateRangeKey, setDateRangeKey] = useState<DateRangeKey>('today');
   const [pendingFrom, setPendingFrom] = useState('');
@@ -108,7 +122,7 @@ export function OrdersPage() {
   const [appliedFrom, setAppliedFrom] = useState('');
   const [appliedTo, setAppliedTo] = useState('');
 
-  // One-time: load settings + locations
+  // One-time: load commerce settings + locations
   useEffect(() => {
     if (!storeId) return;
     void Promise.all([
@@ -122,6 +136,19 @@ export function OrdersPage() {
       .catch(() => undefined)
       .finally(() => setBootstrapped(true));
   }, [storeId]);
+
+  // Set default view only when there is no saved preference
+  useEffect(() => {
+    if (!bootstrapped || viewMode !== null || !storeId) return;
+    const defaultMode: ViewMode = getOrderFlowType(commerceSettings) === 'restaurant' ? 'board' : 'table';
+    setViewMode(defaultMode);
+    localStorage.setItem(viewStorageKey(storeId), defaultMode);
+  }, [bootstrapped, viewMode, commerceSettings, storeId]);
+
+  function changeViewMode(mode: ViewMode) {
+    setViewMode(mode);
+    if (storeId) localStorage.setItem(viewStorageKey(storeId), mode);
+  }
 
   // Orders fetch — re-runs when date range or storeId changes
   const fetchOrders = useCallback(() => {
@@ -145,13 +172,12 @@ export function OrdersPage() {
     fetchOrders();
   }, [fetchOrders]);
 
-  // Memoized date params exposed to the realtime hook
+  // Memoized date params for the realtime hook
   const currentDateParams = useMemo(
     () => buildDateParams(dateRangeKey, appliedFrom, appliedTo),
     [dateRangeKey, appliedFrom, appliedTo]
   );
 
-  // Realtime subscription — auto-updates the board/table when orders arrive or change
   useOrdersRealtime({
     storeId,
     dateFrom: currentDateParams?.dateFrom,
@@ -170,13 +196,11 @@ export function OrdersPage() {
 
   const { refresh: refreshPendingBadge } = usePendingOrdersBadge();
 
-  // Status change (from board/table)
   async function handleStatusChange(orderId: string, newStatus: OrderStatus) {
     try {
       const updated = await ordersService.updateOrderStatus(orderId, newStatus);
       dispatch(updateOrder(updated));
       notify.success('Pedido actualizado');
-      // Refresh badge immediately — don't wait for realtime event
       refreshPendingBadge();
     } catch {
       notify.error('No se pudo actualizar el estado del pedido');
@@ -199,7 +223,8 @@ export function OrdersPage() {
     }
   }
 
-  const restaurant = isRestaurantMode(commerceSettings);
+  const restaurant = getOrderFlowType(commerceSettings) === 'restaurant';
+  const context = restaurant ? 'restaurant' as const : 'retail' as const;
   const dateLabel = getDateLabel(dateRangeKey, appliedFrom, appliedTo);
   const isLoading = status === 'loading';
   const isFailed = status === 'failed';
@@ -211,6 +236,20 @@ export function OrdersPage() {
     locationOptions.push({ id: loc.id, name: loc.name });
   }
 
+  const sharedProps = {
+    orders: items,
+    storeName,
+    dateLabel,
+    locationMap,
+    locationOptions,
+    onStatusChange: handleStatusChange,
+    context,
+    search: sharedSearch,
+    locationId: sharedLocationId,
+    onSearchChange: setSharedSearch,
+    onLocationChange: setSharedLocationId,
+  };
+
   return (
     <div className="flex flex-col h-full gap-4">
       <PageHeader
@@ -220,7 +259,9 @@ export function OrdersPage() {
           <div className="flex items-center gap-2">
             {commerceSettings && (
               <span className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-500">
-                {restaurant ? <><Utensils className="w-3.5 h-3.5" /> Restaurante</> : <><Package className="w-3.5 h-3.5" /> Ecommerce</>}
+                {restaurant
+                  ? <><Utensils className="w-3.5 h-3.5" /> Restaurante</>
+                  : <><Package className="w-3.5 h-3.5" /> Ecommerce</>}
               </span>
             )}
             <button
@@ -293,6 +334,38 @@ export function OrdersPage() {
             <span className="text-indigo-600 font-medium">{dateLabel}</span>
           </span>
         )}
+
+        {/* View mode toggle — right-aligned */}
+        {viewMode && (
+          <div className="ml-auto flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1">
+            <button
+              type="button"
+              onClick={() => changeViewMode('board')}
+              title="Vista tablero"
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                viewMode === 'board'
+                  ? 'bg-white text-indigo-700 shadow-sm border border-gray-200'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              Tablero
+            </button>
+            <button
+              type="button"
+              onClick={() => changeViewMode('table')}
+              title="Vista lista"
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                viewMode === 'table'
+                  ? 'bg-white text-indigo-700 shadow-sm border border-gray-200'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <List className="w-3.5 h-3.5" />
+              Lista
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Error state */}
@@ -313,15 +386,8 @@ export function OrdersPage() {
         </div>
       )}
 
-      {/* Loading */}
-      {isLoading && !bootstrapped && (
-        <div className="flex items-center justify-center py-24">
-          <div className="w-6 h-6 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-        </div>
-      )}
-
       {/* Content */}
-      {!isFailed && bootstrapped && (
+      {!isFailed && bootstrapped && viewMode && (
         isLoading && items.length === 0 ? (
           <div className="flex items-center justify-center py-24">
             <div className="w-6 h-6 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
@@ -332,24 +398,10 @@ export function OrdersPage() {
             title="Sin pedidos"
             description={`No hay pedidos de ${dateLabel}. Prueba cambiando el rango de fechas.`}
           />
-        ) : restaurant ? (
-          <RestaurantOrdersBoard
-            orders={items}
-            storeName={storeName}
-            dateLabel={dateLabel}
-            locationMap={locationMap}
-            locationOptions={locationOptions}
-            onStatusChange={handleStatusChange}
-          />
+        ) : viewMode === 'board' ? (
+          <RestaurantOrdersBoard {...sharedProps} />
         ) : (
-          <RetailOrdersTable
-            orders={items}
-            storeName={storeName}
-            dateLabel={dateLabel}
-            locationMap={locationMap}
-            locationOptions={locationOptions}
-            onStatusChange={handleStatusChange}
-          />
+          <RetailOrdersTable {...sharedProps} />
         )
       )}
     </div>

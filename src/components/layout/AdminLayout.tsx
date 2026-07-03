@@ -16,12 +16,14 @@ import {
   ChevronRight,
   UserCircle,
   ExternalLink,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { logout } from '@/features/auth/authSlice';
 import { authService } from '@/features/auth/authService';
-import { isPlatformAdmin } from '@/utils/permissions';
+import { selectIsPlatformAdmin } from '@/features/auth/auth.selectors';
+import { selectCurrentStore, selectMyMemberships } from '@/features/stores/stores.selectors';
 import { PendingOrdersBadgeProvider } from '@/features/orders/PendingOrdersBadgeContext';
 import { usePendingOrdersBadge } from '@/features/orders/usePendingOrdersBadge';
 
@@ -37,11 +39,10 @@ interface NavItem {
 // Outer shell: derives storeId and wraps with PendingOrdersBadgeProvider so that
 // both the sidebar (badge) and page content (OrdersPage.refresh) share the same context.
 export function AdminLayout() {
-  const profile = useAppSelector((s) => s.auth.profile);
-  const myMemberships = useAppSelector((s) => s.stores.myMemberships);
+  const isAdmin = useAppSelector(selectIsPlatformAdmin);
+  const myMemberships = useAppSelector(selectMyMemberships);
   const { pathname } = useLocation();
 
-  const isAdmin = isPlatformAdmin(profile);
   const storeIdFromUrl = pathname.match(/^\/admin\/stores\/([^/]+)/)?.[1];
   const storeId = storeIdFromUrl ?? myMemberships.find((m) => m.status === 'active')?.storeId ?? '';
 
@@ -59,11 +60,10 @@ function AdminLayoutContent() {
   const { pathname } = useLocation();
 
   const user = useAppSelector((s) => s.auth.user);
-  const profile = useAppSelector((s) => s.auth.profile);
-  const myMemberships = useAppSelector((s) => s.stores.myMemberships);
-  const currentStore = useAppSelector((s) => s.stores.current);
+  const myMemberships = useAppSelector(selectMyMemberships);
+  const currentStore = useAppSelector(selectCurrentStore);
 
-  const isAdmin = isPlatformAdmin(profile);
+  const isAdmin = useAppSelector(selectIsPlatformAdmin);
 
   const storeIdFromUrl = pathname.match(/^\/admin\/stores\/([^/]+)/)?.[1];
   const firstActiveMembership = myMemberships.find((m) => m.status === 'active');
@@ -103,7 +103,13 @@ function AdminLayoutContent() {
   ] : [];
 
   const navItems = isAdmin ? platformAdminNav : ownerNav;
-  const ownerRole = myMemberships.find((m) => m.status === 'active')?.role;
+
+  // Use the role from the store currently in the URL, not the first membership
+  const ownerRole = myMemberships.find(
+    (m) => m.storeId === storeId && m.status === 'active'
+  )?.role;
+
+  const activeStoreCount = myMemberships.filter((m) => m.status === 'active').length;
 
   useEffect(() => {
     const previousBodyOverflow = document.body.style.overflow;
@@ -218,6 +224,26 @@ function AdminLayoutContent() {
               <ExternalLink className="w-5 h-5" />
               <span className="flex-1">Ver ecommerce</span>
             </a>
+          )}
+
+          {/* Store switcher — only when user has 2+ active memberships */}
+          {!isAdmin && activeStoreCount > 1 && (
+            <NavLink
+              to="/admin/my-stores"
+              onClick={() => setSidebarOpen(false)}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium',
+                  'transition-colors duration-150',
+                  isActive
+                    ? 'bg-indigo-50 text-indigo-700'
+                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+                )
+              }
+            >
+              <ArrowLeftRight className="w-5 h-5" />
+              <span className="flex-1">Cambiar empresa</span>
+            </NavLink>
           )}
         </nav>
 

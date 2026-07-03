@@ -46,9 +46,9 @@ export function isCashOnDeliveryActive(config: PublicCommerceConfig): boolean {
   return config.cashOnDeliveryEnabled === true;
 }
 
-/** Wompi online payment — always false until Fase 7 */
-export function canUseOnlineCheckout(_config: PublicCommerceConfig): boolean {
-  return false;
+/** Wompi online payment — enabled when store has onlineCheckoutEnabled=true */
+export function canUseOnlineCheckout(config: PublicCommerceConfig): boolean {
+  return config.onlineCheckoutEnabled === true;
 }
 
 export function hasAnyPurchaseMethod(config: PublicCommerceConfig): boolean {
@@ -95,9 +95,9 @@ export function getProductPageCtaConfig(
   if (canUseOnlineCheckout(config)) {
     return {
       show: true,
-      label: 'Checkout online (próximamente)',
+      label: 'Pagar en línea',
       variant: 'primary',
-      isComingSoon: true,
+      isComingSoon: false,
       showSecondaryWhatsapp: false,
     };
   }

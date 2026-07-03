@@ -1,7 +1,11 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { useFormik } from 'formik';
-import { Palette, FileText, CreditCard, ShoppingBag, Save, CheckCircle, Building2, Sun, Moon, Plus, Images } from 'lucide-react';
+import { Palette, FileText, CreditCard, ShoppingBag, Save, CheckCircle, Building2, Sun, Moon, Plus, Images, AlertTriangle, ExternalLink, LayoutTemplate } from 'lucide-react';
+import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
+import { paymentsService } from '@/features/payments/paymentsService';
+import type { StorePaymentSettings } from '@/features/payments/payments.types';
+import { getWompiAvailability } from '@/features/payments/wompiStatus';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -15,6 +19,7 @@ import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import {
   buildCommerceUpdatePayload,
   getCommerceProfile,
+  getDefaultHeroCta,
   mapBusinessTypeToBusinessCategory,
   normalizeCommerceSettings,
 } from '@/features/stores/storeCommerceProfiles';
@@ -29,7 +34,8 @@ import type { StoreGeneralSettingsFormValues } from '@/schemas/storeGeneralSetti
 import { storeThemeSchema } from '@/schemas/storeTheme.schema';
 import { getThemeColors, THEME_PRESET_LIST } from '@/utils/themePresets';
 import { cn } from '@/utils/cn';
-import type { CatalogType, CommerceMode, DeliveryMode, ThemeMode, ThemePreset } from '@/types/common.types';
+import type { CatalogType, CommerceMode, DeliveryMode, ThemeMode, ThemePreset, PublicHeaderSettings, PublicHeaderStyle, LogoSize, MenuTextSize, HeaderMenuMode } from '@/types/common.types';
+import { DEFAULT_HEADER_SETTINGS } from '@/types/common.types';
 import type { Store } from '@/features/stores/stores.types';
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 
@@ -41,43 +47,47 @@ const CATALOG_TYPE_LABELS: Record<string, string> = {
   mixed: 'Mixto',
 };
 
-type SellingModeKey = 'catalog_only' | 'whatsapp' | 'web_cod';
+type SellingModeKey = 'catalog_only' | 'whatsapp' | 'web_cod' | 'web_online';
 type DeliveryUXKey = 'none' | 'pickup' | 'local' | 'both' | 'national';
 
-const SELLING_MODE_OPTIONS = [
-  {
-    key: 'catalog_only' as const,
-    label: 'Solo catálogo',
-    description: 'Los clientes pueden explorar el catálogo o menú. Sin pedidos desde la página.',
-    badge: null as string | null,
-    badgeColor: null as string | null,
-    disabled: false,
-  },
-  {
-    key: 'whatsapp' as const,
-    label: 'Pedido por WhatsApp',
-    description: 'Los clientes eligen productos y hacen su pedido directamente por WhatsApp.',
-    badge: null as string | null,
-    badgeColor: null as string | null,
-    disabled: false,
-  },
-  {
-    key: 'web_cod' as const,
-    label: 'Pedido desde la página',
-    description: 'Los clientes agregan productos al pedido, escriben sus datos y pagan contraentrega.',
-    badge: 'Recomendado',
-    badgeColor: '#16a34a',
-    disabled: false,
-  },
-  {
-    key: 'online_coming_soon' as 'online_coming_soon',
-    label: 'Checkout online con pago',
-    description: 'Próximamente: pago en línea con tarjeta o PSE vía Wompi.',
-    badge: 'Próximamente',
-    badgeColor: '#6b7280',
-    disabled: true,
-  },
-] as const;
+function getSellingModeOptions(canUseOnline: boolean) {
+  return [
+    {
+      key: 'catalog_only' as SellingModeKey,
+      label: 'Solo catálogo',
+      description: 'Los clientes pueden explorar el catálogo o menú. Sin pedidos desde la página.',
+      badge: null as string | null,
+      badgeColor: null as string | null,
+      disabled: false,
+    },
+    {
+      key: 'whatsapp' as SellingModeKey,
+      label: 'Pedido por WhatsApp',
+      description: 'Los clientes eligen productos y hacen su pedido directamente por WhatsApp.',
+      badge: null as string | null,
+      badgeColor: null as string | null,
+      disabled: false,
+    },
+    {
+      key: 'web_cod' as SellingModeKey,
+      label: 'Pedido desde la página',
+      description: 'Los clientes agregan productos al pedido, escriben sus datos y pagan contraentrega.',
+      badge: 'Recomendado' as string | null,
+      badgeColor: '#16a34a' as string | null,
+      disabled: false,
+    },
+    {
+      key: 'web_online' as SellingModeKey,
+      label: 'Checkout online con pago',
+      description: canUseOnline
+        ? 'Los clientes pagan antes de confirmar el pedido usando Wompi.'
+        : 'Pago en línea con tarjeta o PSE vía Wompi.',
+      badge: canUseOnline ? null : 'Requiere configuración' as string | null,
+      badgeColor: canUseOnline ? null : '#d97706' as string | null,
+      disabled: !canUseOnline,
+    },
+  ];
+}
 
 const DELIVERY_UX_OPTIONS = [
   { key: 'none' as DeliveryUXKey, label: 'Sin entrega', description: 'Atención presencial, para llevar o sin coordinar entrega online.' },
@@ -89,42 +99,41 @@ const DELIVERY_UX_OPTIONS = [
 
 type PaymentMethodKey = 'cash_on_delivery' | 'online_only' | 'both';
 
-const PAYMENT_METHOD_OPTIONS: Array<{
-  key: PaymentMethodKey;
-  label: string;
-  description: string;
-  badge: string | null;
-  badgeColor: string | null;
-  disabled: boolean;
-}> = [
-  {
-    key: 'cash_on_delivery',
-    label: 'Pago contraentrega',
-    description: 'El cliente arma el pedido desde la página y paga en efectivo al recibir.',
-    badge: null,
-    badgeColor: null,
-    disabled: false,
-  },
-  {
-    key: 'online_only',
-    label: 'Pago online con Wompi',
-    description: 'El cliente paga con tarjeta o PSE antes de confirmar el pedido.',
-    badge: 'Próximamente',
-    badgeColor: '#6b7280',
-    disabled: true,
-  },
-  {
-    key: 'both',
-    label: 'Contraentrega + pago online',
-    description: 'El cliente elige cómo prefiere pagar al confirmar su pedido.',
-    badge: 'Próximamente',
-    badgeColor: '#6b7280',
-    disabled: true,
-  },
-];
+function getPaymentMethodOptions(canUseOnline: boolean) {
+  return [
+    {
+      key: 'cash_on_delivery' as PaymentMethodKey,
+      label: 'Pago contraentrega',
+      description: 'El cliente arma el pedido desde la página y paga en efectivo al recibir.',
+      badge: null as string | null,
+      badgeColor: null as string | null,
+      disabled: false,
+    },
+    {
+      key: 'online_only' as PaymentMethodKey,
+      label: 'Pago online con Wompi',
+      description: canUseOnline
+        ? 'El cliente paga con tarjeta o PSE antes de confirmar el pedido.'
+        : 'El cliente paga con tarjeta o PSE antes de confirmar el pedido.',
+      badge: canUseOnline ? null : 'Requiere configuración' as string | null,
+      badgeColor: canUseOnline ? null : '#d97706' as string | null,
+      disabled: !canUseOnline,
+    },
+    {
+      key: 'both' as PaymentMethodKey,
+      label: 'Contraentrega + pago online',
+      description: canUseOnline
+        ? 'El cliente elige cómo prefiere pagar al confirmar su pedido.'
+        : 'El cliente elige cómo prefiere pagar al confirmar su pedido.',
+      badge: canUseOnline ? null : 'Requiere configuración' as string | null,
+      badgeColor: canUseOnline ? null : '#d97706' as string | null,
+      disabled: !canUseOnline,
+    },
+  ];
+}
 
 function deriveSellingMode(values: StoreCommerceFormValues): SellingModeKey {
-  // web order takes priority — maps any legacy "mixed" DB data to web_cod
+  if (values.webOrderEnabled && values.onlineCheckoutEnabled && !values.cashOnDeliveryEnabled) return 'web_online';
   if (values.webOrderEnabled) return 'web_cod';
   if (values.whatsappCheckoutEnabled) return 'whatsapp';
   return 'catalog_only';
@@ -184,6 +193,7 @@ type SettingsSection =
   | 'hero'
   | 'commerce'
   | 'theme'
+  | 'header'
   | 'policies'
   | 'payments';
 
@@ -263,8 +273,8 @@ function createDefaultHeroSlide(sortOrder: number, store?: Store | null): Editab
         : '',
     ctaLabel:
       sortOrder === 1
-        ? store?.heroCtaLabel ?? 'Ver menú'
-        : 'Ver menú',
+        ? store?.heroCtaLabel ?? getDefaultHeroCta(store?.businessVertical ?? null)
+        : getDefaultHeroCta(store?.businessVertical ?? null),
     mainImageUrl: sortOrder === 1 ? store?.heroImageUrl ?? null : null,
     backgroundImageUrl: sortOrder === 1 ? store?.heroBackgroundImageUrl ?? null : null,
     badgeImageUrl: null,
@@ -288,7 +298,11 @@ export function StoreSettingsPage() {
   const [heroStatus, setHeroStatus] = useState<string | null>(null);
   const [heroUploadErrors, setHeroUploadErrors] = useState<Record<string, string>>({});
   const [heroUploadingBySlot, setHeroUploadingBySlot] = useState<Record<string, boolean>>({});
+  const [wompiSettings, setWompiSettings] = useState<StorePaymentSettings | null>(null);
   const [themeSaved, setThemeSaved] = useState(false);
+  const [headerSettings, setHeaderSettings] = useState<PublicHeaderSettings>({ ...DEFAULT_HEADER_SETTINGS });
+  const [headerSaved, setHeaderSaved] = useState(false);
+  const [headerSaving, setHeaderSaving] = useState(false);
   const [themeInitialValues, setThemeInitialValues] = useState<ThemeAppearanceFormValues>(() => {
     const defaults = getThemeColors('blue', 'light');
     return {
@@ -309,20 +323,17 @@ export function StoreSettingsPage() {
 
   useEffect(() => {
     if (!storeId) return;
+    // Load Wompi settings to determine if online checkout is available
+    paymentsService
+      .getStorePaymentSettings(storeId)
+      .then((data) => setWompiSettings(data))
+      .catch(() => setWompiSettings(null));
+  }, [storeId]);
 
-    if (currentStore?.id !== storeId) {
-      storesService
-        .getStoreById(storeId)
-        .then((data) => dispatch(setCurrentStore(data)))
-        .catch(() => { /* store load error handled by page state elsewhere */ });
-    }
-
-    if (currentCommerceSettings?.storeId !== storeId) {
-      storeCommerceService
-        .fetchStoreCommerceSettings(storeId)
-        .then((data) => dispatch(setCurrentCommerceSettings(data)))
-        .catch(() => { /* settings may not exist yet */ });
-    }
+  // Store/commerce settings are hydrated by StoreAccessRoute
+  // (useEnsureCurrentStore) before this page renders.
+  useEffect(() => {
+    if (!storeId) return;
 
     storesService
       .getStoreTheme(storeId)
@@ -339,6 +350,9 @@ export function StoreSettingsPage() {
             textColor: theme.textColor ?? presetDefaults.textColor,
             buttonRadius: theme.buttonRadius ?? presetDefaults.buttonRadius,
           });
+          if (theme.headerSettings) {
+            setHeaderSettings({ ...DEFAULT_HEADER_SETTINGS, ...theme.headerSettings });
+          }
           return;
         }
 
@@ -355,7 +369,7 @@ export function StoreSettingsPage() {
         });
       })
       .catch(() => { /* theme can be configured later */ });
-  }, [storeId, dispatch, currentStore?.id, currentCommerceSettings?.storeId]);
+  }, [storeId]);
 
   useEffect(() => {
     if (!storeId || !currentStore) return;
@@ -456,6 +470,12 @@ export function StoreSettingsPage() {
     },
   });
 
+  useScrollToFirstFormikError({
+    errors: generalFormik.errors,
+    submitCount: generalFormik.submitCount,
+    isSubmitting: generalFormik.isSubmitting,
+  });
+
   const formik = useFormik<StoreCommerceFormValues>({
     enableReinitialize: true,
     initialValues: normalizeCommerceSettings({
@@ -477,6 +497,11 @@ export function StoreSettingsPage() {
     validationSchema: storeCommerceSchema,
     onSubmit: async (values, { setStatus }) => {
       if (!storeId) return;
+      // Guard: prevent saving online checkout config without Wompi ready
+      if (values.onlineCheckoutEnabled && !getWompiAvailability(wompiSettings).canUseOnlinePayments) {
+        setStatus('Para activar pago online primero debes configurar y activar Wompi en la pestaña Pagos.');
+        return;
+      }
       try {
         const updated = await storeCommerceService.updateStoreCommerceSettings(
           storeId,
@@ -494,15 +519,22 @@ export function StoreSettingsPage() {
     },
   });
 
+  useScrollToFirstFormikError({
+    errors: formik.errors,
+    submitCount: formik.submitCount,
+    isSubmitting: formik.isSubmitting,
+  });
+
   const commerceProfile = getCommerceProfile(formik.values.businessCategory);
+  const wompiAvailability = getWompiAvailability(wompiSettings);
 
   const currentSellingMode = deriveSellingMode(formik.values);
   const currentDeliveryUX = deriveDeliveryUX(formik.values);
   const currentPaymentMethod = derivePaymentMethod(formik.values);
-  const showPaymentBlock = currentSellingMode === 'web_cod';
+  const showPaymentBlock = currentSellingMode === 'web_cod' || currentSellingMode === 'web_online';
 
   function handleSellingModeChange(key: SellingModeKey) {
-    const newCommerceMode = deriveCommerceMode(key, key === 'catalog_only' ? 'none' : currentDeliveryUX);
+    const newCommerceMode = deriveCommerceMode(key === 'web_online' ? 'web_cod' : key, key === 'catalog_only' ? 'none' : currentDeliveryUX);
     let patch: Partial<StoreCommerceFormValues>;
     switch (key) {
       case 'catalog_only':
@@ -525,6 +557,9 @@ export function StoreSettingsPage() {
       case 'web_cod':
         patch = { commerceMode: newCommerceMode, whatsappCheckoutEnabled: false, webOrderEnabled: true, onlineCheckoutEnabled: false, cashOnDeliveryEnabled: true, defaultOrderMethod: 'web_order' };
         break;
+      case 'web_online':
+        patch = { commerceMode: newCommerceMode, whatsappCheckoutEnabled: false, webOrderEnabled: true, onlineCheckoutEnabled: true, cashOnDeliveryEnabled: false, defaultOrderMethod: 'online_checkout' };
+        break;
     }
     void formik.setValues({ ...formik.values, ...patch });
   }
@@ -534,8 +569,12 @@ export function StoreSettingsPage() {
       case 'cash_on_delivery':
         void formik.setValues({ ...formik.values, cashOnDeliveryEnabled: true, onlineCheckoutEnabled: false });
         break;
-      default:
-        break; // online_only and both are disabled — no action
+      case 'online_only':
+        void formik.setValues({ ...formik.values, cashOnDeliveryEnabled: false, onlineCheckoutEnabled: true });
+        break;
+      case 'both':
+        void formik.setValues({ ...formik.values, cashOnDeliveryEnabled: true, onlineCheckoutEnabled: true });
+        break;
     }
   }
 
@@ -592,13 +631,21 @@ export function StoreSettingsPage() {
     },
   });
 
-  const visibleSellingModes = SELLING_MODE_OPTIONS.filter((opt) => {
-    if (opt.key === 'online_coming_soon') return true;
+  useScrollToFirstFormikError({
+    errors: themeFormik.errors,
+    submitCount: themeFormik.submitCount,
+    isSubmitting: themeFormik.isSubmitting,
+  });
+
+  const sellingModeOptions = getSellingModeOptions(wompiAvailability.canUseOnlinePayments);
+  const visibleSellingModes = sellingModeOptions.filter((opt) => {
     if (opt.key === 'catalog_only') return true;
     if (opt.key === 'whatsapp') return commerceProfile.allowWhatsappOrders;
     if (opt.key === 'web_cod') return commerceProfile.allowWebsiteOrders;
+    if (opt.key === 'web_online') return commerceProfile.allowWebsiteOrders;
     return false;
   });
+  const paymentMethodOptions = getPaymentMethodOptions(wompiAvailability.canUseOnlinePayments);
 
   const hasDeliveryOptions = commerceProfile.allowPickup || commerceProfile.allowLocalDelivery || commerceProfile.allowNationalShipping;
 
@@ -619,11 +666,27 @@ export function StoreSettingsPage() {
     textColor: themeFormik.values.textColor,
     buttonRadius: themeFormik.values.buttonRadius,
   });
+  async function handleSaveHeaderSettings() {
+    if (!storeId) return;
+    setHeaderSaving(true);
+    try {
+      await storesService.updateStoreTheme(storeId, { headerSettings });
+      setHeaderSaved(true);
+      setTimeout(() => setHeaderSaved(false), 3000);
+      notify.success('Header guardado.');
+    } catch (err) {
+      notify.fromError(err, 'No se pudo guardar la configuración del header.');
+    } finally {
+      setHeaderSaving(false);
+    }
+  }
+
   const sections: { key: SettingsSection; label: string }[] = [
     { key: 'general', label: 'Información general' },
     { key: 'hero', label: 'Portada pública' },
     { key: 'commerce', label: 'Configuración comercial' },
     { key: 'theme', label: 'Tema y apariencia' },
+    { key: 'header', label: 'Header público' },
     { key: 'policies', label: 'Políticas' },
     { key: 'payments', label: 'Pagos' },
   ];
@@ -1125,58 +1188,94 @@ export function StoreSettingsPage() {
                 </div>
               </div>
 
-              {/* Block 3: Formas de pago — solo si web_order_enabled */}
+              {/* Wompi hint under selling modes (when web_online is blocked) */}
+              {commerceProfile.allowWebsiteOrders && !wompiAvailability.canUseOnlinePayments && currentSellingMode !== 'web_online' && (
+                <div className="flex items-start gap-3 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+                  <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-amber-800">{wompiAvailability.message}</p>
+                    <Link
+                      to={`/admin/stores/${storeId}/payments`}
+                      className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-amber-700 underline underline-offset-2 hover:text-amber-900"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      Configurar Wompi
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {/* Block 3: Formas de pago — solo si web_order_enabled o web_online */}
               {showPaymentBlock && (
-                <div>
-                  <p className="text-sm font-semibold text-gray-900 mb-0.5">Formas de pago</p>
-                  <p className="text-xs text-gray-500 mb-3">¿Cómo pagará el cliente cuando haga su pedido desde la página?</p>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                    {PAYMENT_METHOD_OPTIONS.map((opt) => {
-                      const isSelected = !opt.disabled && currentPaymentMethod === opt.key;
-                      return (
-                        <button
-                          key={opt.key}
-                          type="button"
-                          disabled={opt.disabled}
-                          onClick={() => { if (!opt.disabled) { handlePaymentMethodChange(opt.key); } }}
-                          className={cn(
-                            'relative flex items-start gap-3 rounded-2xl border p-4 text-left transition-all',
-                            opt.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
-                            isSelected
-                              ? 'border-indigo-400 bg-indigo-50 shadow-sm ring-1 ring-indigo-200'
-                              : !opt.disabled
-                                ? 'border-gray-200 bg-white hover:border-indigo-200 hover:bg-indigo-50/30'
-                                : 'border-gray-200 bg-gray-50'
-                          )}
-                        >
-                          <div
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900 mb-0.5">Formas de pago</p>
+                    <p className="text-xs text-gray-500 mb-3">¿Cómo pagará el cliente cuando haga su pedido desde la página?</p>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                      {paymentMethodOptions.map((opt) => {
+                        const isSelected = !opt.disabled && currentPaymentMethod === opt.key;
+                        return (
+                          <button
+                            key={opt.key}
+                            type="button"
+                            disabled={opt.disabled}
+                            onClick={() => { if (!opt.disabled) { handlePaymentMethodChange(opt.key); } }}
                             className={cn(
-                              'mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 transition-colors',
-                              isSelected ? 'border-indigo-500 bg-indigo-500' : 'border-gray-300 bg-white'
+                              'relative flex items-start gap-3 rounded-2xl border p-4 text-left transition-all',
+                              opt.disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+                              isSelected
+                                ? 'border-indigo-400 bg-indigo-50 shadow-sm ring-1 ring-indigo-200'
+                                : !opt.disabled
+                                  ? 'border-gray-200 bg-white hover:border-indigo-200 hover:bg-indigo-50/30'
+                                  : 'border-gray-200 bg-gray-50'
                             )}
                           >
-                            {isSelected && (
-                              <div className="h-full w-full rounded-full bg-white" style={{ transform: 'scale(0.45)' }} />
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <p className="text-sm font-semibold text-gray-900">{opt.label}</p>
-                              {opt.badge && (
-                                <span
-                                  className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
-                                  style={{ backgroundColor: opt.badgeColor ?? '#6b7280' }}
-                                >
-                                  {opt.badge}
-                                </span>
+                            <div
+                              className={cn(
+                                'mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 transition-colors',
+                                isSelected ? 'border-indigo-500 bg-indigo-500' : 'border-gray-300 bg-white'
+                              )}
+                            >
+                              {isSelected && (
+                                <div className="h-full w-full rounded-full bg-white" style={{ transform: 'scale(0.45)' }} />
                               )}
                             </div>
-                            <p className="mt-0.5 text-xs text-gray-500">{opt.description}</p>
-                          </div>
-                        </button>
-                      );
-                    })}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <p className="text-sm font-semibold text-gray-900">{opt.label}</p>
+                                {opt.badge && (
+                                  <span
+                                    className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
+                                    style={{ backgroundColor: opt.badgeColor ?? '#6b7280' }}
+                                  >
+                                    {opt.badge}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-0.5 text-xs text-gray-500">{opt.description}</p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
+
+                  {/* Wompi availability hint */}
+                  {!wompiAvailability.canUseOnlinePayments && (
+                    <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                      <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-amber-800">{wompiAvailability.message}</p>
+                        <Link
+                          to={`/admin/stores/${storeId}/payments`}
+                          className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-amber-700 underline underline-offset-2 hover:text-amber-900"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                          Ir a configurar Wompi
+                        </Link>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1479,6 +1578,17 @@ export function StoreSettingsPage() {
         </Card>
         )}
 
+        {activeSection === 'header' && (
+        <HeaderSettingsSection
+          settings={headerSettings}
+          onChange={setHeaderSettings}
+          onSave={() => void handleSaveHeaderSettings()}
+          saving={headerSaving}
+          saved={headerSaved}
+          catalogType={currentCommerceSettings?.catalogType ?? null}
+        />
+        )}
+
         {activeSection === 'policies' && (
         <Card>
           <CardBody>
@@ -1497,19 +1607,397 @@ export function StoreSettingsPage() {
         {activeSection === 'payments' && (
         <Card>
           <CardBody>
-            <div className="flex items-center gap-3 mb-3">
-              <CreditCard className="w-5 h-5 text-gray-400" />
+            <div className="flex items-center gap-3 mb-4">
+              <CreditCard className="w-5 h-5 text-indigo-600" />
               <h2 className="font-semibold text-gray-900">Pagos — Wompi</h2>
             </div>
-            <p className="text-sm text-gray-500">
-              Configura tu cuenta de Wompi para aceptar pagos en esta tienda.
-              Las llaves privadas se manejan de forma segura a través de Edge Functions.
+
+            {/* Status summary */}
+            <div className={cn(
+              'rounded-xl border px-4 py-4 mb-5',
+              wompiAvailability.reason === 'ready'
+                ? 'border-green-200 bg-green-50'
+                : wompiAvailability.reason === 'disabled'
+                  ? 'border-amber-200 bg-amber-50'
+                  : 'border-gray-200 bg-gray-50'
+            )}>
+              <div className="flex items-center gap-2 mb-1">
+                <span className={cn(
+                  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold',
+                  wompiAvailability.reason === 'ready'
+                    ? 'bg-green-100 text-green-700'
+                    : wompiAvailability.reason === 'disabled'
+                      ? 'bg-amber-100 text-amber-700'
+                      : wompiAvailability.reason === 'incomplete'
+                        ? 'bg-orange-100 text-orange-700'
+                        : 'bg-gray-100 text-gray-600'
+                )}>
+                  {wompiAvailability.reason === 'ready' && 'Activo'}
+                  {wompiAvailability.reason === 'disabled' && 'Desactivado'}
+                  {wompiAvailability.reason === 'incomplete' && 'Configuración incompleta'}
+                  {wompiAvailability.reason === 'not_configured' && 'No configurado'}
+                </span>
+              </div>
+              <p className="text-sm text-gray-700">{wompiAvailability.message}</p>
+              {wompiSettings && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Entorno: {wompiSettings.environment === 'production' ? 'Producción' : 'Sandbox'}
+                  {wompiSettings.publicKey && ` · Clave pública configurada`}
+                </p>
+              )}
+            </div>
+
+            <p className="text-sm text-gray-500 mb-4">
+              Configura las llaves de Wompi para aceptar pagos con tarjeta, PSE y otros métodos.
+              Las llaves privadas se procesan de forma segura mediante Edge Functions — nunca quedan expuestas en el navegador.
             </p>
-            <p className="text-xs text-indigo-500 mt-3 font-medium">Disponible próximamente</p>
+
+            <Link
+              to={`/admin/stores/${storeId}/payments`}
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+            >
+              <CreditCard className="w-4 h-4" />
+              {wompiAvailability.reason === 'not_configured' ? 'Configurar Wompi' : 'Ver configuración de pagos'}
+              <ExternalLink className="w-3.5 h-3.5 opacity-70" />
+            </Link>
           </CardBody>
         </Card>
         )}
       </div>
+      </div>
+    </div>
+  );
+}
+
+// ── HeaderSettingsSection ────────────────────────────────────
+
+interface HeaderSettingsSectionProps {
+  settings: PublicHeaderSettings;
+  onChange: (s: PublicHeaderSettings) => void;
+  onSave: () => void;
+  saving: boolean;
+  saved: boolean;
+  catalogType: string | null;
+}
+
+function HeaderToggle({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description?: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-3 border-b border-gray-100 last:border-0">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-gray-900">{label}</p>
+        {description && <p className="text-xs text-gray-500 mt-0.5">{description}</p>}
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={cn(
+          'relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none',
+          checked ? 'bg-indigo-600' : 'bg-gray-200'
+        )}
+      >
+        <span
+          className={cn(
+            'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform',
+            checked ? 'translate-x-5' : 'translate-x-0'
+          )}
+        />
+      </button>
+    </div>
+  );
+}
+
+function HeaderSettingsSection({
+  settings,
+  onChange,
+  onSave,
+  saving,
+  saved,
+}: HeaderSettingsSectionProps) {
+  function set<K extends keyof PublicHeaderSettings>(key: K, value: PublicHeaderSettings[K]) {
+    onChange({ ...settings, [key]: value });
+  }
+
+  const noIdentity = !settings.showLogo && !settings.showStoreName;
+
+  const STYLE_OPTIONS: Array<{
+    key: PublicHeaderStyle;
+    label: string;
+    description: string;
+    preview: React.ReactNode;
+  }> = [
+    {
+      key: 'classic',
+      label: 'Clásico',
+      description: 'Logo + nombre izquierda · navegación centrada · buscador + carrito derecha.',
+      preview: (
+        <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-b border-gray-200">
+            {/* left: logo + name */}
+            <div className="flex items-center gap-1.5 flex-1">
+              <div className="w-5 h-5 rounded-full bg-indigo-200 shrink-0" />
+              <div className="w-12 h-2 rounded bg-gray-300" />
+            </div>
+            {/* center: nav */}
+            <div className="flex items-center gap-2 flex-1 justify-center">
+              <div className="w-5 h-1.5 rounded bg-gray-200" />
+              <div className="w-7 h-1.5 rounded bg-gray-200" />
+            </div>
+            {/* right: search + cart */}
+            <div className="flex items-center gap-1.5 flex-1 justify-end">
+              <div className="w-14 h-4 rounded-md bg-gray-100 border border-gray-200" />
+              <div className="w-4 h-4 rounded-full bg-gray-200" />
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'search',
+      label: 'Con buscador',
+      description: 'Barra de búsqueda central para tiendas con muchos productos o platos.',
+      preview: (
+        <div className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+          <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <div className="w-5 h-5 rounded-full bg-indigo-200" />
+                <div className="w-10 h-2 rounded bg-gray-300" />
+              </div>
+              <div className="flex-1 mx-2 h-4 rounded-md bg-gray-100 border border-gray-200" />
+              <div className="w-5 h-5 rounded-full bg-gray-200" />
+            </div>
+            <div className="flex items-center gap-2 pt-0.5">
+              <div className="w-6 h-1.5 rounded bg-gray-200" />
+              <div className="w-8 h-1.5 rounded bg-indigo-200" />
+              <div className="w-7 h-1.5 rounded bg-gray-200" />
+            </div>
+          </div>
+        </div>
+      ),
+    },
+  ];
+
+  const LOGO_SIZE_OPTIONS: Array<{ value: LogoSize; label: string }> = [
+    { value: 'sm', label: 'Original' },
+    { value: 'md', label: 'Mediano' },
+    { value: 'lg', label: 'Grande' },
+  ];
+
+  const MENU_TEXT_SIZE_OPTIONS: Array<{ value: MenuTextSize; label: string }> = [
+    { value: 'sm', label: 'Original' },
+    { value: 'md', label: 'Mediano' },
+    { value: 'lg', label: 'Grande' },
+  ];
+
+  const MENU_MODE_OPTIONS: Array<{ value: HeaderMenuMode; label: string; description: string }> = [
+    {
+      value: 'catalog_link',
+      label: 'Enlace al catálogo',
+      description: 'Muestra un link directo a la página de todos los productos.',
+    },
+    {
+      value: 'categories',
+      label: 'Por categorías',
+      description: 'Muestra un link por cada categoría de producto activa.',
+    },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardBody>
+          <div className="flex items-center gap-3 mb-1">
+            <LayoutTemplate className="w-5 h-5 text-indigo-600" />
+            <h2 className="font-semibold text-gray-900">Header de la tienda</h2>
+          </div>
+          <p className="text-sm text-gray-500 mb-5">
+            Elige cómo se verá la parte superior de tu tienda pública.
+          </p>
+
+          {/* Style selector */}
+          <div className="mb-6">
+            <p className="text-sm font-medium text-gray-700 mb-3">Estilo del header</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {STYLE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => set('style', opt.key)}
+                  className={cn(
+                    'flex flex-col gap-3 rounded-xl border-2 p-3 text-left transition-all',
+                    settings.style === opt.key
+                      ? 'border-indigo-500 bg-indigo-50'
+                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                  )}
+                >
+                  {opt.preview}
+                  <div>
+                    <span className={cn('text-sm font-semibold block mb-0.5', settings.style === opt.key ? 'text-indigo-700' : 'text-gray-700')}>
+                      {opt.label}
+                    </span>
+                    <p className="text-xs text-gray-500 leading-snug">{opt.description}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Warning: no identity */}
+          {noIdentity && (
+            <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-4 text-sm text-amber-700">
+              <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+              <p>Recomendamos mostrar al menos el logo o el nombre de la empresa.</p>
+            </div>
+          )}
+
+          {/* Behavior toggles */}
+          <div className="mb-5">
+            <p className="text-sm font-medium text-gray-700 mb-1">Comportamiento</p>
+            <div className="rounded-xl border border-gray-200 bg-white px-4">
+              <HeaderToggle
+                label="Header fijo al hacer scroll"
+                description="El header se mantiene visible cuando el usuario baja por la página."
+                checked={settings.isSticky}
+                onChange={(v) => set('isSticky', v)}
+              />
+              <HeaderToggle
+                label="Transparente sobre la portada"
+                description="El header empieza transparente cuando hay portada y se vuelve sólido al hacer scroll."
+                checked={settings.transparentOnHero}
+                onChange={(v) => set('transparentOnHero', v)}
+              />
+            </div>
+          </div>
+
+          {/* Identity toggles */}
+          <div className="mb-5">
+            <p className="text-sm font-medium text-gray-700 mb-1">Identidad de la marca</p>
+            <div className="rounded-xl border border-gray-200 bg-white px-4">
+              <HeaderToggle
+                label="Mostrar logo"
+                description="Muestra el logo de tu empresa en el header."
+                checked={settings.showLogo}
+                onChange={(v) => set('showLogo', v)}
+              />
+              <HeaderToggle
+                label="Mostrar nombre de la empresa"
+                description="Muestra el nombre junto al logo."
+                checked={settings.showStoreName}
+                onChange={(v) => set('showStoreName', v)}
+              />
+              <HeaderToggle
+                label="Mostrar enlace 'Inicio'"
+                description="Permite que los clientes vuelvan fácilmente a la página principal de la tienda."
+                checked={settings.showHomeLink}
+                onChange={(v) => set('showHomeLink', v)}
+              />
+            </div>
+          </div>
+
+          {/* Logo size */}
+          <div className="mb-5">
+            <p className="text-sm font-medium text-gray-700 mb-2">Tamaño del logo</p>
+            <div className="flex gap-2">
+              {LOGO_SIZE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => set('logoSize', opt.value)}
+                  className={cn(
+                    'flex-1 rounded-xl border py-2.5 text-sm font-medium transition-all',
+                    settings.logoSize === opt.value
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Menu text size */}
+          <div className="mb-5">
+            <p className="text-sm font-medium text-gray-700 mb-2">Tamaño del texto de navegación</p>
+            <div className="flex gap-2">
+              {MENU_TEXT_SIZE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => set('menuTextSize', opt.value)}
+                  className={cn(
+                    'flex-1 rounded-xl border py-2.5 text-sm font-medium transition-all',
+                    settings.menuTextSize === opt.value
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Menu mode */}
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-2">Modo de navegación</p>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {MENU_MODE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => set('menuMode', opt.value)}
+                  className={cn(
+                    'flex items-start gap-3 rounded-xl border p-3.5 text-left transition-all',
+                    settings.menuMode === opt.value
+                      ? 'border-indigo-400 bg-indigo-50 ring-1 ring-indigo-200'
+                      : 'border-gray-200 bg-white hover:border-indigo-200 hover:bg-indigo-50/30'
+                  )}
+                >
+                  <div
+                    className={cn(
+                      'mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 transition-colors',
+                      settings.menuMode === opt.value ? 'border-indigo-500 bg-indigo-500' : 'border-gray-300 bg-white'
+                    )}
+                  >
+                    {settings.menuMode === opt.value && (
+                      <div className="h-full w-full rounded-full bg-white" style={{ transform: 'scale(0.45)' }} />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900">{opt.label}</p>
+                    <p className="mt-0.5 text-xs text-gray-500">{opt.description}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </CardBody>
+      </Card>
+
+      <div className="flex items-center gap-3 pb-2">
+        <Button type="button" onClick={onSave} isLoading={saving}>
+          <Save className="w-4 h-4 mr-1.5" />
+          Guardar header
+        </Button>
+        {saved && (
+          <span className="flex items-center gap-1.5 text-sm text-green-600">
+            <CheckCircle className="w-4 h-4" />
+            Guardado
+          </span>
+        )}
       </div>
     </div>
   );

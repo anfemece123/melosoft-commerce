@@ -4,6 +4,7 @@ import type {
   CatalogType,
   CommerceMode,
   DeliveryMode,
+  OrderFlowType,
   OrderMethod,
 } from '@/types/common.types';
 import type { StoreCommerceSettings, StoreCommerceSettingsUpdate } from './storeCommerce.types';
@@ -28,6 +29,10 @@ export function mapStoreCommerceSettingsRowToStoreCommerceSettings(
     defaultOrderMethod: row.default_order_method as OrderMethod,
     localDeliveryNotes: row.local_delivery_notes,
     shippingNotes: row.shipping_notes,
+    orderFlowType: (row.order_flow_type as OrderFlowType) ?? 'ecommerce',
+    hasInventory: row.has_inventory ?? false,
+    hasVariants: row.has_variants ?? false,
+    hasLeads: row.has_leads ?? false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -51,5 +56,9 @@ export function mapStoreCommerceSettingsUpdateToRow(
   if (data.defaultOrderMethod !== undefined) row.default_order_method = data.defaultOrderMethod;
   if (data.localDeliveryNotes !== undefined) row.local_delivery_notes = data.localDeliveryNotes;
   if (data.shippingNotes !== undefined) row.shipping_notes = data.shippingNotes;
+  if (data.orderFlowType !== undefined) row.order_flow_type = data.orderFlowType;
+  if (data.hasInventory !== undefined) row.has_inventory = data.hasInventory;
+  if (data.hasVariants !== undefined) row.has_variants = data.hasVariants;
+  if (data.hasLeads !== undefined) row.has_leads = data.hasLeads;
   return row;
 }

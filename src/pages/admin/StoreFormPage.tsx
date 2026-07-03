@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFormik } from 'formik';
+import type { FormikErrors } from 'formik';
 import {
   User, Building2, Palette, MapPin, Clock, FileText,
-  Sun, Moon, CheckCircle2, AlertCircle,
+  Sun, Moon, CheckCircle2, AlertCircle, Utensils, ShoppingBag, ClipboardList, Home,
 } from 'lucide-react';
+import type { BusinessVertical } from '@/types/common.types';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -17,6 +19,7 @@ import { addStore } from '@/features/stores/storesSlice';
 import { storesService } from '@/features/stores/storesService';
 import { storeCreationSchema } from '@/schemas/storeCreation.schema';
 import type { StoreCreationFormValues } from '@/schemas/storeCreation.schema';
+import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
 import { slugify } from '@/utils/slugify';
 import { getThemeColors, THEME_PRESET_LIST } from '@/utils/themePresets';
 import type { ThemePreset, ThemeMode } from '@/types/common.types';
@@ -24,20 +27,111 @@ import { cn } from '@/utils/cn';
 import { geoService } from '@/features/geo/geoService';
 import type { GeoDepartment, GeoCity } from '@/features/geo/geo.types';
 
-// ── Constants ────────────────────────────────────────────────
+// ── Business vertical constants ──────────────────────────────
 
-const BUSINESS_TYPE_OPTIONS = [
-  { value: '', label: 'Seleccionar tipo...' },
-  { value: 'barberia',    label: 'Barbería' },
-  { value: 'restaurante', label: 'Restaurante' },
-  { value: 'moda',        label: 'Moda y ropa' },
-  { value: 'tecnologia',  label: 'Tecnología' },
-  { value: 'mascotas',    label: 'Mascotas' },
-  { value: 'hogar',       label: 'Hogar y deco' },
-  { value: 'belleza',     label: 'Belleza y estética' },
-  { value: 'salud',       label: 'Salud y bienestar' },
-  { value: 'otro',        label: 'Otro' },
+const VERTICAL_OPTIONS: Array<{
+  value: BusinessVertical;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+}> = [
+  {
+    value: 'food_restaurant',
+    label: 'Restaurante / Comida',
+    description: 'Menú, domicilios, recogida, tablero Kanban en tiempo real.',
+    icon: <Utensils className="w-5 h-5" />,
+  },
+  {
+    value: 'retail_products',
+    label: 'Venta de productos',
+    description: 'Catálogo, carrito, pedidos web, envío nacional.',
+    icon: <ShoppingBag className="w-5 h-5" />,
+  },
+  {
+    value: 'catalog_quote',
+    label: 'Catálogo / Cotización',
+    description: 'Solo catálogo público. Cotizaciones y contacto por WhatsApp.',
+    icon: <ClipboardList className="w-5 h-5" />,
+  },
+  {
+    value: 'real_estate',
+    label: 'Bienes raíces',
+    description: 'Propiedades, contacto y solicitud de información. (Próximamente)',
+    icon: <Home className="w-5 h-5" />,
+  },
 ];
+
+const SUBCATEGORIES: Record<BusinessVertical, Array<{ value: string; label: string }>> = {
+  food_restaurant: [
+    { value: 'restaurante', label: 'Restaurante' },
+    { value: 'comidas_rapidas', label: 'Comidas rápidas' },
+    { value: 'cafeteria', label: 'Cafetería' },
+    { value: 'panaderia', label: 'Panadería' },
+    { value: 'bar_cafe', label: 'Bar / Café' },
+    { value: 'postres', label: 'Postres' },
+    { value: 'otro', label: 'Otro' },
+  ],
+  retail_products: [
+    { value: 'lociones_perfumes', label: 'Lociones / perfumes' },
+    { value: 'ropa_moda', label: 'Ropa / moda' },
+    { value: 'gafas_accesorios', label: 'Gafas / accesorios' },
+    { value: 'tecnologia', label: 'Tecnología' },
+    { value: 'belleza_cosmeticos', label: 'Belleza / cosméticos' },
+    { value: 'salud_bienestar', label: 'Salud / bienestar' },
+    { value: 'mascotas', label: 'Mascotas' },
+    { value: 'hogar_deco', label: 'Hogar y deco' },
+    { value: 'deporte', label: 'Deporte' },
+    { value: 'joyeria', label: 'Joyería' },
+    { value: 'accesorios', label: 'Accesorios' },
+    { value: 'otro', label: 'Otro' },
+  ],
+  catalog_quote: [
+    { value: 'b2b_mayorista', label: 'B2B / Mayorista' },
+    { value: 'fabricante', label: 'Fabricante' },
+    { value: 'productos_a_medida', label: 'Productos a medida' },
+    { value: 'servicios_cotizables', label: 'Servicios cotizables' },
+    { value: 'artesanias', label: 'Artesanías' },
+    { value: 'catalogo_general', label: 'Catálogo general' },
+    { value: 'otro', label: 'Otro' },
+  ],
+  real_estate: [
+    { value: 'inmobiliaria', label: 'Inmobiliaria' },
+    { value: 'venta_inmuebles', label: 'Venta de inmuebles' },
+    { value: 'arriendo', label: 'Arriendo' },
+    { value: 'proyectos_nuevos', label: 'Proyectos nuevos' },
+    { value: 'agente_independiente', label: 'Agente independiente' },
+    { value: 'otro', label: 'Otro' },
+  ],
+};
+
+const VERTICAL_PRESET_SUMMARY: Record<BusinessVertical, string[]> = {
+  food_restaurant: [
+    'Menú digital con categorías de platos',
+    'Carrito y pedidos web habilitados',
+    'Domicilio local y recogida en local',
+    'WhatsApp habilitado',
+    'Tablero Kanban de pedidos en tiempo real',
+  ],
+  retail_products: [
+    'Catálogo de productos físicos',
+    'Carrito y pedidos web habilitados',
+    'WhatsApp habilitado',
+    'Envío nacional, domicilio local y recogida',
+    'Vista de pedidos tipo ecommerce',
+  ],
+  catalog_quote: [
+    'Catálogo público sin checkout',
+    'Solo WhatsApp para cotizaciones',
+    'Sin carrito ni pago directo',
+    'Ideal para B2B, mayoristas o productos a medida',
+  ],
+  real_estate: [
+    'Catálogo de propiedades (próximamente)',
+    'Contacto y solicitud de información por WhatsApp',
+    'Sin carrito ni checkout',
+    'Vista de leads (próximamente)',
+  ],
+};
 
 const CURRENCY_OPTIONS = [
   { value: 'COP', label: 'COP — Peso colombiano' },
@@ -92,7 +186,8 @@ const INITIAL_VALUES = {
   name: '',
   slug: '',
   slogan: '',
-  businessType: '' as StoreCreationFormValues['businessType'],
+  businessVertical: '' as StoreCreationFormValues['businessVertical'],
+  businessSubcategory: '' as StoreCreationFormValues['businessSubcategory'],
   description: '',
   logoUrl: '',
   supportEmail: '',
@@ -120,6 +215,49 @@ const INITIAL_VALUES = {
   privacyPolicy: DEFAULT_POLICIES.privacyPolicy,
   termsAndConditions: DEFAULT_POLICIES.termsAndConditions,
 } satisfies StoreCreationFormValues;
+
+// ── Error summary helpers ─────────────────────────────────────
+
+const FIELD_LABELS: Partial<Record<keyof StoreCreationFormValues, string>> = {
+  ownerFullName: 'Nombre del propietario',
+  ownerEmail: 'Email del propietario',
+  ownerPhone: 'Teléfono del propietario',
+  name: 'Nombre de la empresa',
+  slug: 'URL (slug) de la tienda',
+  businessVertical: 'Tipo de empresa',
+  businessSubcategory: 'Subcategoría',
+  description: 'Descripción',
+  whatsappNumber: 'WhatsApp de contacto',
+  country: 'País',
+  city: 'Ciudad (empresa)',
+  currency: 'Moneda',
+  mode: 'Modo de tema',
+  themePreset: 'Tema de color',
+  locationDepartment: 'Departamento (sede principal)',
+  locationCity: 'Ciudad / Municipio (sede principal)',
+  businessHours: 'Horario del establecimiento',
+};
+
+function getErrorSummary(
+  errors: FormikErrors<StoreCreationFormValues>,
+  values: StoreCreationFormValues
+): string[] {
+  const labels: string[] = [];
+  for (const key of Object.keys(errors) as Array<keyof StoreCreationFormValues>) {
+    const val = errors[key];
+    if (!val) continue;
+    // Skip businessSubcategory in summary when vertical not chosen yet — user
+    // must fix vertical first, subcategory is implicitly blocked.
+    if (key === 'businessSubcategory' && !values.businessVertical) continue;
+    const label = FIELD_LABELS[key];
+    if (label) {
+      labels.push(label);
+    } else if (key === 'businessHours' && typeof val !== 'string') {
+      labels.push('Horario del establecimiento');
+    }
+  }
+  return labels;
+}
 
 // ── Section header ───────────────────────────────────────────
 
@@ -155,71 +293,86 @@ export function StoreFormPage() {
   const formik = useFormik<StoreCreationFormValues>({
     initialValues: INITIAL_VALUES,
     validationSchema: storeCreationSchema,
-    onSubmit: async (values) => {
-      const colors = getThemeColors(values.themePreset as ThemePreset, values.mode as ThemeMode);
+    onSubmit: async (values, { setStatus }) => {
+      console.log('[StoreFormPage] formik onSubmit fired', values);
+      try {
+        const colors = getThemeColors(values.themePreset as ThemePreset, values.mode as ThemeMode);
 
-      const policies = values.usePolicyDefaults
-        ? DEFAULT_POLICIES
-        : {
-            shippingPolicy: values.shippingPolicy || null,
-            returnsPolicy: values.returnsPolicy || null,
-            warrantyPolicy: values.warrantyPolicy || null,
-            privacyPolicy: values.privacyPolicy || null,
-            termsAndConditions: values.termsAndConditions || null,
-          };
+        const policies = values.usePolicyDefaults
+          ? DEFAULT_POLICIES
+          : {
+              shippingPolicy: values.shippingPolicy || null,
+              returnsPolicy: values.returnsPolicy || null,
+              warrantyPolicy: values.warrantyPolicy || null,
+              privacyPolicy: values.privacyPolicy || null,
+              termsAndConditions: values.termsAndConditions || null,
+            };
 
-      const result = await storesService.createStoreWithOwner({
-        ownerFullName: values.ownerFullName,
-        ownerEmail: values.ownerEmail,
-        ownerPhone: values.ownerPhone,
-        ownerDocumentType: values.ownerDocumentType || null,
-        ownerDocumentNumber: values.ownerDocumentNumber || null,
-        name: values.name,
-        slug: values.slug,
-        slogan: values.slogan || null,
-        businessType: values.businessType,
-        description: values.description,
-        logoUrl: values.logoUrl || null,
-        supportEmail: values.supportEmail || null,
-        whatsappNumber: values.whatsappNumber,
-        country: values.country,
-        city: values.city,
-        currency: values.currency,
-        mode: values.mode as ThemeMode,
-        themePreset: values.themePreset,
-        primaryColor: colors.primaryColor,
-        secondaryColor: colors.secondaryColor,
-        accentColor: colors.accentColor,
-        backgroundColor: colors.backgroundColor,
-        textColor: colors.textColor,
-        buttonRadius: colors.buttonRadius,
-        location: {
-          addressLine: values.locationAddressLine || null,
-          neighborhood: values.locationNeighborhood || null,
-          city: values.locationCity || null,
-          department: values.locationDepartment || null,
+        console.log('[StoreFormPage] calling create-store-with-owner');
+        const result = await storesService.createStoreWithOwner({
+          ownerFullName: values.ownerFullName,
+          ownerEmail: values.ownerEmail,
+          ownerPhone: values.ownerPhone,
+          ownerDocumentType: values.ownerDocumentType || null,
+          ownerDocumentNumber: values.ownerDocumentNumber || null,
+          name: values.name,
+          slug: values.slug,
+          slogan: values.slogan || null,
+          businessVertical: values.businessVertical as BusinessVertical,
+          businessSubcategory: values.businessSubcategory,
+          description: values.description,
+          logoUrl: values.logoUrl || null,
+          supportEmail: values.supportEmail || null,
+          whatsappNumber: values.whatsappNumber,
           country: values.country,
-          postalCode: values.locationPostalCode || null,
-          isPublic: values.locationIsPublic,
-        },
-        businessHours: values.businessHours.map((h) => ({
-          dayOfWeek: h.dayOfWeek,
-          isOpen: h.isOpen,
-          opensAt: h.opensAt || null,
-          closesAt: h.closesAt || null,
-          breakStartsAt: h.breakStartsAt || null,
-          breakEndsAt: h.breakEndsAt || null,
-        })),
-        policies,
-      });
+          city: values.city,
+          currency: values.currency,
+          mode: values.mode as ThemeMode,
+          themePreset: values.themePreset,
+          primaryColor: colors.primaryColor,
+          secondaryColor: colors.secondaryColor,
+          accentColor: colors.accentColor,
+          backgroundColor: colors.backgroundColor,
+          textColor: colors.textColor,
+          buttonRadius: colors.buttonRadius,
+          location: {
+            addressLine: values.locationAddressLine || null,
+            neighborhood: values.locationNeighborhood || null,
+            city: values.locationCity || null,
+            department: values.locationDepartment || null,
+            country: values.country,
+            postalCode: values.locationPostalCode || null,
+            isPublic: values.locationIsPublic,
+          },
+          businessHours: values.businessHours.map((h) => ({
+            dayOfWeek: h.dayOfWeek,
+            isOpen: h.isOpen,
+            opensAt: h.opensAt || null,
+            closesAt: h.closesAt || null,
+            breakStartsAt: h.breakStartsAt || null,
+            breakEndsAt: h.breakEndsAt || null,
+          })),
+          policies,
+        });
 
-      // Optimistically add to Redux so StoresPage shows it immediately
-      const loadedStores = await storesService.getStores();
-      const newStore = loadedStores.find((s) => s.id === result.storeId);
-      if (newStore) dispatch(addStore(newStore));
+        console.log('[StoreFormPage] create-store-with-owner response', result);
+        // Optimistically add to Redux so StoresPage shows it immediately
+        const loadedStores = await storesService.getStores();
+        const newStore = loadedStores.find((s) => s.id === result.storeId);
+        if (newStore) dispatch(addStore(newStore));
 
-      void navigate(`/admin/stores/${result.storeId}`);
+        void navigate(`/admin/stores/${result.storeId}`);
+      } catch (err) {
+        console.error('[StoreFormPage] submit error', err);
+        setStatus(err instanceof Error ? err.message : 'Error al crear la empresa');
+      }
     },
+  });
+
+  useScrollToFirstFormikError({
+    errors: formik.errors,
+    submitCount: formik.submitCount,
+    isSubmitting: formik.isSubmitting,
   });
 
   // Auto-generate slug from store name
@@ -262,10 +415,14 @@ export function StoreFormPage() {
     formik.values.mode as ThemeMode
   );
 
+  // Show error when the field has been touched OR after a submit attempt —
+  // Formik does NOT auto-touch fields on submit, so without submitCount > 0
+  // no errors would ever appear after the user clicks "Crear empresa".
   function fieldError(field: keyof StoreCreationFormValues): string | undefined {
-    const touched = formik.touched[field];
     const error = formik.errors[field];
-    return touched && typeof error === 'string' ? error : undefined;
+    if (typeof error !== 'string') return undefined;
+    const showError = !!formik.touched[field] || formik.submitCount > 0;
+    return showError ? error : undefined;
   }
 
   async function handleLogoSelect(file: File | null) {
@@ -284,6 +441,15 @@ export function StoreFormPage() {
     }
   }
 
+  // Per-row business hour errors — only shown after a submit attempt
+  const businessHourRowErrors: Array<string | undefined> =
+    formik.submitCount > 0 && Array.isArray(formik.errors.businessHours)
+      ? (formik.errors.businessHours as Array<Record<string, string> | undefined>).map((rowErr) => {
+          if (!rowErr || typeof rowErr !== 'object') return undefined;
+          return rowErr.opensAt ?? rowErr.closesAt;
+        })
+      : [];
+
   return (
     <div>
       <PageHeader
@@ -295,6 +461,44 @@ export function StoreFormPage() {
         <div className="mb-6 flex items-start gap-2 px-4 py-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-700">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>{formik.status as string}</span>
+        </div>
+      )}
+
+      {/* DEV-ONLY: raw Formik errors for debugging — remove before shipping */}
+      {import.meta.env.DEV && formik.submitCount > 0 && Object.keys(formik.errors).length > 0 && (
+        <pre className="mb-4 rounded-lg bg-red-50 p-4 text-xs text-red-700 overflow-auto max-h-48">
+          {JSON.stringify(formik.errors, null, 2)}
+        </pre>
+      )}
+
+      {/* Validation summary: lists the exact fields with errors after a failed submit */}
+      {formik.submitCount > 0 && Object.keys(formik.errors).length > 0 && !formik.isSubmitting && (
+        <div
+          data-error-summary="true"
+          className="mb-6 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-sm"
+        >
+          <div className="flex items-start gap-2 text-amber-800">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
+            <div>
+              <p className="font-medium">Hay campos requeridos sin completar:</p>
+              {(() => {
+                const summary = getErrorSummary(formik.errors, formik.values);
+                const visible = summary.slice(0, 5);
+                const extra = summary.length - visible.length;
+                return (
+                  <>
+                    <ul className="mt-1 list-disc list-inside space-y-0.5 text-amber-700">
+                      {visible.map((label) => (
+                        <li key={label}>{label}</li>
+                      ))}
+                      {extra > 0 && <li>…y {extra} campo{extra > 1 ? 's' : ''} más</li>}
+                    </ul>
+                    <p className="mt-2 text-amber-600">Corrige estos campos para continuar.</p>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
         </div>
       )}
 
@@ -421,16 +625,131 @@ export function StoreFormPage() {
                 onBlur={formik.handleBlur}
                 error={fieldError('slogan')}
               />
-              <Select
-                label="Tipo de negocio"
-                id="businessType"
-                name="businessType"
-                options={BUSINESS_TYPE_OPTIONS}
-                value={formik.values.businessType}
-                onChange={formik.handleChange}
-                onBlur={formik.handleBlur}
-                error={fieldError('businessType')}
-              />
+              {/* Vertical selector */}
+              <div id="businessVertical" data-field-name="businessVertical">
+                <p className="text-sm font-medium text-gray-700 mb-2">
+                  Tipo de empresa <span className="text-red-500">*</span>
+                </p>
+                <div className={cn(
+                  'grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-lg p-1 transition-colors',
+                  formik.submitCount > 0 && formik.errors.businessVertical
+                    ? 'ring-1 ring-red-300 bg-red-50/40'
+                    : ''
+                )}>
+                  {VERTICAL_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      aria-invalid={formik.submitCount > 0 && !!formik.errors.businessVertical}
+                      onClick={() => {
+                        void formik.setFieldTouched('businessVertical', true);
+                        void formik.setFieldValue('businessVertical', opt.value);
+                        void formik.setFieldTouched('businessSubcategory', false);
+                        void formik.setFieldValue('businessSubcategory', '');
+                      }}
+                      className={cn(
+                        'flex items-start gap-3 p-3 rounded-lg border text-left transition-all',
+                        formik.values.businessVertical === opt.value
+                          ? 'border-indigo-500 bg-indigo-50'
+                          : 'border-gray-200 hover:border-gray-300 bg-white'
+                      )}
+                    >
+                      <span className={cn(
+                        'mt-0.5 shrink-0',
+                        formik.values.businessVertical === opt.value ? 'text-indigo-600' : 'text-gray-400'
+                      )}>
+                        {opt.icon}
+                      </span>
+                      <div>
+                        <p className={cn(
+                          'text-sm font-medium',
+                          formik.values.businessVertical === opt.value ? 'text-indigo-700' : 'text-gray-800'
+                        )}>
+                          {opt.label}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">{opt.description}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                {(formik.touched.businessVertical || formik.submitCount > 0) && formik.errors.businessVertical && (
+                  <p
+                    className="mt-1 text-xs text-red-600"
+                    data-error-for="businessVertical"
+                  >
+                    {formik.errors.businessVertical as string}
+                  </p>
+                )}
+                {/* If vertical not selected, subcategory is also blocked — surface that here */}
+                {formik.submitCount > 0 && !formik.values.businessVertical && formik.errors.businessSubcategory && (
+                  <p className="mt-0.5 text-xs text-red-500">
+                    Selecciona el tipo de empresa para poder elegir la subcategoría.
+                  </p>
+                )}
+              </div>
+
+              {/* Subcategory chips — shown once vertical is selected */}
+              {formik.values.businessVertical && (
+                <div id="businessSubcategory" data-field-name="businessSubcategory">
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    Subcategoría <span className="text-red-500">*</span>
+                  </p>
+                  <div className={cn(
+                    'flex flex-wrap gap-2 rounded-lg p-1 transition-colors',
+                    formik.submitCount > 0 && formik.errors.businessSubcategory
+                      ? 'ring-1 ring-red-300 bg-red-50/40'
+                      : ''
+                  )}>
+                    {SUBCATEGORIES[formik.values.businessVertical as BusinessVertical].map((sub) => (
+                      <button
+                        key={sub.value}
+                        type="button"
+                        aria-invalid={formik.submitCount > 0 && !!formik.errors.businessSubcategory}
+                        onClick={() => {
+                          void formik.setFieldTouched('businessSubcategory', true);
+                          void formik.setFieldValue('businessSubcategory', sub.value);
+                        }}
+                        className={cn(
+                          'px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
+                          formik.values.businessSubcategory === sub.value
+                            ? 'border-indigo-500 bg-indigo-100 text-indigo-700'
+                            : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                        )}
+                      >
+                        {sub.label}
+                      </button>
+                    ))}
+                  </div>
+                  {(formik.touched.businessSubcategory || formik.submitCount > 0) && formik.errors.businessSubcategory && (
+                    <p
+                      className="mt-1 text-xs text-red-600"
+                      data-error-for="businessSubcategory"
+                    >
+                      {formik.errors.businessSubcategory as string}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Preset summary — shown once subcategory is selected */}
+              {formik.values.businessVertical && formik.values.businessSubcategory && (
+                <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-3">
+                  <p className="text-xs font-semibold text-indigo-700 mb-2">
+                    Configuración que se aplicará:
+                  </p>
+                  <ul className="space-y-1">
+                    {VERTICAL_PRESET_SUMMARY[formik.values.businessVertical as BusinessVertical].map((item) => (
+                      <li key={item} className="flex items-center gap-1.5 text-xs text-indigo-800">
+                        <CheckCircle2 className="w-3 h-3 text-indigo-400 shrink-0" />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-xs text-indigo-600">
+                    Puedes ajustar todo desde la configuración de la tienda después de crearla.
+                  </p>
+                </div>
+              )}
               <Textarea
                 label="Descripción"
                 id="description"
@@ -686,8 +1005,8 @@ export function StoreFormPage() {
           <CardBody>
             <SectionHeader
               icon={<Clock className="w-4 h-4 text-indigo-600" />}
-              title="Horarios de atención"
-              description="Configura los horarios de apertura de la empresa."
+              title="Horario del establecimiento"
+              description="Horario visible al público en el ecommerce. Opcional — puedes ajustarlo después desde la configuración de la tienda."
             />
             <div className="space-y-2">
               {formik.values.businessHours.map((hour, idx) => (
@@ -745,6 +1064,9 @@ export function StoreFormPage() {
                     </>
                   ) : (
                     <div className="col-span-9 text-xs text-gray-400 italic">Cerrado</div>
+                  )}
+                  {businessHourRowErrors[idx] && (
+                    <p className="col-span-12 mt-0.5 text-xs text-red-600">{businessHourRowErrors[idx]}</p>
                   )}
                 </div>
               ))}

@@ -1,21 +1,24 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { MessageCircle, Clock, AlertCircle, Lock, ShoppingBag } from 'lucide-react';
+import { getProductIcon } from '@/features/products/productDescriptionIcons';
 import { StorefrontActionButton } from '@/components/public/storefront/StorefrontActionButton';
 import { StorefrontBackButton } from '@/components/public/storefront/StorefrontBackButton';
+import { StorefrontBreadcrumbs } from '@/components/public/storefront/StorefrontBreadcrumbs';
 import { StorefrontProductCustomizer } from '@/components/public/storefront/StorefrontProductCustomizer';
 import { StorefrontPurchaseDialog } from '@/components/public/storefront/StorefrontPurchaseDialog';
 import { StorefrontProductDetailSkeleton } from '@/components/public/storefront/StorefrontSkeletons';
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
 import { usePublicRouteReady } from '@/components/layout/PublicRouteReadyContext';
-import { useCart } from '@/lib/cart/cartContext';
+import { useCart, isOutOfStock } from '@/lib/cart/cartContext';
 import { useSelectedLocation } from '@/lib/locations/locationContext';
 import { useLocationChangeWithCheck } from '@/lib/locations/useLocationChangeWithCheck';
 import { LocationConflictModal } from '@/components/public/locations/LocationConflictModal';
 import { productOptionsService } from '@/features/products/productOptionsService';
 import { productAvailabilityService } from '@/features/products/productAvailabilityService';
 import { productsService } from '@/features/products/productsService';
-import type { PublicProductPage } from '@/types/common.types';
+import { categoriesService } from '@/features/categories/categoriesService';
+import type { PublicProductPage, PublicStoreCategory } from '@/types/common.types';
 import { notify } from '@/lib/notifications';
 import {
   buildCustomizationSummaryLines,
@@ -46,6 +49,20 @@ interface ProductPageCachePayload {
   product: PublicProductPage | null;
 }
 
+// Normalizes a cached product to guarantee fields added after the cache was written
+// are always arrays/non-null (avoids crashes when old sessionStorage entries are read).
+function normalizePublicProduct(p: PublicProductPage | null): PublicProductPage | null {
+  if (!p) return null;
+  return {
+    ...p,
+    descriptionSections: Array.isArray(p.descriptionSections) ? p.descriptionSections : [],
+    collections: Array.isArray(p.collections) ? p.collections : [],
+    facetValues: Array.isArray(p.facetValues) ? p.facetValues : [],
+    images: Array.isArray(p.images) ? p.images : [],
+    optionGroups: Array.isArray(p.optionGroups) ? p.optionGroups : [],
+  };
+}
+
 export function ProductLandingPage() {
   const { storeSlug, productSlug } = useParams<{ storeSlug: string; productSlug: string }>();
   if (!storeSlug || !productSlug) return null;
@@ -60,7 +77,9 @@ function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; 
   const cachedPayload = readPublicPageCache<ProductPageCachePayload>(`product:${storeSlug}:${productSlug}`);
   const { requestLocationChange, confirmLocationChange, cancelLocationChange, pendingChange } =
     useLocationChangeWithCheck();
-  const [product, setProduct] = useState<PublicProductPage | null>(cachedPayload?.product ?? null);
+  const [product, setProduct] = useState<PublicProductPage | null>(
+    normalizePublicProduct(cachedPayload?.product ?? null)
+  );
   const [selections, setSelections] = useState<ProductOptionSelections>({});
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [purchaseDialogOpen, setPurchaseDialogOpen] = useState(false);
@@ -68,6 +87,17 @@ function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; 
   const [error, setError] = useState<string | null>(null);
   const [isUnavailableInLocation, setIsUnavailableInLocation] = useState(false);
   const [availabilityMap, setAvailabilityMap] = useState<Record<string, boolean>>({});
+  const [categories, setCategories] = useState<PublicStoreCategory[]>([]);
+
+  // Only used to resolve the parent category's name/slug for the breadcrumb
+  // (the product page itself only carries categoryParentId, not its name).
+  useEffect(() => {
+    let cancelled = false;
+    categoriesService.getPublicCategories(storeSlug)
+      .then((cats) => { if (!cancelled) setCategories(cats); })
+      .catch(() => { /* breadcrumb parent level is optional */ });
+    return () => { cancelled = true; };
+  }, [storeSlug]);
 
   useEffect(() => {
     async function load() {
@@ -78,7 +108,7 @@ function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; 
           return;
         }
         const optionGroups = await productOptionsService.getPublicProductOptionGroups(data.productId);
-        const payload = { ...data, optionGroups };
+        const payload = normalizePublicProduct({ ...data, optionGroups }) as PublicProductPage;
         setProduct(payload);
         writePublicPageCache(`product:${storeSlug}:${productSlug}`, { product: payload } satisfies ProductPageCachePayload);
         setSelections(buildInitialProductOptionSelections(optionGroups));
@@ -145,6 +175,7 @@ function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; 
 
   const bgColor = product.backgroundColor ?? '#ffffff';
   const currentProduct = product;
+  const outOfStock = isOutOfStock(currentProduct);
   const theme = buildStorefrontTheme({
     mode: currentProduct.themeMode,
     primaryColor: currentProduct.primaryColor,
@@ -180,6 +211,13 @@ function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; 
   const activePrice = getActivePrice(currentProduct.regularPrice, currentProduct.salePrice);
   const customizationTotal = calculateCustomizationTotal(currentProduct.optionGroups, selections);
   const finalPrice = activePrice + customizationTotal;
+  const primaryCategory = currentProduct.categoryName && currentProduct.categorySlug
+    ? { name: currentProduct.categoryName, slug: currentProduct.categorySlug }
+    : null;
+  const parentCategory = currentProduct.categoryParentId
+    ? categories.find((c) => c.id === currentProduct.categoryParentId) ?? null
+    : null;
+  const catalogLabel = product.productType === 'menu_item' ? 'Menú' : 'Catálogo';
 
   function validateBeforeCheckout() {
     const errors = validateProductOptionSelections(currentProduct.optionGroups, selections);
@@ -220,14 +258,22 @@ function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; 
   function commitAddToCart() {
     const summaryLines = buildCustomizationSummaryLines(currentProduct.optionGroups, selections, '');
     const notes = summaryLines.length > 0 ? summaryLines.join(', ') : null;
-    addItem({
+    const added = addItem({
       productId: currentProduct.productId,
+      storeId: storeBranding?.storeId ?? '',
       productSlug: currentProduct.productSlug,
       productName: currentProduct.productName,
       imageUrl: currentProduct.images[0]?.imageUrl ?? null,
       unitPrice: finalPrice,
       customizationNotes: notes,
+      stock: currentProduct.stock,
+      trackInventory: currentProduct.trackInventory,
+      isAvailable: currentProduct.isAvailable,
     });
+    if (!added) {
+      notify.warning(`"${currentProduct.productName}" no tiene stock disponible.`);
+      return;
+    }
     setPurchaseDialogOpen(false);
     setSpecialInstructions('');
     notify.cartSuccess(`"${currentProduct.productName}" agregado al pedido`);
@@ -236,7 +282,35 @@ function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; 
   return (
     <div style={{ backgroundColor: bgColor, color: textColor, minHeight: '100vh' }}>
       <main className="mx-auto max-w-5xl px-4 py-10">
-        <StorefrontBackButton storeSlug={storeSlug} className="mb-6" color={textColor} />
+        <StorefrontBreadcrumbs
+          theme={theme}
+          className="mb-4"
+          items={[
+            { label: 'Inicio', href: `/s/${storeSlug}` },
+            { label: catalogLabel, href: `/s/${storeSlug}/catalog` },
+            ...(parentCategory
+              ? [
+                  { label: parentCategory.name, href: `/s/${storeSlug}/catalog?cat=${encodeURIComponent(parentCategory.slug)}` },
+                  ...(primaryCategory
+                    ? [{
+                        label: primaryCategory.name,
+                        href: `/s/${storeSlug}/catalog?cat=${encodeURIComponent(parentCategory.slug)}&sub=${encodeURIComponent(primaryCategory.slug)}`,
+                      }]
+                    : []),
+                ]
+              : primaryCategory
+              ? [{ label: primaryCategory.name, href: `/s/${storeSlug}/catalog?cat=${encodeURIComponent(primaryCategory.slug)}` }]
+              : []),
+            { label: product.productName },
+          ]}
+        />
+        <StorefrontBackButton
+          storeSlug={storeSlug}
+          className="mb-6"
+          color={textColor}
+          label="Volver al catálogo"
+          fallbackPath={`/s/${storeSlug}/catalog`}
+        />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
           {/* Image */}
           <StorefrontImageGallery
@@ -249,9 +323,9 @@ function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; 
 
           {/* Info */}
           <div className="space-y-4">
-            {product.category && (
+            {primaryCategory && (
               <span className="text-sm font-medium" style={{ color: primaryColor }}>
-                {product.category}
+                {primaryCategory.name}
               </span>
             )}
 
@@ -318,6 +392,30 @@ function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; 
               <p className="text-sm leading-relaxed" style={{ color: textColor, opacity: 0.8 }}>
                 {product.description}
               </p>
+            )}
+
+            {/* Advanced description sections */}
+            {(product.descriptionSections ?? []).filter((s) => s?.isVisible !== false).length > 0 && (
+              <div className="space-y-4 pt-1">
+                {(product.descriptionSections ?? [])
+                  .filter((s) => s?.isVisible !== false)
+                  .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+                  .map((section) => (
+                    <div key={section.id} className="rounded-xl border p-4" style={{ borderColor: `${textColor}18` }}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span style={{ color: primaryColor }}>
+                          {getProductIcon(section.icon, { className: 'h-4 w-4' })}
+                        </span>
+                        <h4 className="text-sm font-semibold" style={{ color: textColor }}>
+                          {section.title}
+                        </h4>
+                      </div>
+                      <p className="text-sm leading-relaxed whitespace-pre-line" style={{ color: textColor, opacity: 0.75 }}>
+                        {section.content}
+                      </p>
+                    </div>
+                  ))}
+              </div>
             )}
 
             {product.optionGroups.length > 0 || product.allowsSpecialInstructions ? (
@@ -387,8 +485,19 @@ function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; 
               );
             })()}
 
+            {/* Out of stock */}
+            {!isUnavailableInLocation && outOfStock && (
+              <div
+                className="flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium"
+                style={{ borderColor: theme.border, backgroundColor: `${theme.mutedText}0d`, color: theme.mutedText }}
+              >
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                Este producto no tiene stock disponible.
+              </div>
+            )}
+
             {/* CTA — web order mode: "Agregar al pedido" */}
-            {isWebOrderMode && !isUnavailableInLocation && (
+            {isWebOrderMode && !isUnavailableInLocation && !outOfStock && (
               <StorefrontActionButton
                 as="button"
                 type="button"

@@ -17,12 +17,19 @@ import { ProductFormPage } from '@/pages/admin/ProductFormPage';
 import { OffersPage } from '@/pages/admin/OffersPage';
 import { OfferFormPage } from '@/pages/admin/OfferFormPage';
 import { LocationsPage } from '@/pages/admin/LocationsPage';
+import { ProductsLayout } from '@/pages/admin/products/ProductsLayout';
+import { ProductCategoriesPage } from '@/pages/admin/products/ProductCategoriesPage';
+import { ProductCollectionsPage } from '@/pages/admin/products/ProductCollectionsPage';
+import { ProductFiltersPage } from '@/pages/admin/products/ProductFiltersPage';
 import { OrdersPage } from '@/pages/admin/OrdersPage';
 import { PaymentsPage } from '@/pages/admin/PaymentsPage';
+import { MyStoresPage } from '@/pages/admin/MyStoresPage';
 import { StoreHomePage } from '@/pages/public/StoreHomePage';
+import { StoreCatalogPage } from '@/pages/public/StoreCatalogPage';
 import { ProductLandingPage } from '@/pages/public/ProductLandingPage';
 import { OfferLandingPage } from '@/pages/public/OfferLandingPage';
 import { StorePoliciesPage } from '@/pages/public/StorePoliciesPage';
+import { PaymentResultPage } from '@/pages/public/PaymentResultPage';
 import { AccessDeniedPage } from '@/pages/AccessDeniedPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 
@@ -38,6 +45,9 @@ export function AppRouter() {
 
         {/* Protected admin — requires login */}
         <Route element={<ProtectedRoute />}>
+          {/* Multi-store selection — own page, outside AdminLayout */}
+          <Route path="/admin/my-stores" element={<MyStoresPage />} />
+
           <Route element={<AdminLayout />}>
             {/* Dashboard: all authenticated users */}
             <Route path="/admin" element={<DashboardPage />} />
@@ -53,7 +63,12 @@ export function AppRouter() {
               <Route path="/admin/stores/:storeId" element={<StoreDetailPage />} />
               <Route path="/admin/stores/:storeId/settings" element={<StoreSettingsPage />} />
               <Route path="/admin/stores/:storeId/locations" element={<LocationsPage />} />
-              <Route path="/admin/stores/:storeId/products" element={<ProductsPage />} />
+              <Route path="/admin/stores/:storeId/products" element={<ProductsLayout />}>
+                <Route index element={<ProductsPage />} />
+                <Route path="categories" element={<ProductCategoriesPage />} />
+                <Route path="collections" element={<ProductCollectionsPage />} />
+                <Route path="filters" element={<ProductFiltersPage />} />
+              </Route>
               <Route path="/admin/stores/:storeId/products/new" element={<ProductFormPage />} />
               <Route
                 path="/admin/stores/:storeId/products/:productId/edit"
@@ -74,9 +89,11 @@ export function AppRouter() {
         {/* Public store pages */}
         <Route element={<PublicLayout />}>
           <Route path="/s/:storeSlug" element={<StoreHomePage />} />
+          <Route path="/s/:storeSlug/catalog" element={<StoreCatalogPage />} />
           <Route path="/s/:storeSlug/p/:productSlug" element={<ProductLandingPage />} />
           <Route path="/s/:storeSlug/o/:offerSlug" element={<OfferLandingPage />} />
           <Route path="/s/:storeSlug/policies" element={<StorePoliciesPage />} />
+          <Route path="/s/:storeSlug/payment-result" element={<PaymentResultPage />} />
         </Route>
 
         {/* 404 */}

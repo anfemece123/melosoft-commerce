@@ -6,20 +6,23 @@ import { StorefrontHeader } from '@/components/public/storefront/StorefrontHeade
 import { StorefrontPageLoader } from '@/components/public/storefront/StorefrontPageLoader';
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import { storesService } from '@/features/stores/storesService';
+import { categoriesService, buildCategoryTree } from '@/features/categories/categoriesService';
+import { collectionsService } from '@/features/collections/collectionsService';
+import { facetsService } from '@/features/facets/facetsService';
+import { productsService } from '@/features/products/productsService';
 import {
   canUseWebOrders,
-  getCatalogLabel,
-  getCatalogSearchPlaceholder,
   type PublicCommerceConfig,
 } from '@/lib/commerce/commerceConfig.utils';
 import { CartProvider, useCart } from '@/lib/cart/cartContext';
-import type { PublicStorePage } from '@/types/common.types';
+import type { CatalogMeta, PublicStorePage, PublicStoreCategory } from '@/types/common.types';
 import { readCachedPublicStoreBranding, writeCachedPublicStoreBranding } from '@/lib/storefront/publicStoreBrandingCache';
 import { PublicStoreBrandingProvider } from './PublicStoreBrandingContext';
 import { PublicLocationProvider } from '@/lib/locations/locationContext';
 import { PublicRouteReadyProvider } from './PublicRouteReadyContext';
 import { readPublicScrollPosition, writePublicScrollPosition } from '@/lib/storefront/publicScrollRestoration';
 import { useSelectedLocation } from '@/lib/locations/locationContext';
+import { pruneEmptyCategoryTree, pruneEmptyCollections } from '@/lib/storefront/catalogVisibility';
 
 export function PublicLayout() {
   const location = useLocation();
@@ -27,6 +30,7 @@ export function PublicLayout() {
     matchPath('/s/:storeSlug/p/:productSlug', location.pathname),
     matchPath('/s/:storeSlug/o/:offerSlug', location.pathname),
     matchPath('/s/:storeSlug/policies', location.pathname),
+    matchPath('/s/:storeSlug/catalog', location.pathname),
     matchPath('/s/:storeSlug', location.pathname),
   ].find(Boolean);
   const storeSlug = matchedRoute?.params.storeSlug ?? null;
@@ -81,7 +85,7 @@ export function PublicLayout() {
     <PublicStoreBrandingProvider value={{ storeSlug, branding, loading }}>
       {storeSlug ? (
         <PublicLocationProvider storeSlug={storeSlug}>
-          <CartProvider storeSlug={storeSlug}>
+          <CartProvider key={storeSlug} storeSlug={storeSlug}>
             <PublicStoreShell storeSlug={storeSlug} branding={branding} loading={loading} />
           </CartProvider>
         </PublicLocationProvider>
@@ -109,6 +113,7 @@ function PublicStoreShell({
   const { locations } = useSelectedLocation();
   const [cartOpen, setCartOpen] = useState(false);
   const [routeReady, setRouteReady] = useState(false);
+  const [catalogMeta, setCatalogMeta] = useState<CatalogMeta | null>(null);
   const routeKey = `${location.pathname}${location.search}${location.hash}`;
   const pendingScrollModeRef = useRef<'restore' | 'top'>('top');
 
@@ -136,12 +141,45 @@ function PublicStoreShell({
   });
   const hasHeroRoute = Boolean(matchPath('/s/:storeSlug', location.pathname));
   const hasHero = hasHeroRoute && branding?.heroEnabled !== false;
-  const searchPlaceholder = getCatalogSearchPlaceholder(commerceConfig);
-  const catalogLabel = getCatalogLabel(commerceConfig);
   const showCart = canUseWebOrders(commerceConfig);
-  const whatsappHref = branding?.whatsappNumber
-    ? `https://wa.me/${branding.whatsappNumber.replace(/\D/g, '')}`
-    : null;
+
+  useEffect(() => {
+    if (!storeSlug) return;
+    let cancelled = false;
+    Promise.all([
+      categoriesService.getPublicCategories(storeSlug),
+      collectionsService.getPublicCollections(storeSlug),
+      facetsService.getPublicFacets(storeSlug),
+      productsService.getPublicProductsByStoreSlug(storeSlug),
+    ]).then(([cats, cols, facets, products]) => {
+      if (cancelled) return;
+      const categoryTree = pruneEmptyCategoryTree(buildCategoryTree(cats), products);
+      const nonEmptyCollections = pruneEmptyCollections(cols, products);
+      const priceRange = products.reduce(
+        (acc, product) => {
+          const activePrice = product.salePrice ?? product.regularPrice;
+          return {
+            min: Math.min(acc.min, activePrice),
+            max: Math.max(acc.max, activePrice),
+          };
+        },
+        { min: Number.POSITIVE_INFINITY, max: 0 },
+      );
+      setCatalogMeta({
+        categories: cats,
+        categoryTree,
+        collections: nonEmptyCollections,
+        facets,
+        megaMenuFacets: facets.filter((f) => f.showInMegaMenu),
+        products,
+        priceRange: {
+          min: priceRange.min === Number.POSITIVE_INFINITY ? 0 : priceRange.min,
+          max: priceRange.max,
+        },
+      });
+    }).catch(() => { /* catalog meta is optional */ });
+    return () => { cancelled = true; };
+  }, [storeSlug]);
 
   useEffect(() => {
     if (!('scrollRestoration' in window.history)) return;
@@ -151,6 +189,14 @@ function PublicStoreShell({
       window.history.scrollRestoration = previous;
     };
   }, []);
+
+  // Defensive cleanup: CartDrawer must never survive a route change (e.g.
+  // browser back/forward while it's open). PublicStoreShell stays mounted
+  // across nested public route navigations, so cartOpen otherwise persists
+  // and its fixed, z-50 panel keeps covering the header on the new page.
+  useEffect(() => {
+    setCartOpen(false);
+  }, [location.pathname]);
 
   useLayoutEffect(() => {
     setRouteReady(false);
@@ -246,13 +292,16 @@ function PublicStoreShell({
             storeName={branding.storeName}
             storeSlug={storeSlug}
             logoUrl={branding.logoUrl}
-            searchPlaceholder={searchPlaceholder}
-            catalogLabel={catalogLabel}
-            whatsappHref={whatsappHref}
+            slogan={branding.slogan}
+            catalogType={branding.catalogType}
             hasHero={hasHero}
             showCart={showCart}
             cartCount={totalItems}
             onCartOpen={() => setCartOpen(true)}
+            onRequestCloseCart={() => setCartOpen(false)}
+            headerSettings={branding.headerSettings}
+            categories={(catalogMeta?.categoryTree ?? []).filter((c: PublicStoreCategory) => c.showInMenu)}
+            catalogMeta={catalogMeta}
           />
         ) : null}
 
@@ -270,16 +319,19 @@ function PublicStoreShell({
           />
         ) : null}
 
-        {branding ? (
+        {branding && cartOpen ? (
           <CartDrawer
             open={cartOpen}
             onClose={() => setCartOpen(false)}
             theme={theme}
             storeName={branding.storeName}
             storeSlug={storeSlug}
+            currency={branding.currency}
             whatsappNumber={branding.whatsappNumber}
             allowsPickup={branding.allowsPickup}
             allowsLocalDelivery={branding.allowsLocalDelivery}
+            cashOnDeliveryEnabled={branding.cashOnDeliveryEnabled}
+            onlineCheckoutEnabled={branding.onlineCheckoutEnabled}
           />
         ) : null}
       </div>

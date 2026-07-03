@@ -1,4 +1,5 @@
 import type {
+  Json,
   ProductRow,
   ProductRowInsert,
   ProductRowUpdate,
@@ -8,6 +9,9 @@ import type {
   PublicProductPageRow,
 } from '@/types/database.types';
 import type {
+  ProductDescriptionSection,
+  ProductCollectionAssignment,
+  ProductFacetValue,
   ProductOptionSelectionType,
   ProductStatus,
   ProductType,
@@ -26,6 +30,33 @@ import type {
   ProductUpdate,
 } from './products.types';
 
+function parseDescriptionSections(raw: unknown): ProductDescriptionSection[] {
+  if (!Array.isArray(raw)) return [];
+  return raw as ProductDescriptionSection[];
+}
+
+function parseFacetValues(raw: unknown): ProductFacetValue[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as Array<Record<string, unknown>>).map((item) => ({
+    facetId: String(item.facet_id ?? ''),
+    facetName: String(item.facet_name ?? ''),
+    facetSlug: String(item.facet_slug ?? ''),
+    inputType: item.input_type === 'multi_select' ? 'multi_select' : 'single_select',
+    valueId: String(item.value_id ?? ''),
+    value: String(item.value ?? ''),
+    valueSlug: String(item.value_slug ?? ''),
+  }));
+}
+
+function parseCollections(raw: unknown): ProductCollectionAssignment[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as Array<Record<string, unknown>>).map((item) => ({
+    id: String(item.id ?? ''),
+    name: String(item.name ?? ''),
+    slug: String(item.slug ?? ''),
+  }));
+}
+
 export function mapProductRowToProduct(row: ProductRow): Product {
   return {
     id: row.id,
@@ -35,6 +66,7 @@ export function mapProductRowToProduct(row: ProductRow): Product {
     slug: row.slug,
     description: row.description,
     shortDescription: row.short_description,
+    descriptionSections: parseDescriptionSections(row.description_sections),
     productType: (row.product_type as ProductType) ?? 'physical_product',
     regularPrice: Number(row.regular_price),
     compareAtPrice: row.compare_at_price !== null ? Number(row.compare_at_price) : null,
@@ -54,6 +86,9 @@ export function mapProductRowToProduct(row: ProductRow): Product {
     status: row.status as ProductStatus,
     mainImageUrl: row.main_image_url,
     category: row.category,
+    categoryId: row.category_id ?? null,
+    collections: [],
+    facetValues: [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -133,18 +168,20 @@ export function mapPublicProductPageRowToPublicProductPage(row: PublicProductPag
     productName: row.product_name,
     description: row.description,
     shortDescription: row.short_description,
+    descriptionSections: parseDescriptionSections(row.description_sections),
     productType: (row.product_type as ProductType) ?? 'physical_product',
     regularPrice: Number(row.regular_price),
     compareAtPrice: row.compare_at_price !== null ? Number(row.compare_at_price) : null,
     salePrice: row.sale_price !== null ? Number(row.sale_price) : null,
     stock: row.stock,
+    trackInventory: row.track_inventory ?? false,
     isFeatured: row.is_featured ?? false,
     isAvailable: row.is_available ?? true,
     preparationTimeMinutes: row.preparation_time_minutes ?? null,
-    allowsSpecialInstructions: true,
-    specialInstructionsLabel: null,
-    specialInstructionsPlaceholder: null,
-    specialInstructionsMaxLength: 180,
+    allowsSpecialInstructions: row.allows_special_instructions ?? true,
+    specialInstructionsLabel: row.special_instructions_label ?? null,
+    specialInstructionsPlaceholder: row.special_instructions_placeholder ?? null,
+    specialInstructionsMaxLength: row.special_instructions_max_length ?? 180,
     mainImageUrl: row.main_image_url,
     images: row.main_image_url
       ? [
@@ -158,6 +195,12 @@ export function mapPublicProductPageRowToPublicProductPage(row: PublicProductPag
       : [],
     optionGroups: [],
     category: row.category,
+    categoryId: row.category_id ?? null,
+    categoryName: row.category_name ?? null,
+    categorySlug: row.category_slug ?? null,
+    categoryParentId: row.category_parent_id ?? null,
+    collections: parseCollections(row.collections),
+    facetValues: parseFacetValues(row.facet_values),
     whatsappCheckoutEnabled: row.whatsapp_checkout_enabled ?? null,
     webOrderEnabled: row.web_order_enabled ?? null,
     allowsPickup: row.allows_pickup ?? null,
@@ -175,6 +218,7 @@ export function mapProductInsertToRow(data: ProductInsert, ownerId: string): Pro
     slug: data.slug,
     description: data.description,
     short_description: data.shortDescription ?? null,
+    description_sections: data.descriptionSections.length > 0 ? (data.descriptionSections as unknown as Json) : null,
     product_type: data.productType,
     regular_price: data.regularPrice,
     compare_at_price: data.compareAtPrice ?? null,
@@ -194,6 +238,7 @@ export function mapProductInsertToRow(data: ProductInsert, ownerId: string): Pro
     status: data.status,
     main_image_url: data.mainImageUrl ?? null,
     category: data.category ?? null,
+    category_id: data.categoryId ?? null,
   };
 }
 
@@ -203,6 +248,7 @@ export function mapProductUpdateToRow(data: ProductUpdate): ProductRowUpdate {
   if (data.slug !== undefined) row.slug = data.slug;
   if (data.description !== undefined) row.description = data.description;
   if (data.shortDescription !== undefined) row.short_description = data.shortDescription ?? null;
+  if (data.descriptionSections !== undefined) row.description_sections = data.descriptionSections.length > 0 ? (data.descriptionSections as unknown as Json) : null;
   if (data.productType !== undefined) row.product_type = data.productType;
   if (data.regularPrice !== undefined) row.regular_price = data.regularPrice;
   if (data.compareAtPrice !== undefined) row.compare_at_price = data.compareAtPrice ?? null;
@@ -222,5 +268,6 @@ export function mapProductUpdateToRow(data: ProductUpdate): ProductRowUpdate {
   if (data.status !== undefined) row.status = data.status;
   if (data.mainImageUrl !== undefined) row.main_image_url = data.mainImageUrl ?? null;
   if (data.category !== undefined) row.category = data.category ?? null;
+  if (data.categoryId !== undefined) row.category_id = data.categoryId ?? null;
   return row;
 }

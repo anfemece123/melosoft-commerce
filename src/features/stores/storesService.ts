@@ -36,6 +36,7 @@ import {
   mapStorePoliciesUpdateToRow,
   mapStoreHeroSlideRowToStoreHeroSlide,
   mapStoreHeroSlideInsertToRow,
+  mapPublicStoreHeroSlideRowToPublicStoreHeroSlide,
   mapPublicStorePageRowToPublicStorePage,
   mapStoreMemberRowToStoreMember,
   mapStoreMemberInsertToRow,
@@ -433,12 +434,11 @@ export const storesService = {
 
   async getPublicStoreHeroSlides(storeId: string): Promise<PublicStoreHeroSlide[]> {
     const { data, error } = await supabase
-      .from('store_hero_slides')
+      .from('public_store_hero_slides')
       .select('*')
       .eq('store_id', storeId)
-      .eq('is_active', true)
       .order('sort_order', { ascending: true });
     if (error) throw new Error(error.message);
-    return (data ?? []).map(mapStoreHeroSlideRowToStoreHeroSlide);
+    return (data ?? []).map(mapPublicStoreHeroSlideRowToPublicStoreHeroSlide);
   },
 };

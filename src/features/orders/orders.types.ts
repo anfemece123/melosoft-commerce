@@ -86,6 +86,7 @@ export interface CreateWebOrderPayload {
   deliveryReference: string | null;
   notes: string | null;
   storeLocationId?: string | null;
+  paymentMethod?: 'cash_on_delivery' | 'online';
   items: WebOrderCartItem[];
 }
 
@@ -93,5 +94,6 @@ export interface WebOrderResult {
   orderId: string;
   orderNumber: string;
   totalAmount: number;
+  paymentMethod: 'cash_on_delivery' | 'online';
   status: string;
 }

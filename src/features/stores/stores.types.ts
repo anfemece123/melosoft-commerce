@@ -1,5 +1,6 @@
 import type {
   AsyncStatus,
+  BusinessVertical,
   StoreStatus,
   ThemeMode,
   TemplateKey,
@@ -8,6 +9,7 @@ import type {
   PlanKey,
   BusinessType,
   ThemePreset,
+  PublicHeaderSettings,
 } from '@/types/common.types';
 import type { StoreCommerceSettings } from './storeCommerce.types';
 
@@ -23,6 +25,7 @@ export interface StoreTheme {
   textColor: string | null;
   buttonRadius: string | null;
   templateKey: TemplateKey;
+  headerSettings?: PublicHeaderSettings | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -80,6 +83,8 @@ export interface Store {
   slug: string;
   slogan: string | null;
   businessType: BusinessType | null;
+  businessVertical: BusinessVertical | null;
+  businessSubcategory: string | null;
   description: string | null;
   logoUrl: string | null;
   faviconUrl: string | null;
@@ -194,7 +199,8 @@ export interface CreateStoreWithOwnerInput {
   name: string;
   slug: string;
   slogan: string | null;
-  businessType: string;
+  businessVertical: BusinessVertical;
+  businessSubcategory: string;
   description: string;
   logoUrl: string | null;
   supportEmail: string | null;

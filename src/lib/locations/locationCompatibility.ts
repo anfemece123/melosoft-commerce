@@ -26,7 +26,7 @@ export async function checkCartLocationCompatibility(
     return { allAvailable: true, noneAvailable: false, unavailableItems: [], availableCount: 0, unavailableCount: 0 };
   }
 
-  const productIds = cartItems.map(i => i.productId);
+  const productIds = Array.from(new Set(cartItems.map(i => i.productId)));
   const availabilityInTarget = await productAvailabilityService.getAvailabilityForLocation(
     storeId,
     productIds,

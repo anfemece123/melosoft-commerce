@@ -1,4 +1,12 @@
-import type { AsyncStatus, ProductOptionSelectionType, ProductStatus, ProductType } from '@/types/common.types';
+import type {
+  AsyncStatus,
+  ProductCollectionAssignment,
+  ProductDescriptionSection,
+  ProductFacetValue,
+  ProductOptionSelectionType,
+  ProductStatus,
+  ProductType,
+} from '@/types/common.types';
 
 export interface ProductImage {
   id: string;
@@ -21,6 +29,7 @@ export interface Product {
   slug: string;
   description: string;
   shortDescription: string | null;
+  descriptionSections: ProductDescriptionSection[];
   productType: ProductType;
   regularPrice: number;
   compareAtPrice: number | null;
@@ -40,12 +49,15 @@ export interface Product {
   status: ProductStatus;
   mainImageUrl: string | null;
   category: string | null;
+  categoryId: string | null;
+  collections: ProductCollectionAssignment[];
+  facetValues: ProductFacetValue[];
   images?: ProductImage[];
   createdAt: string;
   updatedAt: string;
 }
 
-export type ProductInsert = Omit<Product, 'id' | 'ownerId' | 'images' | 'createdAt' | 'updatedAt'>;
+export type ProductInsert = Omit<Product, 'id' | 'ownerId' | 'images' | 'collections' | 'facetValues' | 'createdAt' | 'updatedAt'>;
 export type ProductUpdate = Partial<Omit<ProductInsert, 'storeId'>>;
 
 export interface ProductCountStats {

@@ -11,14 +11,10 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import {
-  setCurrentStore,
-  setCurrentLimits,
-  setCurrentMembers,
-  setCurrentCommerceSettings,
-} from '@/features/stores/storesSlice';
+import { setCurrentMembers } from '@/features/stores/storesSlice';
+import { selectCurrentStore, selectCurrentCommerceSettings, selectCurrentBusinessLimits, selectMyMemberships } from '@/features/stores/stores.selectors';
+import { selectAuthProfile } from '@/features/auth/auth.selectors';
 import { storesService } from '@/features/stores/storesService';
-import { storeCommerceService } from '@/features/stores/storeCommerceService';
 import { productsService } from '@/features/products/productsService';
 import { isPlatformAdmin, canManageStore, canManageStoreMembers } from '@/utils/permissions';
 import type { ProductCountStats } from '@/features/products/products.types';
@@ -58,11 +54,11 @@ export function StoreDetailPage() {
   const [copied, setCopied] = useState(false);
   const [productStats, setProductStats] = useState<ProductCountStats | null>(null);
 
-  const profile = useAppSelector((state) => state.auth.profile);
-  const myMemberships = useAppSelector((state) => state.stores.myMemberships);
-  const store = useAppSelector((state) => state.stores.current);
-  const currentLimits = useAppSelector((state) => state.stores.currentLimits);
-  const currentCommerceSettings = useAppSelector((state) => state.stores.currentCommerceSettings);
+  const profile = useAppSelector(selectAuthProfile);
+  const myMemberships = useAppSelector(selectMyMemberships);
+  const store = useAppSelector(selectCurrentStore);
+  const currentLimits = useAppSelector(selectCurrentBusinessLimits);
+  const currentCommerceSettings = useAppSelector(selectCurrentCommerceSettings);
 
   const isAdmin = isPlatformAdmin(profile);
   const canManage = storeId ? canManageStore(profile, myMemberships, storeId) : false;
@@ -70,21 +66,18 @@ export function StoreDetailPage() {
 
   const isMenu = currentCommerceSettings?.catalogType === 'menu';
 
+  // Store/limits/commerce settings are hydrated by StoreAccessRoute
+  // (useEnsureCurrentStore) before this page renders — only page-specific
+  // data (members, product stats) is loaded here.
   useEffect(() => {
     if (!storeId) return;
     async function load() {
       if (!storeId) return;
-      const [storeData, limitsData, membersData, commerceData, stats] = await Promise.all([
-        storesService.getStoreById(storeId),
-        storesService.getStoreLimits(storeId),
+      const [membersData, stats] = await Promise.all([
         storesService.getStoreMembers(storeId),
-        storeCommerceService.fetchStoreCommerceSettings(storeId),
         productsService.countProductsByStore(storeId),
       ]);
-      dispatch(setCurrentStore(storeData));
-      dispatch(setCurrentLimits(limitsData));
       dispatch(setCurrentMembers(membersData));
-      dispatch(setCurrentCommerceSettings(commerceData));
       setProductStats(stats);
     }
     void load();

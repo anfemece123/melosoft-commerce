@@ -76,7 +76,6 @@ function OrderCard({ order, locationMap, ghost = false, overlay = false }: Order
   const shownItems = order.items?.slice(0, 2) ?? [];
   const extraItems = (order.items?.length ?? 0) - 2;
 
-  // Border color per attention level
   const borderClass = ghost
     ? 'border-indigo-200'
     : attention === 'overdue'
@@ -85,7 +84,6 @@ function OrderCard({ order, locationMap, ghost = false, overlay = false }: Order
         ? 'border-amber-300'
         : 'border-gray-100';
 
-  // Background tint per attention level
   const bgClass = ghost
     ? 'bg-indigo-50/50 opacity-40'
     : attention === 'overdue'
@@ -114,7 +112,6 @@ function OrderCard({ order, locationMap, ghost = false, overlay = false }: Order
 
           {attention === 'new' && !ghost && (
             <span className="inline-flex items-center gap-1 rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold text-amber-900 shrink-0">
-              {/* Animated pulse dot */}
               <span className="relative flex h-1.5 w-1.5 shrink-0">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-900 opacity-60" />
                 <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-900" />
@@ -194,7 +191,6 @@ function OrderCard({ order, locationMap, ghost = false, overlay = false }: Order
         </div>
       </div>
 
-      {/* Notes — max 2 lines */}
       {order.notes && (
         <div className="mt-2 rounded-lg bg-amber-50 border border-amber-100 px-2 py-1">
           <p className="text-[10px] text-amber-700 line-clamp-2 break-words">{order.notes}</p>
@@ -280,7 +276,7 @@ function DroppableColumn({
         )}
       </div>
 
-      {/* Card list — vertical scroll, no overflow into cards */}
+      {/* Card list — vertical scroll */}
       <div className="flex flex-col gap-2 overflow-y-auto max-h-[calc(100vh-268px)] pb-2">
         {children}
       </div>
@@ -297,6 +293,12 @@ interface RestaurantOrdersBoardProps {
   locationMap: Record<string, string>;
   locationOptions: Array<{ id: string; name: string }>;
   onStatusChange: (orderId: string, status: OrderStatus) => Promise<void>;
+  context: OrderViewContext;
+  // Shared with parent — persist across view switches
+  search: string;
+  locationId: string;
+  onSearchChange: (v: string) => void;
+  onLocationChange: (v: string) => void;
 }
 
 export function RestaurantOrdersBoard({
@@ -306,14 +308,15 @@ export function RestaurantOrdersBoard({
   locationMap,
   locationOptions,
   onStatusChange,
+  context,
+  search,
+  locationId,
+  onSearchChange,
+  onLocationChange,
 }: RestaurantOrdersBoardProps) {
-  const context: OrderViewContext = 'restaurant';
-
   const [activeOrder, setActiveOrder]       = useState<Order | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<Order | null>(null);
   const [selectedOrder, setSelectedOrder]   = useState<Order | null>(null);
-  const [filterLocationId, setFilterLocationId] = useState('');
-  const [search, setSearch]                 = useState('');
 
   // 60-second tick — forces re-render so attention levels & elapsed labels stay fresh
   const [, setTick] = useState(0);
@@ -327,7 +330,7 @@ export function RestaurantOrdersBoard({
   );
 
   const filteredOrders = orders.filter(o => {
-    if (filterLocationId && o.storeLocationId !== filterLocationId) return false;
+    if (locationId && o.storeLocationId !== locationId) return false;
     if (search) {
       const q = search.toLowerCase();
       if (
@@ -357,7 +360,6 @@ export function RestaurantOrdersBoard({
     const order        = orders.find(o => o.id === orderId);
     if (!order || order.status === targetStatus) return;
 
-    // pending → confirmed: require WhatsApp confirmation dialog
     if (order.status === 'pending' && targetStatus === 'confirmed') {
       setPendingConfirm(order);
       return;
@@ -375,13 +377,13 @@ export function RestaurantOrdersBoard({
             type="text"
             placeholder="Buscar cliente, pedido..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => onSearchChange(e.target.value)}
             className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 w-52"
           />
           {locationOptions.length > 1 && (
             <select
-              value={filterLocationId}
-              onChange={e => setFilterLocationId(e.target.value)}
+              value={locationId}
+              onChange={e => onLocationChange(e.target.value)}
               className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
             >
               <option value="">Todas las sedes</option>
@@ -391,7 +393,7 @@ export function RestaurantOrdersBoard({
             </select>
           )}
 
-          {/* Overdue alert — red pill, takes priority */}
+          {/* Overdue alert */}
           {overdueCount > 0 && (
             <div className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
               <span className="relative flex h-2 w-2 shrink-0">
@@ -404,7 +406,6 @@ export function RestaurantOrdersBoard({
             </div>
           )}
 
-          {/* Normal pending — amber pill */}
           {pendingCount > 0 && overdueCount === 0 && (
             <div className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
               <Clock className="w-4 h-4 text-amber-600" />
@@ -417,7 +418,7 @@ export function RestaurantOrdersBoard({
           <div className="ml-auto flex items-center gap-1.5 text-xs text-gray-400">
             <Users className="w-3.5 h-3.5" />
             {filteredOrders.length} de {orders.length} pedido{orders.length !== 1 ? 's' : ''}
-            {(search || filterLocationId) ? ' (filtrado)' : ''}
+            {(search || locationId) ? ' (filtrado)' : ''}
           </div>
         </div>
 
@@ -434,7 +435,6 @@ export function RestaurantOrdersBoard({
               style={{ minWidth: colCount * (COL_W + 12) }}
             >
               {BOARD_COLUMNS.map(col => {
-                // 'shipped' (legacy "Listo") orders are absorbed into 'processing' column.
                 const colOrders = filteredOrders.filter(o =>
                   o.status === col.status ||
                   (col.status === 'processing' && o.status === 'shipped')
@@ -491,7 +491,6 @@ export function RestaurantOrdersBoard({
               )}
             </div>
 
-            {/* DragOverlay — React-rendered, fixed width, no browser ghost */}
             <DragOverlay dropAnimation={null}>
               {activeOrder ? (
                 <OrderCard order={activeOrder} locationMap={locationMap} overlay />

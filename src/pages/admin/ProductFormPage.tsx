@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useFormik } from 'formik';
-import { ArrowLeft, Upload, X, Clock, Package, UtensilsCrossed, MapPin } from 'lucide-react';
+import { ArrowLeft, Upload, X, Clock, MapPin, Layers } from 'lucide-react';
+import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -11,13 +12,24 @@ import { FormErrorAlert } from '@/components/ui/FormErrorAlert';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DiscountBadge } from '@/components/ui/DiscountBadge';
 import { ImageCropDialog } from '@/components/admin/ImageCropDialog';
-import { ProductCategoryField } from '@/components/admin/ProductCategoryField';
+import { ProductCategorySelect } from '@/components/admin/ProductCategorySelect';
+import { ProductCollectionsMultiSelect } from '@/components/admin/ProductCollectionsMultiSelect';
+import { ProductFacetAssignments } from '@/components/admin/ProductFacetAssignments';
 import { ProductOptionsEditor } from '@/components/admin/ProductOptionsEditor';
+import { ProductDescriptionSectionsEditor } from '@/components/admin/ProductDescriptionSectionsEditor';
+import { StockAdjustmentModal } from '@/components/admin/StockAdjustmentModal';
+import { MoneyInput } from '@/components/forms/MoneyInput';
+import { getProductFormLabels } from '@/lib/products/productFormLabels';
 import { useAppSelector } from '@/app/hooks';
+import { selectCurrentStore, selectCurrentCommerceSettings } from '@/features/stores/stores.selectors';
 import { productOptionsService, type ProductOptionGroupDraft } from '@/features/products/productOptionsService';
 import { productsService } from '@/features/products/productsService';
+import { inventoryService } from '@/features/products/inventoryService';
 import { locationsService } from '@/features/locations/locationsService';
 import { productAvailabilityService } from '@/features/products/productAvailabilityService';
+import { categoriesService } from '@/features/categories/categoriesService';
+import { collectionsService } from '@/features/collections/collectionsService';
+import { facetsService } from '@/features/facets/facetsService';
 import type { StoreLocation } from '@/features/locations/locations.types';
 import { slugify } from '@/utils/slugify';
 import { formatCurrency } from '@/utils/formatCurrency';
@@ -32,6 +44,8 @@ import type { DiscountMode, ProductFormValues } from '@/schemas/product.schema';
 import { notify } from '@/lib/notifications';
 import { mapSupabaseError } from '@/lib/errors/supabaseErrorMapper';
 import type { ProductImage } from '@/features/products/products.types';
+import type { ProductDescriptionSection, PublicStoreCategory, PublicStoreCollection } from '@/types/common.types';
+import type { StoreFacet } from '@/features/facets/facets.types';
 import { IMAGE_ASSET_PRESETS } from '@/lib/images/imageAssetPresets';
 import { type LoadedImageFile, validateImageFile } from '@/lib/images/imageFile.utils';
 
@@ -80,15 +94,30 @@ function ToggleField({
   );
 }
 
+function SectionHeader({ title, description }: { title: string; description?: string }) {
+  return (
+    <div className="mb-4">
+      <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+      {description ? <p className="mt-1 text-sm text-gray-500">{description}</p> : null}
+    </div>
+  );
+}
+
 export function ProductFormPage() {
   const { storeId, productId } = useParams<{ storeId: string; productId: string }>();
   const navigate = useNavigate();
   const isEditing = Boolean(productId);
   const slugEditedByUser = useRef(false);
 
-  const store = useAppSelector((s) => s.stores.current);
-  const currentCommerceSettings = useAppSelector((s) => s.stores.currentCommerceSettings);
+  const store = useAppSelector(selectCurrentStore);
+  const currentCommerceSettings = useAppSelector(selectCurrentCommerceSettings);
   const isMenu = currentCommerceSettings?.catalogType === 'menu';
+
+  const labels = getProductFormLabels({
+    vertical: store?.businessVertical ?? null,
+    subcategory: store?.businessSubcategory ?? null,
+    isMenu,
+  });
 
   const [existingImages, setExistingImages] = useState<ProductImage[]>([]);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -99,12 +128,25 @@ export function ProductFormPage() {
   const [cropQueue, setCropQueue] = useState<LoadedImageFile[]>([]);
   const [activeCrop, setActiveCrop] = useState<LoadedImageFile | null>(null);
   const [optionGroups, setOptionGroups] = useState<ProductOptionGroupDraft[]>([]);
+  const [descriptionSections, setDescriptionSections] = useState<ProductDescriptionSection[]>([]);
   const [activeLocations, setActiveLocations] = useState<StoreLocation[]>([]);
   const [locationAvailability, setLocationAvailability] = useState<Record<string, boolean>>({});
+  const [adjustStockOpen, setAdjustStockOpen] = useState(false);
+  const [currentStock, setCurrentStock] = useState(0);
+  const [storeCategories, setStoreCategories] = useState<PublicStoreCategory[]>([]);
+  const [storeCollections, setStoreCollections] = useState<PublicStoreCollection[]>([]);
+  const [storeFacets, setStoreFacets] = useState<StoreFacet[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedCollectionIds, setSelectedCollectionIds] = useState<string[]>([]);
+  const [selectedFacetValueIds, setSelectedFacetValueIds] = useState<string[]>([]);
 
   const defaultProductType = isMenu ? 'menu_item' : 'physical_product';
-  const entitySingular = isMenu ? 'plato' : 'producto';
+  const entitySingular = labels.entityName;
   const currency = store?.currency ?? 'COP';
+  const selectedCategory = useMemo(
+    () => storeCategories.find((category) => category.id === selectedCategoryId) ?? null,
+    [selectedCategoryId, storeCategories],
+  );
 
   const formik = useFormik<ProductFormValues>({
     initialValues: {
@@ -121,13 +163,13 @@ export function ProductFormPage() {
       sku: '',
       trackInventory: true,
       stockQuantity: '',
-      status: 'draft',
+      status: 'active',
       isAvailable: true,
       isFeatured: false,
       preparationTimeMinutes: '',
-      allowsSpecialInstructions: true,
-      specialInstructionsLabel: 'Indicaciones para tu pedido',
-      specialInstructionsPlaceholder: 'Ej: sin cebolla, salsa aparte, término medio',
+      allowsSpecialInstructions: false,
+      specialInstructionsLabel: '',
+      specialInstructionsPlaceholder: '',
       specialInstructionsMaxLength: 180,
     },
     validationSchema: productSchema,
@@ -151,19 +193,22 @@ export function ProductFormPage() {
           finalSalePrice = null;
         }
 
-        const payload = {
+        // Base payload — stock is intentionally excluded.
+        // For create: always inserted with stock=0; initial stock is set via RPC.
+        // For edit: stock is never updated here — only via adjust_product_stock RPC.
+        const basePayload = {
           storeId,
           productType: values.productType,
           name: values.name,
           slug: values.slug,
           description: values.description,
           shortDescription: values.shortDescription || null,
-          category: values.category || null,
+          category: selectedCategory?.name ?? null,
+          categoryId: selectedCategory?.id ?? null,
           regularPrice: regularPriceNum,
           salePrice: finalSalePrice,
           compareAtPrice: null,
           costPrice: null,
-          stock: values.stockQuantity !== '' ? Number(values.stockQuantity) : 0,
           sku: values.sku || null,
           trackInventory: values.trackInventory,
           isFeatured: values.isFeatured,
@@ -177,11 +222,12 @@ export function ProductFormPage() {
           sortOrder: 0,
           status: values.status,
           mainImageUrl: null,
+          descriptionSections,
         };
 
         const saved = isEditing && productId
-          ? await productsService.updateProduct(productId, payload)
-          : await productsService.createProduct(payload);
+          ? await productsService.updateProduct(productId, basePayload)
+          : await productsService.createProduct({ ...basePayload, stock: 0 });
 
         // Upload pending images sequentially so errors are per-file
         let firstUploadedUrl: string | null = null;
@@ -206,12 +252,35 @@ export function ProductFormPage() {
           await productsService.updateProduct(saved.id, { mainImageUrl: firstUploadedUrl });
         }
 
+        await productsService.setProductCollections(saved.id, selectedCollectionIds);
+        await facetsService.setProductFacetValues(saved.id, selectedFacetValueIds);
         await productOptionsService.replaceProductOptionGroups(storeId, saved.id, optionGroups);
 
         // Save per-location availability
         for (const loc of activeLocations) {
           const isAvailable = locationAvailability[loc.id] ?? true;
           await productAvailabilityService.upsertAvailability(storeId, saved.id, loc.id, isAvailable);
+        }
+
+        // Register initial stock via RPC so it appears in inventory_movements
+        if (!isEditing && !isMenu && values.trackInventory) {
+          const initialQty = values.stockQuantity !== '' ? Number(values.stockQuantity) : 0;
+          if (initialQty > 0) {
+            try {
+              await inventoryService.adjustStock({
+                storeId,
+                productId: saved.id,
+                movementType: 'stock_in',
+                quantityChange: initialQty,
+                reason: 'Inventario inicial',
+                notes: null,
+              });
+            } catch (stockErr) {
+              notify.warning(
+                `El ${entitySingular} se creó, pero no se pudo registrar el inventario inicial: ${mapSupabaseError(stockErr)}`
+              );
+            }
+          }
         }
 
         const label = entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1);
@@ -228,6 +297,12 @@ export function ProductFormPage() {
         notify.error(msg);
       }
     },
+  });
+
+  useScrollToFirstFormikError({
+    errors: formik.errors,
+    submitCount: formik.submitCount,
+    isSubmitting: formik.isSubmitting,
   });
 
   // Compute discount preview from current form values
@@ -278,7 +353,12 @@ export function ProductFormPage() {
           specialInstructionsPlaceholder: product.specialInstructionsPlaceholder ?? 'Ej: sin cebolla, salsa aparte, término medio',
           specialInstructionsMaxLength: product.specialInstructionsMaxLength ?? 180,
         });
+        setCurrentStock(product.stock);
         setExistingImages(images);
+        setDescriptionSections(product.descriptionSections ?? []);
+        setSelectedCategoryId(product.categoryId);
+        setSelectedCollectionIds(product.collections.map((collection) => collection.id));
+        setSelectedFacetValueIds(product.facetValues.map((value) => value.valueId));
         setOptionGroups(optionGroupsData.map((group) => ({
           id: group.id,
           name: group.name,
@@ -313,8 +393,18 @@ export function ProductFormPage() {
 
   useEffect(() => {
     if (!storeId) return;
-    locationsService.getStoreLocations(storeId)
-      .then(locs => setActiveLocations(locs.filter(l => l.isActive)))
+    Promise.all([
+      locationsService.getStoreLocations(storeId),
+      categoriesService.getStoreCategories(storeId),
+      collectionsService.getStoreCollections(storeId),
+      facetsService.getStoreFacets(storeId),
+    ])
+      .then(([locs, categories, collections, facets]) => {
+        setActiveLocations(locs.filter(l => l.isActive));
+        setStoreCategories(categories);
+        setStoreCollections(collections);
+        setStoreFacets(facets);
+      })
       .catch(() => { /* silent */ });
   }, [storeId]);
 
@@ -335,6 +425,27 @@ export function ProductFormPage() {
   function handleSlugChange(e: React.ChangeEvent<HTMLInputElement>) {
     slugEditedByUser.current = true;
     formik.handleChange(e);
+  }
+
+  function handleToggleSpecialInstructions(enabled: boolean) {
+    void formik.setFieldValue('allowsSpecialInstructions', enabled);
+    if (enabled) {
+      if (!formik.values.specialInstructionsLabel) {
+        void formik.setFieldValue('specialInstructionsLabel', labels.specialInstructions.labelDefault);
+      }
+      if (!formik.values.specialInstructionsPlaceholder) {
+        void formik.setFieldValue('specialInstructionsPlaceholder', labels.specialInstructions.placeholderDefault);
+      }
+    }
+  }
+
+  function handleFixedDiscountChange(value: number | '') {
+    void formik.setFieldValue('discountValue', value);
+    const num = typeof value === 'number' ? value : 0;
+    const rp = Number(formik.values.regularPrice);
+    if (num > 0 && rp > 0 && num < rp) {
+      void formik.setFieldValue('salePrice', calculateSalePriceFromFixedAmount(rp, num));
+    }
   }
 
   function handleDiscountModeChange(mode: DiscountMode) {
@@ -439,16 +550,14 @@ export function ProductFormPage() {
         }
       />
 
-      <form onSubmit={formik.handleSubmit} noValidate className="space-y-6 max-w-2xl">
+      <form onSubmit={formik.handleSubmit} noValidate className="space-y-6 max-w-4xl">
         {/* Basic info */}
         <Card>
           <CardBody>
-            <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              {isMenu
-                ? <UtensilsCrossed className="w-4 h-4 text-amber-600" />
-                : <Package className="w-4 h-4 text-violet-600" />}
-              Información básica
-            </h3>
+            <SectionHeader
+              title={`Información principal del ${entitySingular}`}
+              description="Agrega la información principal que verá el cliente en la tienda."
+            />
             <div className="space-y-4">
               {/* Product type */}
               <div>
@@ -481,7 +590,7 @@ export function ProductFormPage() {
               <Input
                 id="name"
                 label="Nombre"
-                placeholder={isMenu ? 'Ej: Bandeja paisa' : 'Ej: Camisa de algodón'}
+                placeholder={labels.namePlaceholder}
                 {...formik.getFieldProps('name')}
                 onChange={handleNameChange}
                 error={formik.touched.name ? formik.errors.name : undefined}
@@ -529,15 +638,85 @@ export function ProductFormPage() {
                   <p className="mt-1 text-xs text-red-600">{formik.errors.shortDescription}</p>
                 )}
               </div>
+            </div>
+          </CardBody>
+        </Card>
 
-              {storeId ? (
-                <ProductCategoryField
-                  storeId={storeId}
-                  value={formik.values.category}
-                  placeholder={isMenu ? 'Ej: Platos principales' : 'Ej: Ropa de hombre'}
-                  onChange={(category) => void formik.setFieldValue('category', category)}
-                />
-              ) : null}
+        <Card>
+          <CardBody>
+            <div className="mb-4 flex items-start gap-3">
+              <div className="rounded-2xl bg-violet-50 p-2 text-violet-700">
+                <Upload className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Imágenes del producto</h3>
+                <p className="mt-1 text-sm text-gray-500">La primera imagen será la principal.</p>
+              </div>
+            </div>
+
+            <p className="mb-4 text-xs text-gray-500">
+              Máximo {MAX_IMAGES} imágenes.
+            </p>
+
+            <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+              {existingImages.map((img) => (
+                <div
+                  key={img.id}
+                  className="relative aspect-square overflow-hidden rounded-lg bg-gray-100 group"
+                >
+                  <img src={img.imageUrl} alt="" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteImage(img)}
+                    disabled={deletingImageId === img.id}
+                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                  >
+                    {deletingImageId === img.id ? (
+                      <div className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    ) : (
+                      <X className="h-3 w-3" />
+                    )}
+                  </button>
+                  {img.isPrimary && (
+                    <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-xs text-white">
+                      Principal
+                    </span>
+                  )}
+                </div>
+              ))}
+
+              {pendingPreviews.map((url, i) => (
+                <div
+                  key={url}
+                  className="relative aspect-square overflow-hidden rounded-lg bg-gray-100 group"
+                >
+                  <img src={url} alt="" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removePendingFile(i)}
+                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                  <span className="absolute bottom-1 left-1 rounded bg-amber-500/80 px-1 text-xs text-white">
+                    Por subir
+                  </span>
+                </div>
+              ))}
+
+              {totalImages < MAX_IMAGES && (
+                <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-200 transition-colors hover:border-indigo-400 hover:bg-indigo-50/50">
+                  <Upload className="mb-1 h-5 w-5 text-gray-400" />
+                  <span className="text-xs text-gray-400">Subir</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileSelect}
+                  />
+                </label>
+              )}
             </div>
           </CardBody>
         </Card>
@@ -545,20 +724,20 @@ export function ProductFormPage() {
         {/* Pricing & discount */}
         <Card>
           <CardBody>
-            <h3 className="font-semibold text-gray-900 mb-4">
-              {isMenu ? 'Precio y descuento del plato' : 'Precio y descuento del producto'}
-            </h3>
+            <SectionHeader
+              title={labels.pricingTitle}
+              description="Define el precio y una promoción si aplica."
+            />
             <div className="space-y-4">
               {/* Regular price */}
-              <Input
+              <MoneyInput
                 id="regularPrice"
-                label={isMenu ? 'Precio del plato *' : 'Precio normal *'}
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0"
-                hint={currency}
-                {...formik.getFieldProps('regularPrice')}
+                name="regularPrice"
+                label={`${labels.priceLabel} *`}
+                currency={currency}
+                value={formik.values.regularPrice}
+                onChange={(val) => void formik.setFieldValue('regularPrice', val)}
+                onBlur={() => void formik.setFieldTouched('regularPrice', true)}
                 error={formik.touched.regularPrice ? formik.errors.regularPrice : undefined}
               />
 
@@ -588,15 +767,14 @@ export function ProductFormPage() {
 
               {/* Opción 1 — Precio promocional directo */}
               {formik.values.discountMode === 'direct_price' && (
-                <Input
+                <MoneyInput
                   id="salePrice"
+                  name="salePrice"
                   label="Precio promocional"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0"
-                  hint={currency}
-                  {...formik.getFieldProps('salePrice')}
+                  currency={currency}
+                  value={formik.values.salePrice}
+                  onChange={(val) => void formik.setFieldValue('salePrice', val)}
+                  onBlur={() => void formik.setFieldTouched('salePrice', true)}
                   error={formik.touched.salePrice ? formik.errors.salePrice : undefined}
                 />
               )}
@@ -620,16 +798,14 @@ export function ProductFormPage() {
 
               {/* Opción 3 — Valor fijo de descuento */}
               {formik.values.discountMode === 'fixed_amount' && (
-                <Input
+                <MoneyInput
                   id="discountValue"
+                  name="discountValue"
                   label="Descuento en valor"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="Ej: 5000"
-                  hint={currency}
-                  {...formik.getFieldProps('discountValue')}
-                  onChange={handleDiscountValueChange}
+                  currency={currency}
+                  value={formik.values.discountValue}
+                  onChange={handleFixedDiscountChange}
+                  onBlur={() => void formik.setFieldTouched('discountValue', true)}
                   error={formik.touched.discountValue ? formik.errors.discountValue : undefined}
                 />
               )}
@@ -653,13 +829,68 @@ export function ProductFormPage() {
           </CardBody>
         </Card>
 
+        {/* Categoría, colecciones y características */}
+        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-4 text-sm text-gray-600">
+          <p><span className="font-medium text-gray-900">Categoría:</span> define dónde vive el producto.</p>
+          <p><span className="font-medium text-gray-900">Colecciones:</span> muestran el producto en grupos especiales.</p>
+          <p><span className="font-medium text-gray-900">Características:</span> permiten filtrar y comparar productos.</p>
+        </div>
+
+        {storeId ? (
+          <ProductCategorySelect
+            storeId={storeId}
+            categories={storeCategories}
+            selectedCategoryId={selectedCategoryId}
+            onChange={setSelectedCategoryId}
+            onCategoriesChange={setStoreCategories}
+          />
+        ) : null}
+
+        {storeId ? (
+          <ProductCollectionsMultiSelect
+            storeId={storeId}
+            collections={storeCollections}
+            selectedCollectionIds={selectedCollectionIds}
+            onChange={setSelectedCollectionIds}
+            onCollectionsChange={setStoreCollections}
+          />
+        ) : null}
+
+        {storeId ? (
+          <ProductFacetAssignments
+            storeId={storeId}
+            facets={storeFacets}
+            categories={storeCategories}
+            selectedFacetValueIds={selectedFacetValueIds}
+            selectedCategory={selectedCategory}
+            onChange={setSelectedFacetValueIds}
+            onFacetsChange={setStoreFacets}
+          />
+        ) : null}
+
+        {/* Description sections */}
+        <Card>
+          <CardBody>
+            <SectionHeader
+              title="Descripción avanzada"
+              description="Bloques opcionales para enriquecer la página del producto."
+            />
+            <ProductDescriptionSectionsEditor
+              sections={descriptionSections}
+              onChange={setDescriptionSections}
+              vertical={store?.businessVertical ?? null}
+              subcategory={store?.businessSubcategory ?? null}
+            />
+          </CardBody>
+        </Card>
+
         {/* Type-specific fields */}
         {isMenu ? (
           <Card>
             <CardBody>
               <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <Clock className="w-4 h-4 text-gray-500" />
-                Información del plato
+                Tiempo de preparación
               </h3>
               <Input
                 id="preparationTimeMinutes"
@@ -679,7 +910,10 @@ export function ProductFormPage() {
         ) : (
           <Card>
             <CardBody>
-              <h3 className="font-semibold text-gray-900 mb-4">Inventario</h3>
+              <h3 className="font-semibold text-gray-900 mb-2">Inventario</h3>
+              <p className="mb-4 text-sm text-gray-600">
+                Configura el control interno de stock. Esto no afecta checkout, pedidos ni movimientos fuera del flujo actual.
+              </p>
               <div className="space-y-4">
                 <Input
                   id="sku"
@@ -693,10 +927,11 @@ export function ProductFormPage() {
                   checked={formik.values.trackInventory}
                   onChange={(v) => void formik.setFieldValue('trackInventory', v)}
                 />
-                {formik.values.trackInventory && (
+                {formik.values.trackInventory && !isEditing && (
                   <Input
                     id="stockQuantity"
-                    label="Cantidad en stock"
+                    label="Inventario inicial"
+                    hint="Cantidad disponible al momento de crear el producto."
                     type="number"
                     min="0"
                     placeholder="0"
@@ -706,6 +941,26 @@ export function ProductFormPage() {
                     }
                   />
                 )}
+                {formik.values.trackInventory && isEditing && (
+                  <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
+                    <div>
+                      <p className="text-xs text-gray-500 mb-0.5">Stock actual</p>
+                      <p className="text-lg font-bold text-gray-900">
+                        {currentStock}{' '}
+                        <span className="text-sm font-normal text-gray-400">unidades</span>
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      leftIcon={<Layers className="w-3.5 h-3.5" />}
+                      onClick={() => setAdjustStockOpen(true)}
+                    >
+                      Ajustar stock
+                    </Button>
+                  </div>
+                )}
               </div>
             </CardBody>
           </Card>
@@ -713,21 +968,26 @@ export function ProductFormPage() {
 
         <Card>
           <CardBody>
-            <h3 className="mb-4 font-semibold text-gray-900">Indicaciones especiales</h3>
+            <h3 className="mb-2 font-semibold text-gray-900">
+              {labels.specialInstructions.sectionTitle}
+            </h3>
+            <p className="mb-4 text-sm text-gray-600">
+              Úsalo solo si el cliente necesita dejar comentarios o preferencias al momento de pedir.
+            </p>
             <div className="space-y-4">
               <ToggleField
-                label="Permitir indicaciones del cliente"
-                description="Ejemplos: sin cebolla, salsa aparte, término 3/4, cortar en dos."
+                label={labels.specialInstructions.toggleLabel}
+                description={labels.specialInstructions.toggleDescription}
                 checked={formik.values.allowsSpecialInstructions}
-                onChange={(value) => void formik.setFieldValue('allowsSpecialInstructions', value)}
+                onChange={handleToggleSpecialInstructions}
               />
 
-              {formik.values.allowsSpecialInstructions ? (
+              {formik.values.allowsSpecialInstructions && (
                 <div className="grid gap-4 md:grid-cols-2">
                   <Input
                     id="specialInstructionsLabel"
                     label="Título del campo"
-                    placeholder="Indicaciones para tu pedido"
+                    placeholder={labels.specialInstructions.labelDefault}
                     {...formik.getFieldProps('specialInstructionsLabel')}
                     error={formik.touched.specialInstructionsLabel ? formik.errors.specialInstructionsLabel : undefined}
                   />
@@ -743,132 +1003,96 @@ export function ProductFormPage() {
                   <div className="md:col-span-2">
                     <Textarea
                       id="specialInstructionsPlaceholder"
-                      label="Texto de ayuda"
+                      label="Texto de ayuda (placeholder)"
                       rows={2}
-                      placeholder="Ej: sin cebolla, salsa aparte, bien cocida"
+                      placeholder={labels.specialInstructions.placeholderDefault}
                       {...formik.getFieldProps('specialInstructionsPlaceholder')}
                     />
                   </div>
                 </div>
-              ) : null}
+              )}
             </div>
           </CardBody>
         </Card>
 
-        <ProductOptionsEditor
-          currency={currency}
-          groups={optionGroups}
-          onChange={setOptionGroups}
-        />
+        {isMenu ? (
+          <ProductOptionsEditor
+            currency={currency}
+            groups={optionGroups}
+            onChange={setOptionGroups}
+          />
+        ) : store?.businessVertical === 'retail_products' ? (
+          <Card>
+            <CardBody>
+              <h3 className="font-semibold text-gray-900 mb-1">Variantes del producto</h3>
+              <p className="text-sm text-gray-500">
+                Las variantes de talla, color, aroma o presentación estarán disponibles en una
+                próxima actualización. Por ahora puedes detallarlas en la descripción avanzada.
+              </p>
+            </CardBody>
+          </Card>
+        ) : null}
 
         {/* Visibility */}
         <Card>
           <CardBody>
-            <h3 className="font-semibold text-gray-900 mb-4">Visibilidad y estado</h3>
+            <h3 className="font-semibold text-gray-900 mb-2">Qué se verá en tu catálogo</h3>
+            <p className="mb-4 text-sm text-gray-600">
+              Define si este {entitySingular} estará publicado, disponible temporalmente o destacado en la tienda.
+            </p>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Estado</label>
-                <div className="flex gap-2">
-                  {(['draft', 'active'] as const).map((s) => (
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Estado de publicación
+                </label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  {(
+                    [
+                      { value: 'active', label: 'Publicado', desc: 'Visible en la tienda pública' },
+                      { value: 'draft', label: 'Borrador', desc: 'Guardado, no visible al cliente' },
+                    ] as const
+                  ).map(({ value, label, desc }) => (
                     <button
-                      key={s}
+                      key={value}
                       type="button"
-                      onClick={() => void formik.setFieldValue('status', s)}
+                      onClick={() => void formik.setFieldValue('status', value)}
                       className={[
-                        'px-3 py-1.5 rounded-lg text-sm border transition-colors',
-                        formik.values.status === s
-                          ? 'border-indigo-600 bg-indigo-50 text-indigo-700 font-medium'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-300',
+                        'flex-1 flex items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors',
+                        formik.values.status === value
+                          ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-400'
+                          : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50',
                       ].join(' ')}
                     >
-                      {s === 'draft' ? 'Borrador' : 'Publicado'}
+                      <span
+                        className={[
+                          'mt-0.5 h-4 w-4 rounded-full border-2 flex-shrink-0',
+                          formik.values.status === value
+                            ? 'border-indigo-600 bg-indigo-600'
+                            : 'border-gray-300 bg-white',
+                        ].join(' ')}
+                      />
+                      <span>
+                        <span className={`block text-sm font-medium ${formik.values.status === value ? 'text-indigo-700' : 'text-gray-800'}`}>
+                          {label}
+                        </span>
+                        <span className="block text-xs text-gray-500 mt-0.5">{desc}</span>
+                      </span>
                     </button>
                   ))}
                 </div>
               </div>
               <ToggleField
-                label="Disponible"
-                description="Visible y disponible para pedir en el ecommerce"
+                label="Disponible para pedir"
+                description="Desactívalo temporalmente si el producto no está disponible sin eliminarlo"
                 checked={formik.values.isAvailable}
                 onChange={(v) => void formik.setFieldValue('isAvailable', v)}
               />
               <ToggleField
-                label="Destacado"
-                description="Aparece en la sección de destacados"
+                label="Producto destacado"
+                description="Aparece en la sección de destacados de la tienda"
                 checked={formik.values.isFeatured}
                 onChange={(v) => void formik.setFieldValue('isFeatured', v)}
               />
-            </div>
-          </CardBody>
-        </Card>
-
-        {/* Images */}
-        <Card>
-          <CardBody>
-            <h3 className="font-semibold text-gray-900 mb-1">Imágenes</h3>
-            <p className="text-xs text-gray-400 mb-4">
-              Máximo {MAX_IMAGES} imágenes. La primera será la principal. Todas se recortan en formato 1:1.
-            </p>
-
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-3">
-              {existingImages.map((img) => (
-                <div
-                  key={img.id}
-                  className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 group"
-                >
-                  <img src={img.imageUrl} alt="" className="w-full h-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDeleteImage(img)}
-                    disabled={deletingImageId === img.id}
-                    className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    {deletingImageId === img.id ? (
-                      <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <X className="w-3 h-3" />
-                    )}
-                  </button>
-                  {img.isPrimary && (
-                    <span className="absolute bottom-1 left-1 text-xs bg-black/60 text-white rounded px-1">
-                      Principal
-                    </span>
-                  )}
-                </div>
-              ))}
-
-              {pendingPreviews.map((url, i) => (
-                <div
-                  key={url}
-                  className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 group"
-                >
-                  <img src={url} alt="" className="w-full h-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => removePendingFile(i)}
-                    className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                  <span className="absolute bottom-1 left-1 text-xs bg-amber-500/80 text-white rounded px-1">
-                    Por subir
-                  </span>
-                </div>
-              ))}
-
-              {totalImages < MAX_IMAGES && (
-                <label className="aspect-square rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50/50 transition-colors">
-                  <Upload className="w-5 h-5 text-gray-400 mb-1" />
-                  <span className="text-xs text-gray-400">Subir</span>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    multiple
-                    className="hidden"
-                    onChange={handleFileSelect}
-                  />
-                </label>
-              )}
             </div>
           </CardBody>
         </Card>
@@ -903,6 +1127,9 @@ export function ProductFormPage() {
         {typeof formik.status === 'string' && (
           <FormErrorAlert message={formik.status} />
         )}
+        {formik.submitCount > 0 && Object.keys(formik.errors).length > 0 && !formik.isSubmitting && (
+          <FormErrorAlert message="Hay campos con errores. Revisa los campos marcados en rojo." />
+        )}
 
         <div className="flex items-center gap-3 pb-8">
           <Button type="submit" isLoading={formik.isSubmitting}>
@@ -933,6 +1160,18 @@ export function ProductFormPage() {
         onCancel={() => setActiveCrop(null)}
         onConfirm={appendPendingFile}
       />
+
+      {isEditing && productId && storeId && (
+        <StockAdjustmentModal
+          open={adjustStockOpen}
+          storeId={storeId}
+          productId={productId}
+          productName={formik.values.name}
+          currentStock={currentStock}
+          onClose={() => setAdjustStockOpen(false)}
+          onStockUpdated={(_id, newStock) => setCurrentStock(newStock)}
+        />
+      )}
     </div>
   );
 }

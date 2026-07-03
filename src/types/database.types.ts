@@ -23,6 +23,8 @@ export interface Database {
           slug: string;
           slogan: string | null;
           business_type: string | null;
+          business_vertical: string | null;
+          business_subcategory: string | null;
           description: string | null;
           logo_url: string | null;
           favicon_url: string | null;
@@ -51,6 +53,8 @@ export interface Database {
           slug: string;
           slogan?: string | null;
           business_type?: string | null;
+          business_vertical?: string | null;
+          business_subcategory?: string | null;
           description?: string | null;
           logo_url?: string | null;
           favicon_url?: string | null;
@@ -79,6 +83,8 @@ export interface Database {
           slug?: string;
           slogan?: string | null;
           business_type?: string | null;
+          business_vertical?: string | null;
+          business_subcategory?: string | null;
           description?: string | null;
           logo_url?: string | null;
           favicon_url?: string | null;
@@ -115,6 +121,7 @@ export interface Database {
           text_color: string | null;
           button_radius: string | null;
           template_key: string;
+          header_settings: Json | null;
           created_at: string;
           updated_at: string;
         };
@@ -130,6 +137,7 @@ export interface Database {
           text_color?: string | null;
           button_radius?: string | null;
           template_key?: string;
+          header_settings?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -145,6 +153,7 @@ export interface Database {
           text_color?: string | null;
           button_radius?: string | null;
           template_key?: string;
+          header_settings?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -254,6 +263,10 @@ export interface Database {
           name: string;
           slug: string;
           description: string | null;
+          parent_id: string | null;
+          image_url: string | null;
+          color: string | null;
+          show_in_menu: boolean;
           sort_order: number;
           is_active: boolean;
           created_at: string;
@@ -266,6 +279,10 @@ export interface Database {
           name: string;
           slug: string;
           description?: string | null;
+          parent_id?: string | null;
+          image_url?: string | null;
+          color?: string | null;
+          show_in_menu?: boolean;
           sort_order?: number;
           is_active?: boolean;
           created_at?: string;
@@ -278,10 +295,203 @@ export interface Database {
           name?: string;
           slug?: string;
           description?: string | null;
+          parent_id?: string | null;
+          image_url?: string | null;
+          color?: string | null;
+          show_in_menu?: boolean;
           sort_order?: number;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      store_product_facets: {
+        Row: {
+          id: string;
+          store_id: string;
+          owner_id: string;
+          name: string;
+          slug: string;
+          input_type: string;
+          show_in_product_form: boolean;
+          show_in_catalog_filters: boolean;
+          show_in_mega_menu: boolean;
+          applies_to_all_categories: boolean;
+          sort_order: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          owner_id: string;
+          name: string;
+          slug: string;
+          input_type?: string;
+          show_in_product_form?: boolean;
+          show_in_catalog_filters?: boolean;
+          show_in_mega_menu?: boolean;
+          applies_to_all_categories?: boolean;
+          sort_order?: number;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          owner_id?: string;
+          name?: string;
+          slug?: string;
+          input_type?: string;
+          show_in_product_form?: boolean;
+          show_in_catalog_filters?: boolean;
+          show_in_mega_menu?: boolean;
+          applies_to_all_categories?: boolean;
+          sort_order?: number;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      store_product_facet_categories: {
+        Row: {
+          facet_id: string;
+          category_id: string;
+          applies_to_children: boolean;
+          created_at: string;
+        };
+        Insert: {
+          facet_id: string;
+          category_id: string;
+          applies_to_children?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          facet_id?: string;
+          category_id?: string;
+          applies_to_children?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      store_product_facet_values: {
+        Row: {
+          id: string;
+          store_id: string;
+          facet_id: string;
+          value: string;
+          slug: string;
+          sort_order: number;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          facet_id: string;
+          value: string;
+          slug: string;
+          sort_order?: number;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          facet_id?: string;
+          value?: string;
+          slug?: string;
+          sort_order?: number;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      product_facet_values: {
+        Row: {
+          product_id: string;
+          facet_value_id: string;
+        };
+        Insert: {
+          product_id: string;
+          facet_value_id: string;
+        };
+        Update: {
+          product_id?: string;
+          facet_value_id?: string;
+        };
+        Relationships: [];
+      };
+      store_product_collections: {
+        Row: {
+          id: string;
+          store_id: string;
+          owner_id: string;
+          name: string;
+          slug: string;
+          description: string | null;
+          image_url: string | null;
+          color: string | null;
+          sort_order: number;
+          is_active: boolean;
+          show_on_home: boolean;
+          show_in_menu: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          owner_id: string;
+          name: string;
+          slug: string;
+          description?: string | null;
+          image_url?: string | null;
+          color?: string | null;
+          sort_order?: number;
+          is_active?: boolean;
+          show_on_home?: boolean;
+          show_in_menu?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          owner_id?: string;
+          name?: string;
+          slug?: string;
+          description?: string | null;
+          image_url?: string | null;
+          color?: string | null;
+          sort_order?: number;
+          is_active?: boolean;
+          show_on_home?: boolean;
+          show_in_menu?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      product_collections: {
+        Row: {
+          product_id: string;
+          collection_id: string;
+          created_at: string;
+        };
+        Insert: {
+          product_id: string;
+          collection_id: string;
+          created_at?: string;
+        };
+        Update: {
+          product_id?: string;
+          collection_id?: string;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -294,6 +504,7 @@ export interface Database {
           slug: string;
           description: string;
           short_description: string | null;
+          description_sections: Json | null;
           product_type: string;
           regular_price: number;
           compare_at_price: number | null;
@@ -313,6 +524,7 @@ export interface Database {
           status: string;
           main_image_url: string | null;
           category: string | null;
+          category_id: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -324,6 +536,7 @@ export interface Database {
           slug: string;
           description: string;
           short_description?: string | null;
+          description_sections?: Json | null;
           product_type?: string;
           regular_price: number;
           compare_at_price?: number | null;
@@ -343,6 +556,7 @@ export interface Database {
           status?: string;
           main_image_url?: string | null;
           category?: string | null;
+          category_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -354,6 +568,7 @@ export interface Database {
           slug?: string;
           description?: string;
           short_description?: string | null;
+          description_sections?: Json | null;
           product_type?: string;
           regular_price?: number;
           compare_at_price?: number | null;
@@ -373,6 +588,7 @@ export interface Database {
           status?: string;
           main_image_url?: string | null;
           category?: string | null;
+          category_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -593,6 +809,74 @@ export interface Database {
           hero_image_url?: string | null;
           terms_and_conditions?: string | null;
           created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      checkout_sessions: {
+        Row: {
+          id: string;
+          store_id: string;
+          store_slug: string;
+          store_location_id: string | null;
+          provider: string;
+          provider_reference: string;
+          amount_in_cents: number;
+          currency: string;
+          status: string;
+          customer_name: string;
+          customer_phone: string;
+          customer_email: string | null;
+          fulfillment_method: string;
+          shipping_address: string | null;
+          city: string | null;
+          department: string | null;
+          delivery_neighborhood: string | null;
+          delivery_reference: string | null;
+          notes: string | null;
+          items_snapshot: Json;
+          total_amount: number;
+          checkout_url: string;
+          order_id: string | null;
+          wompi_transaction_id: string | null;
+          expires_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          store_slug: string;
+          store_location_id?: string | null;
+          provider?: string;
+          provider_reference: string;
+          amount_in_cents: number;
+          currency?: string;
+          status?: string;
+          customer_name: string;
+          customer_phone: string;
+          customer_email?: string | null;
+          fulfillment_method?: string;
+          shipping_address?: string | null;
+          city?: string | null;
+          department?: string | null;
+          delivery_neighborhood?: string | null;
+          delivery_reference?: string | null;
+          notes?: string | null;
+          items_snapshot?: Json;
+          total_amount: number;
+          checkout_url: string;
+          order_id?: string | null;
+          wompi_transaction_id?: string | null;
+          expires_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          status?: string;
+          order_id?: string | null;
+          wompi_transaction_id?: string | null;
+          expires_at?: string | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -860,6 +1144,7 @@ export interface Database {
           public_key: string | null;
           private_key_reference: string | null;
           integrity_secret_reference: string | null;
+          events_secret: string | null;
           environment: string;
           is_active: boolean;
           created_at: string;
@@ -872,6 +1157,7 @@ export interface Database {
           public_key?: string | null;
           private_key_reference?: string | null;
           integrity_secret_reference?: string | null;
+          events_secret?: string | null;
           environment?: string;
           is_active?: boolean;
           created_at?: string;
@@ -884,6 +1170,7 @@ export interface Database {
           public_key?: string | null;
           private_key_reference?: string | null;
           integrity_secret_reference?: string | null;
+          events_secret?: string | null;
           environment?: string;
           is_active?: boolean;
           created_at?: string;
@@ -900,10 +1187,13 @@ export interface Database {
           provider_transaction_id: string | null;
           provider_reference: string | null;
           amount: number;
+          amount_in_cents: number | null;
           currency: string;
           status: string;
           payment_method: string | null;
+          checkout_url: string | null;
           raw_response: Json | null;
+          paid_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -915,10 +1205,13 @@ export interface Database {
           provider_transaction_id?: string | null;
           provider_reference?: string | null;
           amount: number;
+          amount_in_cents?: number | null;
           currency?: string;
           status?: string;
           payment_method?: string | null;
+          checkout_url?: string | null;
           raw_response?: Json | null;
+          paid_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -930,10 +1223,13 @@ export interface Database {
           provider_transaction_id?: string | null;
           provider_reference?: string | null;
           amount?: number;
+          amount_in_cents?: number | null;
           currency?: string;
           status?: string;
           payment_method?: string | null;
+          checkout_url?: string | null;
           raw_response?: Json | null;
+          paid_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1200,6 +1496,10 @@ export interface Database {
           default_order_method: string;
           local_delivery_notes: string | null;
           shipping_notes: string | null;
+          order_flow_type: string;
+          has_inventory: boolean;
+          has_variants: boolean;
+          has_leads: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -1220,6 +1520,10 @@ export interface Database {
           default_order_method?: string;
           local_delivery_notes?: string | null;
           shipping_notes?: string | null;
+          order_flow_type?: string;
+          has_inventory?: boolean;
+          has_variants?: boolean;
+          has_leads?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -1238,6 +1542,10 @@ export interface Database {
           default_order_method?: string;
           local_delivery_notes?: string | null;
           shipping_notes?: string | null;
+          order_flow_type?: string;
+          has_inventory?: boolean;
+          has_variants?: boolean;
+          has_leads?: boolean;
           updated_at?: string;
         };
         Relationships: [];
@@ -1320,6 +1628,51 @@ export interface Database {
         };
         Relationships: [];
       };
+      inventory_movements: {
+        Row: {
+          id: string;
+          store_id: string;
+          product_id: string;
+          store_location_id: string | null;
+          movement_type: string;
+          reason: string;
+          quantity_change: number;
+          stock_before: number;
+          stock_after: number;
+          notes: string | null;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          product_id: string;
+          store_location_id?: string | null;
+          movement_type: string;
+          reason: string;
+          quantity_change: number;
+          stock_before: number;
+          stock_after: number;
+          notes?: string | null;
+          created_by: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          product_id?: string;
+          store_location_id?: string | null;
+          movement_type?: string;
+          reason?: string;
+          quantity_change?: number;
+          stock_before?: number;
+          stock_after?: number;
+          notes?: string | null;
+          created_by?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       public_store_pages: {
@@ -1378,6 +1731,7 @@ export interface Database {
           default_order_method: string | null;
           local_delivery_notes: string | null;
           shipping_notes: string | null;
+          header_settings: Json | null;
         };
         Relationships: [];
       };
@@ -1406,16 +1760,132 @@ export interface Database {
           product_name: string;
           description: string;
           short_description: string | null;
+          description_sections: Json | null;
           product_type: string;
           regular_price: number;
           compare_at_price: number | null;
           sale_price: number | null;
           stock: number;
+          track_inventory: boolean;
           is_featured: boolean;
           is_available: boolean;
           preparation_time_minutes: number | null;
+          allows_special_instructions: boolean;
+          special_instructions_label: string | null;
+          special_instructions_placeholder: string | null;
+          special_instructions_max_length: number;
           main_image_url: string | null;
           category: string | null;
+          category_id: string | null;
+          category_name: string | null;
+          category_slug: string | null;
+          category_parent_id: string | null;
+          collections: Json;
+          facet_values: Json;
+        };
+        Relationships: [];
+      };
+      public_store_collections: {
+        Row: {
+          id: string;
+          store_id: string;
+          store_slug: string;
+          name: string;
+          slug: string;
+          description: string | null;
+          image_url: string | null;
+          color: string | null;
+          sort_order: number;
+          show_on_home: boolean;
+          show_in_menu: boolean;
+        };
+        Relationships: [];
+      };
+      public_product_facet_values: {
+        Row: {
+          product_id: string;
+          store_id: string;
+          facet_value_id: string;
+          facet_id: string;
+          facet_name: string;
+          facet_slug: string;
+          input_type: string;
+          value: string;
+          value_slug: string;
+          sort_order: number;
+        };
+        Relationships: [];
+      };
+      public_store_categories: {
+        Row: {
+          id: string;
+          store_id: string;
+          store_slug: string;
+          name: string;
+          slug: string;
+          description: string | null;
+          parent_id: string | null;
+          image_url: string | null;
+          color: string | null;
+          sort_order: number;
+          show_in_menu: boolean;
+        };
+        Relationships: [];
+      };
+      public_store_facets: {
+        Row: {
+          id: string;
+          store_id: string;
+          store_slug: string;
+          name: string;
+          slug: string;
+          input_type: string;
+          show_in_catalog_filters: boolean;
+          show_in_mega_menu: boolean;
+          applies_to_all_categories: boolean;
+          sort_order: number;
+          applicable_categories: Json;
+        };
+        Relationships: [];
+      };
+      public_store_facet_values: {
+        Row: {
+          id: string;
+          store_id: string;
+          facet_id: string;
+          value: string;
+          slug: string;
+          sort_order: number;
+        };
+        Relationships: [];
+      };
+      public_product_images: {
+        Row: {
+          product_id: string;
+          image_url: string;
+          alt_text: string | null;
+          sort_order: number;
+          is_primary: boolean | null;
+        };
+        Relationships: [];
+      };
+      public_store_hero_slides: {
+        Row: {
+          id: string;
+          store_id: string;
+          sort_order: number;
+          is_active: boolean;
+          show_title: boolean;
+          show_subtitle: boolean;
+          show_cta: boolean;
+          show_main_image: boolean;
+          show_badge_image: boolean;
+          title: string | null;
+          subtitle: string | null;
+          cta_label: string | null;
+          main_image_url: string | null;
+          background_image_url: string | null;
+          badge_image_url: string | null;
         };
         Relationships: [];
       };
@@ -1528,8 +1998,33 @@ export interface Database {
           p_notes?: string | null;
           p_items?: Json;
           p_store_location_id?: string | null;
+          p_payment_method?: string;
         };
         Returns: Json;
+      };
+      get_payment_result: {
+        Args: {
+          p_reference: string;
+        };
+        Returns: Array<{
+          session_status: string | null;
+          order_number: string | null;
+          order_status: string | null;
+        }>;
+      };
+      adjust_product_stock: {
+        Args: {
+          p_store_id: string;
+          p_product_id: string;
+          p_movement_type: string;
+          p_quantity_change: number;
+          p_reason: string;
+          p_notes?: string | null;
+        };
+        Returns: Array<{
+          new_stock: number;
+          movement_id: string;
+        }>;
       };
     };
     Enums: Record<string, never>;
@@ -1557,6 +2052,15 @@ export type StoreHeroSlideRowUpdate = Database['public']['Tables']['store_hero_s
 export type StoreProductCategoryRow = Database['public']['Tables']['store_product_categories']['Row'];
 export type StoreProductCategoryRowInsert = Database['public']['Tables']['store_product_categories']['Insert'];
 export type StoreProductCategoryRowUpdate = Database['public']['Tables']['store_product_categories']['Update'];
+
+export type StoreProductCollectionRow = Database['public']['Tables']['store_product_collections']['Row'];
+export type StoreProductCollectionRowInsert = Database['public']['Tables']['store_product_collections']['Insert'];
+export type StoreProductCollectionRowUpdate = Database['public']['Tables']['store_product_collections']['Update'];
+export type ProductCollectionRow = Database['public']['Tables']['product_collections']['Row'];
+export type ProductCollectionRowInsert = Database['public']['Tables']['product_collections']['Insert'];
+
+export type StoreProductFacetCategoryRow = Database['public']['Tables']['store_product_facet_categories']['Row'];
+export type StoreProductFacetCategoryRowInsert = Database['public']['Tables']['store_product_facet_categories']['Insert'];
 
 export type ProductRow = Database['public']['Tables']['products']['Row'];
 export type ProductRowInsert = Database['public']['Tables']['products']['Insert'];
@@ -1587,6 +2091,9 @@ export type OrderItemRowInsert = Database['public']['Tables']['order_items']['In
 export type OrderItemCustomizationRow = Database['public']['Tables']['order_item_customizations']['Row'];
 export type OrderItemCustomizationRowInsert = Database['public']['Tables']['order_item_customizations']['Insert'];
 
+export type InventoryMovementRow = Database['public']['Tables']['inventory_movements']['Row'];
+export type InventoryMovementRowInsert = Database['public']['Tables']['inventory_movements']['Insert'];
+
 export type PaymentProviderRow = Database['public']['Tables']['payment_providers']['Row'];
 
 export type StorePaymentSettingsRow = Database['public']['Tables']['store_payment_settings']['Row'];
@@ -1598,11 +2105,32 @@ export type PaymentTransactionRowInsert = Database['public']['Tables']['payment_
 
 export type PublicStorePageRow = Database['public']['Views']['public_store_pages']['Row'];
 export type PublicProductPageRow = Database['public']['Views']['public_product_pages']['Row'];
+export type PublicProductFacetValueRow = Database['public']['Views']['public_product_facet_values']['Row'];
+export type PublicProductImageRow = Database['public']['Views']['public_product_images']['Row'];
+export type PublicStoreHeroSlideRow = Database['public']['Views']['public_store_hero_slides']['Row'];
 export type PublicOfferPageRow = Database['public']['Views']['public_offer_pages']['Row'];
 export type PublicStoreCampaignOfferRow = Database['public']['Views']['public_store_campaign_offers']['Row'];
+export type PublicStoreCategoryRow = Database['public']['Views']['public_store_categories']['Row'];
+export type PublicStoreCollectionRow = Database['public']['Views']['public_store_collections']['Row'];
+export type PublicStoreFacetRow = Database['public']['Views']['public_store_facets']['Row'];
+export type PublicStoreFacetValueRow = Database['public']['Views']['public_store_facet_values']['Row'];
+
+export type StoreFacetRow = Database['public']['Tables']['store_product_facets']['Row'];
+export type StoreFacetRowInsert = Database['public']['Tables']['store_product_facets']['Insert'];
+export type StoreFacetRowUpdate = Database['public']['Tables']['store_product_facets']['Update'];
+
+export type StoreFacetValueRow = Database['public']['Tables']['store_product_facet_values']['Row'];
+export type StoreFacetValueRowInsert = Database['public']['Tables']['store_product_facet_values']['Insert'];
+export type StoreFacetValueRowUpdate = Database['public']['Tables']['store_product_facet_values']['Update'];
+
+export type ProductFacetValueRow = Database['public']['Tables']['product_facet_values']['Row'];
+export type ProductFacetValueRowInsert = Database['public']['Tables']['product_facet_values']['Insert'];
 
 export type CampaignOfferSessionRow = Database['public']['Tables']['campaign_offer_sessions']['Row'];
 export type CampaignOfferSessionInsert = Database['public']['Tables']['campaign_offer_sessions']['Insert'];
+
+export type CheckoutSessionRow = Database['public']['Tables']['checkout_sessions']['Row'];
+export type CheckoutSessionInsert = Database['public']['Tables']['checkout_sessions']['Insert'];
 
 export type ProfileRow = Database['public']['Tables']['profiles']['Row'];
 export type ProfileRowInsert = Database['public']['Tables']['profiles']['Insert'];

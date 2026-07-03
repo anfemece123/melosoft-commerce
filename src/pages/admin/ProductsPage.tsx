@@ -2,18 +2,18 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   Plus, Package, UtensilsCrossed, Eye, EyeOff,
-  Archive, Edit, CheckCircle, AlertCircle,
+  Archive, Edit, CheckCircle, AlertCircle, Layers,
 } from 'lucide-react';
-import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Card, CardBody } from '@/components/ui/Card';
-import { ProductCategoryManager } from '@/components/admin/ProductCategoryManager';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { StockAdjustmentModal } from '@/components/admin/StockAdjustmentModal';
 import { DiscountBadge } from '@/components/ui/DiscountBadge';
 import { useAppSelector } from '@/app/hooks';
-import { productCategoriesService } from '@/features/products/productCategoriesService';
+import { selectCurrentStore, selectCurrentCommerceSettings, selectCurrentBusinessLimits } from '@/features/stores/stores.selectors';
+import { categoriesService } from '@/features/categories/categoriesService';
 import { productsService } from '@/features/products/productsService';
 import { notify } from '@/lib/notifications';
 import { formatCurrency } from '@/utils/formatCurrency';
@@ -22,7 +22,7 @@ import {
   calculateDiscountPercentage,
 } from '@/lib/pricing/pricing.utils';
 import type { Product } from '@/features/products/products.types';
-import type { StoreProductCategory } from '@/features/products/productCategories.types';
+import type { PublicStoreCategory } from '@/types/common.types';
 import type { BadgeVariant } from '@/types/common.types';
 
 type FilterTab = 'all' | 'active' | 'draft' | 'unavailable' | 'archived';
@@ -43,17 +43,18 @@ const STATUS_VARIANT: Record<string, BadgeVariant> = {
 
 export function ProductsPage() {
   const { storeId } = useParams<{ storeId: string }>();
-  const currentLimits = useAppSelector((s) => s.stores.currentLimits);
-  const currentCommerceSettings = useAppSelector((s) => s.stores.currentCommerceSettings);
-  const store = useAppSelector((s) => s.stores.current);
+  const currentLimits = useAppSelector(selectCurrentBusinessLimits);
+  const currentCommerceSettings = useAppSelector(selectCurrentCommerceSettings);
+  const store = useAppSelector(selectCurrentStore);
 
   const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<StoreProductCategory[]>([]);
+  const [categories, setCategories] = useState<PublicStoreCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<FilterTab>('all');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [confirmArchiveProduct, setConfirmArchiveProduct] = useState<Product | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [adjustingStockProduct, setAdjustingStockProduct] = useState<Product | null>(null);
 
   const isMenu = currentCommerceSettings?.catalogType === 'menu';
   const entityLabel = isMenu ? 'platos' : 'productos';
@@ -74,7 +75,7 @@ export function ProductsPage() {
       try {
         const [productsData, categoriesData] = await Promise.all([
           productsService.getProductsByStore(storeId),
-          productCategoriesService.getStoreCategories(storeId),
+          categoriesService.getStoreCategories(storeId),
         ]);
         setProducts(productsData);
         setCategories(categoriesData);
@@ -88,7 +89,7 @@ export function ProductsPage() {
   }, [storeId]);
 
   const filtered = products.filter((p) => {
-    if (categoryFilter && p.category !== categoryFilter) return false;
+    if (categoryFilter && p.categoryId !== categoryFilter) return false;
     if (tab === 'all') return true;
     if (tab === 'active') return p.status === 'active' && p.isAvailable;
     if (tab === 'draft') return p.status === 'draft';
@@ -104,12 +105,6 @@ export function ProductsPage() {
     { key: 'unavailable', label: 'No disponibles', count: products.filter((p) => p.status === 'active' && !p.isAvailable).length },
     { key: 'archived', label: 'Archivados', count: products.filter((p) => p.status === 'archived').length },
   ];
-
-  const usageCountByCategory = products.reduce<Record<string, number>>((acc, product) => {
-    if (!product.category) return acc;
-    acc[product.category] = (acc[product.category] ?? 0) + 1;
-    return acc;
-  }, {});
 
   async function handlePublish(product: Product) {
     setActionLoading(product.id);
@@ -141,6 +136,12 @@ export function ProductsPage() {
     }
   }
 
+  function handleStockUpdated(productId: string, newStock: number) {
+    setProducts((prev) =>
+      prev.map((p) => (p.id === productId ? { ...p, stock: newStock } : p))
+    );
+  }
+
   async function handleArchiveConfirmed(product: Product) {
     setActionLoading(product.id);
     setConfirmArchiveProduct(null);
@@ -159,45 +160,61 @@ export function ProductsPage() {
 
   return (
     <div>
-      <PageHeader
-        title={isMenu ? 'Menú' : 'Productos'}
-        description={`Catálogo de ${entityLabel} de esta tienda.`}
-        action={
-          <div className="flex items-center gap-2">
-            {atLimit && currentLimits && (
-              <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">
-                Límite del plan ({currentLimits.maxProducts})
-              </span>
-            )}
-            <Link to={`/admin/stores/${storeId}/products/new`}>
-              <Button
-                leftIcon={<Plus className="w-4 h-4" />}
-                disabled={atLimit}
-              >
-                {newLabel}
-              </Button>
-            </Link>
-          </div>
-        }
-      />
+      <div className="flex items-center justify-end gap-2 mb-4">
+        {atLimit && currentLimits && (
+          <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1">
+            Límite del plan ({currentLimits.maxProducts})
+          </span>
+        )}
+        <Link to={`/admin/stores/${storeId}/products/new`}>
+          <Button
+            leftIcon={<Plus className="w-4 h-4" />}
+            disabled={atLimit}
+          >
+            {newLabel}
+          </Button>
+        </Link>
+      </div>
 
-      {storeId ? (
-        <div className="mb-6">
-          <ProductCategoryManager
-            storeId={storeId}
-            categories={categories}
-            selectedCategory={categoryFilter}
-            usageCountByCategory={usageCountByCategory}
-            onSelectCategory={setCategoryFilter}
-            onCategoriesChange={setCategories}
-            onCategoryRenamed={(previousName, nextName) => {
-              setProducts((prev) => prev.map((product) => (
-                product.category === previousName
-                  ? { ...product, category: nextName }
-                  : product
-              )));
-            }}
-          />
+      {categories.length > 0 ? (
+        <div className="mb-6 overflow-x-auto">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('')}
+              className={[
+                'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                categoryFilter
+                  ? 'border-gray-200 text-gray-600 hover:border-gray-300'
+                  : 'border-indigo-600 bg-indigo-50 text-indigo-700',
+              ].join(' ')}
+            >
+              Todas
+            </button>
+            {categories.map((category) => {
+              const selected = categoryFilter === category.id;
+              const usage = products.filter((product) => product.categoryId === category.id).length;
+              const label = category.parentId
+                ? `${categories.find((item) => item.id === category.parentId)?.name ?? 'Categoría'} > ${category.name}`
+                : category.name;
+              return (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => setCategoryFilter(selected ? '' : category.id)}
+                  className={[
+                    'rounded-full border px-3 py-1.5 text-sm transition-colors',
+                    selected
+                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                      : 'border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50',
+                  ].join(' ')}
+                >
+                  {label}
+                  <span className="ml-1 text-xs text-gray-400">{usage}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       ) : null}
 
@@ -283,9 +300,19 @@ export function ProductsPage() {
                             <Badge variant="info">Destacado</Badge>
                           )}
                         </div>
-                        {product.category && (
-                          <span className="text-xs text-gray-400 mt-0.5 block">{product.category}</span>
-                        )}
+                        {(() => {
+                          const category = categories.find((item) => item.id === product.categoryId);
+                          if (!category) return null;
+                          return (
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-500">
+                                {category.parentId
+                                  ? `${categories.find((item) => item.id === category.parentId)?.name ?? 'Categoría'} > ${category.name}`
+                                  : category.name}
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div className="text-right shrink-0">
                         {hasActiveDiscount(product.regularPrice, product.salePrice) ? (
@@ -331,6 +358,16 @@ export function ProductsPage() {
 
                     {/* Actions */}
                     <div className="flex items-center gap-2 mt-3 flex-wrap">
+                      {!isMenu && product.trackInventory && product.status !== 'archived' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setAdjustingStockProduct(product)}
+                          leftIcon={<Layers className="w-3.5 h-3.5" />}
+                        >
+                          Ajustar stock
+                        </Button>
+                      )}
                       {product.status === 'draft' && (
                         <Button
                           size="sm"
@@ -400,6 +437,18 @@ export function ProductsPage() {
         }}
         onCancel={() => setConfirmArchiveProduct(null)}
       />
+
+      {adjustingStockProduct && storeId && (
+        <StockAdjustmentModal
+          open={adjustingStockProduct !== null}
+          storeId={storeId}
+          productId={adjustingStockProduct.id}
+          productName={adjustingStockProduct.name}
+          currentStock={adjustingStockProduct.stock}
+          onClose={() => setAdjustingStockProduct(null)}
+          onStockUpdated={handleStockUpdated}
+        />
+      )}
     </div>
   );
 }

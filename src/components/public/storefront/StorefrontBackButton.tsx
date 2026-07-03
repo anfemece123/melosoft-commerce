@@ -6,11 +6,13 @@ export function StorefrontBackButton({
   className = '',
   color,
   label = 'Volver a la tienda',
+  fallbackPath,
 }: {
   storeSlug: string;
   className?: string;
   color: string;
   label?: string;
+  fallbackPath?: string;
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -26,7 +28,7 @@ export function StorefrontBackButton({
       return;
     }
 
-    navigate(`/s/${storeSlug}`);
+    navigate(fallbackPath ?? `/s/${storeSlug}`);
   }
 
   return (

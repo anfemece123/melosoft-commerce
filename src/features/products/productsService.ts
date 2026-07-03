@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import type { Product, ProductInsert, ProductUpdate, ProductImage, ProductCountStats } from './products.types';
-import type { PublicProductImage, PublicProductPage } from '@/types/common.types';
+import type { ProductFacetValue, ProductCollectionAssignment, PublicProductImage, PublicProductPage } from '@/types/common.types';
+import type { PublicProductImageRow } from '@/types/database.types';
 import {
   mapProductRowToProduct,
   mapProductInsertToRow,
@@ -15,14 +16,6 @@ async function getOwnerId(): Promise<string> {
   return session.user.id;
 }
 
-type PublicProductImageRow = {
-  product_id: string;
-  image_url: string;
-  alt_text: string | null;
-  sort_order: number;
-  is_primary: boolean | null;
-};
-
 function mapPublicImageRow(row: PublicProductImageRow): PublicProductImage {
   return {
     imageUrl: row.image_url,
@@ -32,17 +25,110 @@ function mapPublicImageRow(row: PublicProductImageRow): PublicProductImage {
   };
 }
 
+async function attachProductTaxonomy(products: Product[]): Promise<Product[]> {
+  if (products.length === 0) return products;
+
+  const productIds = products.map((product) => product.id);
+
+  const [productCollectionsResult, productFacetValuesResult] = await Promise.all([
+    supabase
+      .from('product_collections')
+      .select('product_id, collection_id')
+      .in('product_id', productIds),
+    supabase
+      .from('product_facet_values')
+      .select('product_id, facet_value_id')
+      .in('product_id', productIds),
+  ]);
+
+  if (productCollectionsResult.error) throw new Error(productCollectionsResult.error.message);
+  if (productFacetValuesResult.error) throw new Error(productFacetValuesResult.error.message);
+
+  const collectionIds = Array.from(new Set((productCollectionsResult.data ?? []).map((row) => row.collection_id)));
+  const facetValueIds = Array.from(new Set((productFacetValuesResult.data ?? []).map((row) => row.facet_value_id)));
+
+  const [resolvedCollectionsResult, resolvedFacetValuesResult] = await Promise.all([
+    collectionIds.length > 0
+      ? supabase
+          .from('store_product_collections')
+          .select('id, name, slug')
+          .in('id', collectionIds)
+      : Promise.resolve({ data: [], error: null }),
+    facetValueIds.length > 0
+      ? supabase
+          .from('store_product_facet_values')
+          .select('id, facet_id, value, slug')
+          .in('id', facetValueIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (resolvedCollectionsResult.error) throw new Error(resolvedCollectionsResult.error.message);
+  if (resolvedFacetValuesResult.error) throw new Error(resolvedFacetValuesResult.error.message);
+
+  const facetIds = Array.from(new Set((resolvedFacetValuesResult.data ?? []).map((row) => row.facet_id)));
+  const resolvedFacetsResult = facetIds.length > 0
+    ? await supabase.from('store_product_facets').select('id, name, slug, input_type').in('id', facetIds)
+    : { data: [], error: null };
+  if (resolvedFacetsResult.error) throw new Error(resolvedFacetsResult.error.message);
+
+  const collectionsById = new Map(
+    (resolvedCollectionsResult.data ?? []).map((row) => [row.id, row])
+  );
+  const facetValuesById = new Map(
+    (resolvedFacetValuesResult.data ?? []).map((row) => [row.id, row])
+  );
+  const facetsById = new Map(
+    (resolvedFacetsResult.data ?? []).map((row) => [row.id, row])
+  );
+
+  const collectionsByProductId = new Map<string, ProductCollectionAssignment[]>();
+  for (const row of (productCollectionsResult.data ?? [])) {
+    const collection = collectionsById.get(row.collection_id);
+    if (!collection) continue;
+    const current = collectionsByProductId.get(row.product_id) ?? [];
+    current.push({
+      id: collection.id,
+      name: collection.name,
+      slug: collection.slug,
+    });
+    collectionsByProductId.set(row.product_id, current);
+  }
+
+  const facetsByProductId = new Map<string, ProductFacetValue[]>();
+  for (const row of (productFacetValuesResult.data ?? [])) {
+    const facetValue = facetValuesById.get(row.facet_value_id);
+    const facet = facetValue ? facetsById.get(facetValue.facet_id) : null;
+    if (!facetValue || !facet) continue;
+    const current = facetsByProductId.get(row.product_id) ?? [];
+    current.push({
+      facetId: facet.id,
+      facetName: facet.name,
+      facetSlug: facet.slug,
+      inputType: facet.input_type === 'multi_select' ? 'multi_select' : 'single_select',
+      valueId: facetValue.id,
+      value: facetValue.value,
+      valueSlug: facetValue.slug,
+    });
+    facetsByProductId.set(row.product_id, current);
+  }
+
+  return products.map((product) => ({
+    ...product,
+    collections: collectionsByProductId.get(product.id) ?? [],
+    facetValues: facetsByProductId.get(product.id) ?? [],
+  }));
+}
+
 async function attachPublicImages(products: PublicProductPage[]): Promise<PublicProductPage[]> {
   if (products.length === 0) return products;
 
   const productIds = products.map((product) => product.productId);
   const { data, error } = await supabase
-    .from('product_images')
+    .from('public_product_images')
     .select('product_id, image_url, alt_text, sort_order, is_primary')
     .in('product_id', productIds)
     .order('is_primary', { ascending: false })
-    .order('sort_order', { ascending: true })
-    .order('created_at', { ascending: true });
+    .order('sort_order', { ascending: true });
 
   if (error) throw new Error(error.message);
 
@@ -76,7 +162,7 @@ export const productsService = {
       .order('sort_order', { ascending: true })
       .order('created_at', { ascending: false });
     if (error) throw new Error(error.message);
-    return (data ?? []).map(mapProductRowToProduct);
+    return attachProductTaxonomy((data ?? []).map(mapProductRowToProduct));
   },
 
   async getProductById(id: string): Promise<Product | null> {
@@ -90,7 +176,8 @@ export const productsService = {
       throw new Error(error.message);
     }
     if (!data) return null;
-    return mapProductRowToProduct(data);
+    const [product] = await attachProductTaxonomy([mapProductRowToProduct(data)]);
+    return product ?? null;
   },
 
   async getPublicProductBySlug(storeSlug: string, productSlug: string): Promise<PublicProductPage | null> {
@@ -107,22 +194,7 @@ export const productsService = {
     if (!data) return null;
     const [product] = await attachPublicImages([mapPublicProductPageRowToPublicProductPage(data)]);
     if (!product) return null;
-
-    const { data: productSettings, error: productSettingsError } = await supabase
-      .from('products')
-      .select('allows_special_instructions, special_instructions_label, special_instructions_placeholder, special_instructions_max_length')
-      .eq('id', product.productId)
-      .single();
-
-    if (productSettingsError) throw new Error(productSettingsError.message);
-
-    return {
-      ...product,
-      allowsSpecialInstructions: productSettings?.allows_special_instructions ?? true,
-      specialInstructionsLabel: productSettings?.special_instructions_label ?? null,
-      specialInstructionsPlaceholder: productSettings?.special_instructions_placeholder ?? null,
-      specialInstructionsMaxLength: productSettings?.special_instructions_max_length ?? 180,
-    };
+    return product;
   },
 
   async getPublicProductsByStoreSlug(storeSlug: string): Promise<PublicProductPage[]> {
@@ -248,6 +320,18 @@ export const productsService = {
       await supabase.storage.from('store-assets').remove([storagePath]);
     }
     const { error } = await supabase.from('product_images').delete().eq('id', imageId);
+    if (error) throw new Error(error.message);
+  },
+
+  async setProductCollections(productId: string, collectionIds: string[]): Promise<void> {
+    const deduped = Array.from(new Set(collectionIds));
+    const { error: deleteError } = await supabase.from('product_collections').delete().eq('product_id', productId);
+    if (deleteError) throw new Error(deleteError.message);
+    if (deduped.length === 0) return;
+
+    const { error } = await supabase
+      .from('product_collections')
+      .insert(deduped.map((collectionId) => ({ product_id: productId, collection_id: collectionId })));
     if (error) throw new Error(error.message);
   },
 };

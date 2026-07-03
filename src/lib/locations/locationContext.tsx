@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { PublicStoreLocation } from '@/features/locations/locations.types';
@@ -62,6 +63,28 @@ export function PublicLocationProvider({
     void load();
     return () => { cancelled = true; };
   }, [storeSlug]);
+
+  useEffect(() => {
+    function handleStorage(event: StorageEvent) {
+      if (event.storageArea !== localStorage || event.key !== `${STORAGE_KEY_PREFIX}${storeSlug}`) {
+        return;
+      }
+
+      const nextLocationId = event.newValue;
+      if (!nextLocationId) return;
+
+      setSelectedLocationState((current) => {
+        if (current?.locationId === nextLocationId) {
+          return current;
+        }
+
+        return locations.find((loc) => loc.locationId === nextLocationId) ?? current;
+      });
+    }
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [locations, storeSlug]);
 
   const setSelectedLocation = useCallback((loc: PublicStoreLocation) => {
     setSelectedLocationState(loc);

@@ -1,4 +1,5 @@
 import * as Yup from 'yup';
+import { THEME_PRESET_LIST } from '@/utils/themePresets';
 
 const businessHourSchema = Yup.object({
   dayOfWeek: Yup.number().min(0).max(6).required(),
@@ -39,12 +40,13 @@ export const storeCreationSchema = Yup.object({
     .max(60, 'Máximo 60 caracteres')
     .required('Slug requerido'),
   slogan: Yup.string().trim().max(160).nullable(),
-  businessType: Yup.string()
+  businessVertical: Yup.string()
     .oneOf(
-      ['barberia', 'restaurante', 'moda', 'tecnologia', 'mascotas', 'hogar', 'belleza', 'salud', 'otro'],
-      'Tipo de negocio inválido'
+      ['food_restaurant', 'retail_products', 'catalog_quote', 'real_estate'],
+      'Tipo de empresa inválido'
     )
-    .required('Tipo de negocio requerido'),
+    .required('Tipo de empresa requerido'),
+  businessSubcategory: Yup.string().trim().max(60).required('Subcategoría requerida'),
   description: Yup.string().trim().min(10, 'Mínimo 10 caracteres').max(1000).required('Descripción requerida'),
   logoUrl: Yup.string().trim().url('Logo inválido').nullable(),
   supportEmail: Yup.string().trim().email('Email inválido').nullable(),
@@ -54,10 +56,10 @@ export const storeCreationSchema = Yup.object({
   currency: Yup.string().trim().length(3, 'Código de 3 letras').required('Moneda requerida'),
 
   // Section 3 — Design
-  mode: Yup.string().oneOf(['light', 'dark']).required('Modo de tema requerido'),
+  mode: Yup.string().oneOf(['light', 'dark'], 'Modo de tema inválido.').required('Modo de tema requerido'),
   themePreset: Yup.string()
-    .oneOf(['blue', 'violet', 'emerald', 'rose', 'amber', 'slate'])
-    .required('Paleta de colores requerida'),
+    .oneOf(THEME_PRESET_LIST.map((p) => p.key), 'Selecciona un tema válido.')
+    .required('Selecciona un tema de color.'),
 
   // Section 4 — Location (address optional, dept/city required)
   locationAddressLine: Yup.string().trim().max(200).nullable(),
@@ -67,8 +69,8 @@ export const storeCreationSchema = Yup.object({
   locationPostalCode: Yup.string().trim().max(20).nullable(),
   locationIsPublic: Yup.boolean().required(),
 
-  // Section 5 — Business hours
-  businessHours: Yup.array().of(businessHourSchema).min(7).max(7).required(),
+  // Section 5 — Business hours (optional — can be configured later from store settings)
+  businessHours: Yup.array().of(businessHourSchema).required(),
 
   // Section 6 — Policies
   usePolicyDefaults: Yup.boolean().required(),

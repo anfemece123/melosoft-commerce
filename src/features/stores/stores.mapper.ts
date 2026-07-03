@@ -1,3 +1,4 @@
+import type { Json } from '@/types/database.types';
 import type {
   StoreRow,
   StoreRowInsert,
@@ -12,6 +13,7 @@ import type {
   StoreHeroSlideRowInsert,
   StoreHeroSlideRowUpdate,
   PublicStorePageRow,
+  PublicStoreHeroSlideRow,
   StoreMemberRow,
   StoreMemberRowInsert,
   StoreLimitRow,
@@ -23,6 +25,7 @@ import type {
   StoreBusinessHourRowInsert,
 } from '@/types/database.types';
 import type {
+  BusinessVertical,
   StoreStatus,
   ThemeMode,
   TemplateKey,
@@ -36,6 +39,8 @@ import type {
   CommerceMode,
   DeliveryMode,
   OrderMethod,
+  PublicStoreHeroSlide,
+  PublicHeaderSettings,
 } from '@/types/common.types';
 import type {
   Store,
@@ -71,6 +76,8 @@ export function mapStoreRowToStore(row: StoreRow): Store {
     slug: row.slug,
     slogan: row.slogan ?? null,
     businessType: (row.business_type as BusinessType) ?? null,
+    businessVertical: (row.business_vertical as BusinessVertical) ?? null,
+    businessSubcategory: row.business_subcategory ?? null,
     description: row.description,
     logoUrl: row.logo_url,
     faviconUrl: row.favicon_url,
@@ -107,6 +114,7 @@ export function mapStoreThemeRowToStoreTheme(row: StoreThemeRow): StoreTheme {
     textColor: row.text_color,
     buttonRadius: row.button_radius,
     templateKey: row.template_key as TemplateKey,
+    headerSettings: (row.header_settings as PublicHeaderSettings | null) ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -182,6 +190,7 @@ export function mapPublicStorePageRowToPublicStorePage(row: PublicStorePageRow):
     defaultOrderMethod: (row.default_order_method as OrderMethod) ?? null,
     localDeliveryNotes: row.local_delivery_notes ?? null,
     shippingNotes: row.shipping_notes ?? null,
+    headerSettings: (row.header_settings as PublicHeaderSettings | null) ?? null,
   };
 }
 
@@ -194,6 +203,8 @@ export function mapStoreInsertToRow(data: StoreInsert, ownerId: string): StoreRo
     slug: data.slug,
     slogan: data.slogan ?? null,
     business_type: data.businessType ?? null,
+    business_vertical: data.businessVertical ?? null,
+    business_subcategory: data.businessSubcategory ?? null,
     description: data.description ?? null,
     logo_url: data.logoUrl ?? null,
     favicon_url: data.faviconUrl ?? null,
@@ -221,6 +232,8 @@ export function mapStoreUpdateToRow(data: StoreUpdate): StoreRowUpdate {
   if (data.slug !== undefined) row.slug = data.slug;
   if (data.slogan !== undefined) row.slogan = data.slogan ?? null;
   if (data.businessType !== undefined) row.business_type = data.businessType ?? null;
+  if (data.businessVertical !== undefined) row.business_vertical = data.businessVertical ?? null;
+  if (data.businessSubcategory !== undefined) row.business_subcategory = data.businessSubcategory ?? null;
   if (data.description !== undefined) row.description = data.description ?? null;
   if (data.logoUrl !== undefined) row.logo_url = data.logoUrl ?? null;
   if (data.faviconUrl !== undefined) row.favicon_url = data.faviconUrl ?? null;
@@ -254,6 +267,7 @@ export function mapStoreThemeInsertToRow(data: StoreThemeInsert): StoreThemeRowI
     text_color: data.textColor ?? null,
     button_radius: data.buttonRadius ?? null,
     template_key: data.templateKey,
+    header_settings: (data.headerSettings ?? null) as Json | null,
   };
 }
 
@@ -268,6 +282,7 @@ export function mapStoreThemeUpdateToRow(data: StoreThemeUpdate): StoreThemeRowU
   if (data.textColor !== undefined) row.text_color = data.textColor ?? null;
   if (data.buttonRadius !== undefined) row.button_radius = data.buttonRadius ?? null;
   if (data.templateKey !== undefined) row.template_key = data.templateKey;
+  if (data.headerSettings !== undefined) row.header_settings = (data.headerSettings ?? null) as Json | null;
   return row;
 }
 
@@ -484,5 +499,27 @@ export function mapStoreBusinessHourInsertToRow(data: StoreBusinessHourInsert): 
     closes_at: data.closesAt ?? null,
     break_starts_at: data.breakStartsAt ?? null,
     break_ends_at: data.breakEndsAt ?? null,
+  };
+}
+
+export function mapPublicStoreHeroSlideRowToPublicStoreHeroSlide(
+  row: PublicStoreHeroSlideRow,
+): PublicStoreHeroSlide {
+  return {
+    id: row.id,
+    storeId: row.store_id,
+    sortOrder: row.sort_order,
+    isActive: row.is_active,
+    showTitle: row.show_title,
+    showSubtitle: row.show_subtitle,
+    showCta: row.show_cta,
+    showMainImage: row.show_main_image,
+    showBadgeImage: row.show_badge_image,
+    title: row.title,
+    subtitle: row.subtitle,
+    ctaLabel: row.cta_label,
+    mainImageUrl: row.main_image_url,
+    backgroundImageUrl: row.background_image_url,
+    badgeImageUrl: row.badge_image_url,
   };
 }

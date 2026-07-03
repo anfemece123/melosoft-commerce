@@ -16,7 +16,7 @@ import { StorefrontPageLoader } from '@/components/public/storefront/StorefrontP
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
 import { usePublicRouteReady } from '@/components/layout/PublicRouteReadyContext';
-import { useCart } from '@/lib/cart/cartContext';
+import { useCart, isOutOfStock } from '@/lib/cart/cartContext';
 import { useSelectedLocation } from '@/lib/locations/locationContext';
 import { LocationSelector } from '@/components/public/locations/LocationSelector';
 import { notify } from '@/lib/notifications';
@@ -242,14 +242,22 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
     event.stopPropagation();
     if (unavailableProductIds.has(product.productId)) return;
 
-    addItem({
+    const added = addItem({
       productId: product.productId,
+      storeId: storeBranding?.storeId ?? '',
       productSlug: product.productSlug,
       productName: product.productName,
       imageUrl: product.mainImageUrl,
       unitPrice: getActivePrice(product.regularPrice, product.salePrice),
       customizationNotes: null,
+      stock: product.stock,
+      trackInventory: product.trackInventory,
+      isAvailable: product.isAvailable,
     });
+    if (!added) {
+      notify.warning(`"${product.productName}" no tiene stock disponible.`);
+      return;
+    }
 
     notify.cartSuccess(`"${product.productName}" agregado al pedido`);
   }
@@ -315,10 +323,16 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
             >
               {isMenu ? 'El menú está vacío por el momento' : 'Aún no hay productos disponibles'}
             </div>
-          ) : (
+          ) : (() => {
+            const displayedProducts = [...products]
+              .sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0))
+              .slice(0, 8);
+            return (
+            <>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {products.map((product) => {
-                const isUnavailable = unavailableProductIds.has(product.productId);
+              {displayedProducts.map((product) => {
+                const outOfStock = isOutOfStock(product);
+                const isUnavailable = unavailableProductIds.has(product.productId) || outOfStock;
                 return (
                 <Link
                   key={product.productId}
@@ -363,9 +377,9 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
 
                   <div className="flex flex-1 flex-col p-3">
                     <div className="min-h-4">
-                      {product.category && (
+                      {product.categoryName && (
                         <span className="text-xs font-medium" style={{ color: theme.primary }}>
-                          {product.category}
+                          {product.categoryName}
                         </span>
                       )}
                     </div>
@@ -407,7 +421,7 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
                         className="mt-3 h-10 flex items-center justify-center text-xs font-medium rounded-lg border"
                         style={{ borderColor: theme.border, color: theme.mutedText }}
                       >
-                        No disponible en esta sede
+                        {outOfStock ? 'Sin stock disponible' : 'No disponible en esta sede'}
                       </div>
                     ) : showCartButton ? (
                       <StorefrontActionButton
@@ -437,7 +451,20 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
                 );
               })}
             </div>
-          )}
+            {products.length > 8 && (
+              <div className="mt-6 flex justify-center">
+                <Link
+                  to={`/s/${storeSlug}/catalog`}
+                  className="inline-flex items-center gap-2 rounded-xl border px-6 py-2.5 text-sm font-semibold transition-opacity hover:opacity-80"
+                  style={{ borderColor: theme.primary, color: theme.primary }}
+                >
+                  Ver todos ({products.length})
+                </Link>
+              </div>
+            )}
+            </>
+            );
+          })()}
         </div>
       </section>
 

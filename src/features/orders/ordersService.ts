@@ -115,31 +115,39 @@ export const ordersService = {
 
   async createWebOrder(payload: CreateWebOrderPayload): Promise<WebOrderResult> {
     const { data, error } = await supabase.rpc('create_store_order', {
-      p_store_slug: payload.storeSlug,
-      p_customer_name: payload.customerName,
-      p_customer_phone: payload.customerPhone,
-      p_customer_email: payload.customerEmail,
-      p_fulfillment_method: payload.fulfillmentMethod,
-      p_shipping_address: payload.shippingAddress,
-      p_city: payload.city,
-      p_department: payload.department,
+      p_store_slug:            payload.storeSlug,
+      p_customer_name:         payload.customerName,
+      p_customer_phone:        payload.customerPhone,
+      p_customer_email:        payload.customerEmail,
+      p_fulfillment_method:    payload.fulfillmentMethod,
+      p_shipping_address:      payload.shippingAddress,
+      p_city:                  payload.city,
+      p_department:            payload.department,
       p_delivery_neighborhood: payload.deliveryNeighborhood,
-      p_delivery_reference: payload.deliveryReference,
-      p_notes: payload.notes,
-      p_store_location_id: payload.storeLocationId ?? null,
+      p_delivery_reference:    payload.deliveryReference,
+      p_notes:                 payload.notes,
+      p_store_location_id:     payload.storeLocationId ?? null,
+      p_payment_method:        payload.paymentMethod ?? 'cash_on_delivery',
       p_items: payload.items.map((item) => ({
-        product_id: item.productId,
-        quantity: item.quantity,
+        product_id:          item.productId,
+        quantity:            item.quantity,
         customization_notes: item.customizationNotes,
       })),
     });
     if (error) throw new Error(error.message);
-    const result = data as { order_id: string; order_number: string; total_amount: number; status: string };
+    const result = data as {
+      order_id: string;
+      order_number: string;
+      total_amount: number;
+      payment_method: string;
+      status: string;
+    };
     return {
-      orderId: result.order_id,
-      orderNumber: result.order_number,
-      totalAmount: Number(result.total_amount),
-      status: result.status,
+      orderId:       result.order_id,
+      orderNumber:   result.order_number,
+      totalAmount:   Number(result.total_amount),
+      paymentMethod: result.payment_method as 'cash_on_delivery' | 'online',
+      status:        result.status,
     };
   },
 };

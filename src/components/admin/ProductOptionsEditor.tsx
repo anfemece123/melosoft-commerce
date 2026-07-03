@@ -48,9 +48,9 @@ export function ProductOptionsEditor({
       <CardBody className="space-y-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h3 className="font-semibold text-gray-900">Opciones y personalizaciones</h3>
+            <h3 className="font-semibold text-gray-900">Opciones y adicionales del plato</h3>
             <p className="mt-1 text-sm text-gray-500">
-              Configura tamaños, salsas, términos, acompañamientos, bebidas y extras con precio adicional.
+              Permite que el cliente elija salsas, acompañamientos, tamaños o extras antes de agregar el plato al carrito.
             </p>
           </div>
           <Button
@@ -63,9 +63,13 @@ export function ProductOptionsEditor({
           </Button>
         </div>
 
+        <div className="rounded-lg bg-amber-50 border border-amber-100 px-4 py-2.5 text-xs text-amber-700">
+          Los adicionales con precio extra (+$) se muestran en el carrito, pero el total del pedido web usa el precio base del plato. Úsalos sin costo adicional o para pedidos por WhatsApp hasta la próxima actualización.
+        </div>
+
         {groups.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-6 text-sm text-gray-500">
-            Aún no hay opciones configuradas. Ejemplos: Salsas, término, acompañamiento, bebida, extras, tamaño.
+            Aún no hay opciones configuradas. Ejemplos: Salsas, Acompañamientos, Término de la carne, Tamaño, Bebida, Adiciones.
           </div>
         ) : null}
 
@@ -76,7 +80,7 @@ export function ProductOptionsEditor({
                 <div>
                   <p className="text-sm font-semibold text-gray-900">Grupo {groupIndex + 1}</p>
                   <p className="text-xs text-gray-500">
-                    Usa selección única para tamaño/término y múltiple para extras o salsas.
+                    Selección única para tamaño o término; múltiple para salsas, extras o adiciones.
                   </p>
                 </div>
                 <button

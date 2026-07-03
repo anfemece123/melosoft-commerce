@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { MapPin, Plus, Pencil, Trash2, Star, Eye, EyeOff, Check } from 'lucide-react';
+import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -139,6 +140,12 @@ export function LocationsPage() {
         setSaving(false);
       }
     },
+  });
+
+  useScrollToFirstFormikError({
+    errors: formik.errors,
+    submitCount: formik.submitCount,
+    isSubmitting: formik.isSubmitting,
   });
 
   // Load cities when department changes
