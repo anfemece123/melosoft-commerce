@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
-import type { StorefrontTheme } from './storefrontTheme';
+import { STOREFRONT_CONTAINER_CLASS, type StorefrontTheme } from './storefrontTheme';
 import type { PublicStoreCategory, PublicStoreFacet } from '@/types/common.types';
+import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 
 interface MegaMenuPanelProps {
   theme: StorefrontTheme;
@@ -36,7 +37,7 @@ export function MegaMenuPanel({
         WebkitBackdropFilter: 'blur(20px)',
       }}
     >
-      <div className="mx-auto max-w-7xl px-6 py-5">
+      <div className={`mx-auto ${STOREFRONT_CONTAINER_CLASS} px-6 py-5`}>
         <div className="flex gap-8">
           {/* Subcategories column */}
           {subcategories.length > 0 && (
@@ -51,7 +52,7 @@ export function MegaMenuPanel({
                 {subcategories.map((sub) => (
                   <Link
                     key={sub.id}
-                    to={`/s/${storeSlug}/catalog?cat=${encodeURIComponent(activeCategorySlug)}&sub=${encodeURIComponent(sub.slug)}`}
+                    to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(activeCategorySlug)}&sub=${encodeURIComponent(sub.slug)}`)}
                     onClick={onClose}
                     className="block py-1.5 text-sm font-medium transition-opacity hover:opacity-60"
                     style={{ color: theme.text }}
@@ -80,7 +81,7 @@ export function MegaMenuPanel({
                 {facet.values.slice(0, 8).map((val) => (
                   <Link
                     key={val.id}
-                    to={`/s/${storeSlug}/catalog?cat=${encodeURIComponent(activeCategorySlug)}&f_${encodeURIComponent(facet.slug)}=${encodeURIComponent(val.slug)}`}
+                    to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(activeCategorySlug)}&f_${encodeURIComponent(facet.slug)}=${encodeURIComponent(val.slug)}`)}
                     onClick={onClose}
                     className="block py-1.5 text-sm transition-opacity hover:opacity-60"
                     style={{ color: theme.text }}
@@ -90,7 +91,7 @@ export function MegaMenuPanel({
                 ))}
                 {facet.values.length > 8 && (
                   <Link
-                    to={`/s/${storeSlug}/catalog?cat=${encodeURIComponent(activeCategorySlug)}`}
+                    to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(activeCategorySlug)}`)}
                     onClick={onClose}
                     className="block pt-2 text-xs font-medium transition-opacity hover:opacity-70"
                     style={{ color: theme.primary }}

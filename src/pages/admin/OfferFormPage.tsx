@@ -5,6 +5,8 @@ import { ArrowLeft, Tag } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { MoneyInput } from '@/components/forms/MoneyInput';
+import { IntegerInput } from '@/components/forms/IntegerInput';
 import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
@@ -13,6 +15,7 @@ import { DiscountBadge } from '@/components/ui/DiscountBadge';
 import { ImageUploadField } from '@/components/admin/ImageUploadField';
 import { useAppSelector } from '@/app/hooks';
 import { offersService } from '@/features/offers/offersService';
+import { domainsService } from '@/features/domains/domainsService';
 import { productsService } from '@/features/products/productsService';
 import { notify } from '@/lib/notifications';
 import { slugify } from '@/utils/slugify';
@@ -150,7 +153,7 @@ export function OfferFormPage() {
         : null,
       showCountdown: values.showCountdown,
       isVisibleInStore: values.isVisibleInStore,
-      sortOrder: values.sortOrder,
+      sortOrder: values.sortOrder === '' ? 0 : values.sortOrder,
       status: values.status as 'draft' | 'active',
       whatsappNumber: values.whatsappNumber || null,
       whatsappMessage: values.whatsappMessage || null,
@@ -227,7 +230,7 @@ export function OfferFormPage() {
           }
         }}
       >
-        {({ values, errors, touched, handleChange, handleBlur, setFieldValue, isSubmitting, status }) => (
+        {({ values, errors, touched, handleChange, handleBlur, setFieldValue, setFieldTouched, isSubmitting, status }) => (
           <Form className="space-y-6">
             {status && <FormErrorAlert message={status} />}
 
@@ -263,7 +266,9 @@ export function OfferFormPage() {
                     onChange={handleChange}
                     onBlur={handleBlur}
                     error={touched.slug ? errors.slug : undefined}
-                    hint={`/s/${store?.slug ?? 'tienda'}/o/${values.slug || 'slug-campaña'}`}
+                    hint={store
+                      ? `${domainsService.getPlatformStoreUrl(store.slug)}/o/${values.slug || 'slug-campaña'}`
+                      : 'La campaña usará la dirección pública de la empresa'}
                   />
                   <Input
                     id="subtitle"
@@ -321,27 +326,27 @@ export function OfferFormPage() {
               <CardBody>
                 <h3 className="font-semibold text-gray-900 mb-4">Precios de campaña</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input
+                  <MoneyInput
                     id="regularPrice"
                     name="regularPrice"
-                    type="number"
                     label="Precio normal (referencia)"
+                    currency={currency}
                     placeholder="30000"
                     value={values.regularPrice}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
+                    onChange={(value) => void setFieldValue('regularPrice', value)}
+                    onBlur={() => void setFieldTouched('regularPrice', true)}
                     error={touched.regularPrice ? errors.regularPrice : undefined}
                     hint="Se muestra tachado para mostrar el ahorro."
                   />
-                  <Input
+                  <MoneyInput
                     id="offerPrice"
                     name="offerPrice"
-                    type="number"
                     label="Precio especial de campaña *"
+                    currency={currency}
                     placeholder="22000"
                     value={values.offerPrice}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
+                    onChange={(value) => void setFieldValue('offerPrice', value)}
+                    onBlur={() => void setFieldTouched('offerPrice', true)}
                     error={touched.offerPrice ? errors.offerPrice : undefined}
                   />
                 </div>
@@ -441,15 +446,15 @@ export function OfferFormPage() {
 
                 {values.countdownMode === 'per_visitor' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <Input
+                    <IntegerInput
                       id="durationMinutes"
                       name="durationMinutes"
-                      type="number"
                       label="Duración en minutos *"
+                      min={1}
                       placeholder="120"
                       value={values.durationMinutes}
-                      onChange={handleChange}
-                      onBlur={handleBlur}
+                      onChange={(value) => void setFieldValue('durationMinutes', value)}
+                      onBlur={() => void setFieldTouched('durationMinutes', true)}
                       error={touched.durationMinutes ? errors.durationMinutes : undefined}
                       hint="Ej: 60 = 1 hora, 120 = 2 horas, 1440 = 24 horas"
                     />
@@ -559,14 +564,15 @@ export function OfferFormPage() {
                       Mostrar en la página principal de la tienda
                     </label>
                   </div>
-                  <Input
+                  <IntegerInput
                     id="sortOrder"
                     name="sortOrder"
-                    type="number"
                     label="Orden de visualización"
+                    min={0}
                     value={values.sortOrder}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
+                    onChange={(value) => void setFieldValue('sortOrder', value)}
+                    onBlur={() => void setFieldTouched('sortOrder', true)}
+                    error={touched.sortOrder ? errors.sortOrder : undefined}
                     hint="Número menor = aparece primero."
                   />
                   <Textarea

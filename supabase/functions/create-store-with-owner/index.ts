@@ -71,6 +71,12 @@ interface CreateStoreWithOwnerResponse {
   ownerIsNew: boolean;
 }
 
+const STORE_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
+const RESERVED_STORE_SLUGS = new Set([
+  'admin', 'api', 'app', 'assets', 'auth', 'blog', 'cdn', 'dashboard',
+  'docs', 'help', 'mail', 'static', 'status', 'store', 'stores', 'support', 'www',
+]);
+
 // ── Commerce defaults ─────────────────────────────────────────
 
 interface CommerceDefaults {
@@ -191,9 +197,18 @@ const ALLOWED_ORIGINS = new Set([
   'https://www.melosoftapp.com',
 ]);
 
+function getAllowedOrigins(): Set<string> {
+  const origins = new Set(ALLOWED_ORIGINS);
+  for (const hostname of (Deno.env.get('PLATFORM_HOSTNAMES') ?? '').split(',')) {
+    const normalized = hostname.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
+    if (normalized) origins.add(`https://${normalized}`);
+  }
+  return origins;
+}
+
 function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get('Origin') ?? '';
-  const allowedOrigin = ALLOWED_ORIGINS.has(origin) ? origin : '';
+  const allowedOrigin = getAllowedOrigins().has(origin) ? origin : '';
   return {
     'Access-Control-Allow-Origin': allowedOrigin,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -298,6 +313,36 @@ Deno.serve(async (req) => {
     }
   }
 
+  payload.slug = payload.slug.trim().toLowerCase();
+  if (
+    payload.slug.length < 2 ||
+    payload.slug.length > 60 ||
+    !STORE_SLUG_PATTERN.test(payload.slug)
+  ) {
+    return jsonError(
+      'La dirección de la empresa debe usar letras minúsculas, números o guiones, sin guiones al inicio o al final.',
+      400,
+      cors,
+    );
+  }
+  if (RESERVED_STORE_SLUGS.has(payload.slug)) {
+    return jsonError('Esa dirección está reservada por la plataforma. Elige otra.', 409, cors);
+  }
+
+  // Check before inviting/creating the owner to avoid orphan users when the
+  // public storefront address is already taken.
+  const { data: existingStore, error: slugLookupError } = await adminClient
+    .from('stores')
+    .select('id')
+    .ilike('slug', payload.slug)
+    .maybeSingle();
+  if (slugLookupError) {
+    return jsonError(`No se pudo validar la dirección: ${slugLookupError.message}`, 500, cors);
+  }
+  if (existingStore) {
+    return jsonError(`La dirección "${payload.slug}" ya está en uso.`, 409, cors);
+  }
+
   // ── Resolve or create owner in Auth ─────────────────────
   let ownerUserId: string;
   let ownerIsNew = false;
@@ -317,7 +362,7 @@ Deno.serve(async (req) => {
     // redirectTo sends the owner to /auth/callback?next=/set-password so they
     // land on SetPasswordPage after clicking the email link.
     const requestOrigin = req.headers.get('Origin') ?? '';
-    const appOrigin = ALLOWED_ORIGINS.has(requestOrigin)
+    const appOrigin = getAllowedOrigins().has(requestOrigin)
       ? requestOrigin
       : 'https://melosoftapp.com';
     const redirectTo = `${appOrigin}/auth/callback?next=/set-password`;
@@ -362,17 +407,6 @@ Deno.serve(async (req) => {
 
   if (profileUpsertError) {
     return jsonError(`Failed to upsert owner profile: ${profileUpsertError.message}`, 500, cors);
-  }
-
-  // ── Check slug uniqueness ───────────────────────────────
-  const { data: existingStore } = await adminClient
-    .from('stores')
-    .select('id')
-    .eq('slug', payload.slug)
-    .maybeSingle();
-
-  if (existingStore) {
-    return jsonError(`The slug "${payload.slug}" is already in use`, 409, cors);
   }
 
   // ── Create store ────────────────────────────────────────

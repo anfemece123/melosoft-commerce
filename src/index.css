@@ -11,3 +11,14 @@ body,
 body {
   margin: 0;
 }
+
+/* Hides the scrollbar on horizontally-scrolling carousels (product
+   carousels, gallery) while keeping native touch/wheel scroll intact. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

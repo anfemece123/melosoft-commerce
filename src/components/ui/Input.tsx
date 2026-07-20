@@ -1,13 +1,14 @@
-import type { InputHTMLAttributes, WheelEvent } from 'react';
+import type { InputHTMLAttributes, ReactNode, WheelEvent } from 'react';
 import { cn } from '@/utils/cn';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
+  labelAdornment?: ReactNode;
   error?: string;
   hint?: string;
 }
 
-export function Input({ label, error, hint, className, id, type, onWheel, ...props }: InputProps) {
+export function Input({ label, labelAdornment, error, hint, className, id, type, onWheel, ...props }: InputProps) {
   const wheelHandler =
     type === 'number'
       ? (e: WheelEvent<HTMLInputElement>) => {
@@ -19,8 +20,9 @@ export function Input({ label, error, hint, className, id, type, onWheel, ...pro
   return (
     <div className="space-y-1">
       {label && (
-        <label htmlFor={id} className="block text-sm font-medium text-gray-700">
-          {label}
+        <label htmlFor={id} className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+          <span>{label}</span>
+          {labelAdornment}
         </label>
       )}
       <input

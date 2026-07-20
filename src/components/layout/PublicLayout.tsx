@@ -23,17 +23,27 @@ import { PublicRouteReadyProvider } from './PublicRouteReadyContext';
 import { readPublicScrollPosition, writePublicScrollPosition } from '@/lib/storefront/publicScrollRestoration';
 import { useSelectedLocation } from '@/lib/locations/locationContext';
 import { pruneEmptyCategoryTree, pruneEmptyCollections } from '@/lib/storefront/catalogVisibility';
+import { useStorefrontDocumentMetadata } from '@/lib/storefront/useStorefrontDocumentMetadata';
+import {
+  isStorefrontHostnameMode,
+  useStorefrontDomain,
+} from '@/lib/storefront/storefrontDomainContext';
 
 export function PublicLayout() {
   const location = useLocation();
+  const { mode: domainMode, resolution: domainResolution } = useStorefrontDomain();
   const matchedRoute = [
+    matchPath('/s/:storeSlug/checkout', location.pathname),
+    matchPath('/s/:storeSlug/payment-result', location.pathname),
+    matchPath('/s/:storeSlug/cart', location.pathname),
     matchPath('/s/:storeSlug/p/:productSlug', location.pathname),
     matchPath('/s/:storeSlug/o/:offerSlug', location.pathname),
     matchPath('/s/:storeSlug/policies', location.pathname),
     matchPath('/s/:storeSlug/catalog', location.pathname),
     matchPath('/s/:storeSlug', location.pathname),
   ].find(Boolean);
-  const storeSlug = matchedRoute?.params.storeSlug ?? null;
+  const storeSlug = matchedRoute?.params.storeSlug ??
+    (isStorefrontHostnameMode(domainMode) ? domainResolution?.storeSlug ?? null : null);
 
   const [branding, setBranding] = useState<PublicStorePage | null>(() =>
     storeSlug ? readCachedPublicStoreBranding(storeSlug) : null
@@ -108,6 +118,7 @@ function PublicStoreShell({
   loading: boolean;
 }) {
   const location = useLocation();
+  const { mode: domainMode } = useStorefrontDomain();
   const navigationType = useNavigationType();
   const { totalItems } = useCart();
   const { locations } = useSelectedLocation();
@@ -116,6 +127,12 @@ function PublicStoreShell({
   const [catalogMeta, setCatalogMeta] = useState<CatalogMeta | null>(null);
   const routeKey = `${location.pathname}${location.search}${location.hash}`;
   const pendingScrollModeRef = useRef<'restore' | 'top'>('top');
+
+  useStorefrontDocumentMetadata(
+    branding?.storeName,
+    branding?.faviconUrl,
+    branding?.logoUrl,
+  );
 
   const commerceConfig: PublicCommerceConfig = {
     catalogType: branding?.catalogType ?? null,
@@ -139,7 +156,8 @@ function PublicStoreShell({
     textColor: branding?.textColor,
     buttonRadius: branding?.buttonRadius,
   });
-  const hasHeroRoute = Boolean(matchPath('/s/:storeSlug', location.pathname));
+  const hasHeroRoute = Boolean(matchPath('/s/:storeSlug', location.pathname)) ||
+    (isStorefrontHostnameMode(domainMode) && location.pathname === '/');
   const hasHero = hasHeroRoute && branding?.heroEnabled !== false;
   const showCart = canUseWebOrders(commerceConfig);
 
@@ -330,6 +348,13 @@ function PublicStoreShell({
             whatsappNumber={branding.whatsappNumber}
             allowsPickup={branding.allowsPickup}
             allowsLocalDelivery={branding.allowsLocalDelivery}
+            allowsNationalShipping={branding.allowsNationalShipping}
+            localDeliveryNotes={branding.localDeliveryNotes}
+            shippingNotes={branding.shippingNotes}
+            localDeliveryBaseFee={branding.localDeliveryBaseFee}
+            localDeliveryFreeFrom={branding.localDeliveryFreeFrom}
+            nationalShippingBaseFee={branding.nationalShippingBaseFee}
+            nationalShippingFreeFrom={branding.nationalShippingFreeFrom}
             cashOnDeliveryEnabled={branding.cashOnDeliveryEnabled}
             onlineCheckoutEnabled={branding.onlineCheckoutEnabled}
           />

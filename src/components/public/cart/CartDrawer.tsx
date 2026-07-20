@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ShoppingBag } from 'lucide-react';
 import { useSelectedLocation } from '@/lib/locations/locationContext';
 import { useLocationChangeWithCheck } from '@/lib/locations/useLocationChangeWithCheck';
 import { LocationConflictModal } from '@/components/public/locations/LocationConflictModal';
 import type { StorefrontTheme } from '../storefront/storefrontTheme';
+import { withAlpha } from '../storefront/storefrontTheme';
 import { CartDrawerHeader } from './CartDrawerHeader';
 import { CartItemsList } from './CartItemsList';
 import { CartSummary } from './CartSummary';
@@ -14,6 +16,8 @@ import { CheckoutActions } from './CheckoutActions';
 import { CheckoutResultMessage } from './CheckoutResultMessage';
 import { useCartCheckout } from './useCartCheckout';
 import { useCartLocationAvailability } from './useCartLocationAvailability';
+import { getPickupLocations } from '@/lib/orders/fulfillment';
+import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 
 interface CartDrawerProps {
   open: boolean;
@@ -25,6 +29,13 @@ interface CartDrawerProps {
   whatsappNumber: string | null;
   allowsPickup: boolean | null;
   allowsLocalDelivery: boolean | null;
+  allowsNationalShipping?: boolean | null;
+  localDeliveryNotes?: string | null;
+  shippingNotes?: string | null;
+  localDeliveryBaseFee?: number | null;
+  localDeliveryFreeFrom?: number | null;
+  nationalShippingBaseFee?: number | null;
+  nationalShippingFreeFrom?: number | null;
   cashOnDeliveryEnabled?: boolean | null;
   onlineCheckoutEnabled?: boolean | null;
 }
@@ -39,9 +50,17 @@ export function CartDrawer({
   whatsappNumber,
   allowsPickup,
   allowsLocalDelivery,
+  allowsNationalShipping,
+  localDeliveryNotes,
+  shippingNotes,
+  localDeliveryBaseFee,
+  localDeliveryFreeFrom,
+  nationalShippingBaseFee,
+  nationalShippingFreeFrom,
   cashOnDeliveryEnabled,
   onlineCheckoutEnabled,
 }: CartDrawerProps) {
+  const navigate = useNavigate();
   const {
     items,
     totalItems,
@@ -57,9 +76,23 @@ export function CartDrawer({
     showOnline,
     showPaymentChoice,
     hasAnyPaymentMethod,
+    availableFulfillmentMethods,
     hasFulfillmentChoice,
+    operationalLocation,
+    localDeliveryCities,
     formik,
-  } = useCartCheckout({ storeSlug, allowsPickup, allowsLocalDelivery, cashOnDeliveryEnabled, onlineCheckoutEnabled });
+  } = useCartCheckout({
+    storeSlug,
+    allowsPickup,
+    allowsLocalDelivery,
+    allowsNationalShipping: allowsNationalShipping ?? null,
+    localDeliveryBaseFee,
+    localDeliveryFreeFrom,
+    nationalShippingBaseFee,
+    nationalShippingFreeFrom,
+    cashOnDeliveryEnabled,
+    onlineCheckoutEnabled,
+  });
 
   // Lock background scroll while the drawer is open so touch-scrolling the
   // page behind it doesn't fight the drawer's own internal scroll on mobile.
@@ -86,6 +119,9 @@ export function CartDrawer({
       ? cartUnavailableIds
       : new Set<string>();
   const unavailableItems = items.filter((i) => visibleCartUnavailableIds.has(i.productId));
+  const checkoutMethod = formik.values.fulfillmentMethod;
+  const pickupLocations = getPickupLocations(locations);
+  const showLocationSelector = checkoutMethod === 'pickup' && pickupLocations.length > 1;
 
   function handleRemoveUnavailable() {
     for (const item of unavailableItems) {
@@ -142,7 +178,14 @@ export function CartDrawer({
                   ) : null
                 }
                 hasAnyPaymentMethod={hasAnyPaymentMethod}
-                onContinue={() => setStep('form')}
+                onViewCart={() => {
+                  onClose();
+                  void navigate(buildStorefrontPath(storeSlug, '/cart'));
+                }}
+                onContinue={() => {
+                  onClose();
+                  void navigate(buildStorefrontPath(storeSlug, '/checkout'));
+                }}
               />
             )}
           </>
@@ -160,23 +203,42 @@ export function CartDrawer({
             />
 
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-              <CheckoutLocationSelector
+              {showLocationSelector ? (
+                <CheckoutLocationSelector
+                  theme={theme}
+                  locations={pickupLocations}
+                  selectedLocation={selectedLocation}
+                  disabled={step === 'submitting' || checkingLocation}
+                  title="Punto de retiro"
+                  helperText="Elige dónde vas a recoger el pedido."
+                  onSelectLocation={requestLocationChange}
+                />
+              ) : null}
+
+              <CheckoutCustomerForm
                 theme={theme}
+                formik={formik}
+                hasFulfillmentChoice={hasFulfillmentChoice}
+                availableFulfillmentMethods={availableFulfillmentMethods}
                 locations={locations}
                 selectedLocation={selectedLocation}
-                disabled={step === 'submitting' || checkingLocation}
-                onSelectLocation={requestLocationChange}
+                localDeliveryCities={localDeliveryCities}
+                operationalLocation={operationalLocation}
+                currency={currency}
+                localDeliveryBaseFee={localDeliveryBaseFee}
+                localDeliveryFreeFrom={localDeliveryFreeFrom}
+                nationalShippingBaseFee={nationalShippingBaseFee}
+                nationalShippingFreeFrom={nationalShippingFreeFrom}
+                localDeliveryNotes={localDeliveryNotes ?? null}
+                nationalShippingNotes={shippingNotes ?? null}
+                onSelectSuggestedLocation={requestLocationChange}
               />
-
-              <CheckoutCustomerForm theme={theme} formik={formik} hasFulfillmentChoice={hasFulfillmentChoice} />
             </div>
 
             <CheckoutActions
               theme={theme}
-              currency={currency}
-              totalPrice={totalPrice}
               isSubmitting={step === 'submitting'}
-              hasSelectedLocation={Boolean(selectedLocation)}
+              hasSelectedLocation={Boolean(operationalLocation)}
               paymentChoice={paymentChoice}
               onSubmit={() => { void formik.submitForm(); }}
             />
@@ -186,10 +248,13 @@ export function CartDrawer({
         {/* ── STEP: redirecting to Wompi ── */}
         {step === 'redirecting_to_wompi' && (
           <div className="flex flex-col items-center justify-center flex-1 gap-5 px-6 py-10 text-center">
-            <div className="w-16 h-16 rounded-full border-4 border-indigo-200 border-t-indigo-600 animate-spin" />
+            <div
+              className="h-16 w-16 rounded-full border-4 animate-spin"
+              style={{ borderColor: withAlpha(theme.primary, 0.18), borderTopColor: theme.primary }}
+            />
             <div>
-              <p className="font-semibold text-gray-800">Abriendo pasarela de pago...</p>
-              <p className="text-sm text-gray-500 mt-1">Serás redirigido a Wompi para completar tu pago.</p>
+              <p className="font-semibold" style={{ color: theme.text }}>Abriendo pasarela de pago...</p>
+              <p className="mt-1 text-sm" style={{ color: theme.mutedText }}>Serás redirigido a Wompi para completar tu pago.</p>
             </div>
           </div>
         )}

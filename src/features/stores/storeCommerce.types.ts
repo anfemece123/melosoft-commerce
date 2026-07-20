@@ -24,6 +24,10 @@ export interface StoreCommerceSettings {
   defaultOrderMethod: OrderMethod;
   localDeliveryNotes: string | null;
   shippingNotes: string | null;
+  localDeliveryBaseFee: number;
+  localDeliveryFreeFrom: number | null;
+  nationalShippingBaseFee: number;
+  nationalShippingFreeFrom: number | null;
   orderFlowType: OrderFlowType;
   hasInventory: boolean;
   hasVariants: boolean;

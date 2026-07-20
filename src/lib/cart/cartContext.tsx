@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import type { ProductType, SelectedProductOptionItem } from '@/types/common.types';
 
 export interface CartItem {
   lineId: string;
@@ -7,10 +8,16 @@ export interface CartItem {
   storeId: string;
   productSlug: string;
   productName: string;
+  productType?: ProductType;
   imageUrl: string | null;
   unitPrice: number;
   quantity: number;
   customizationNotes: string | null;
+  // Structured modifiers/adiciones — the source of truth for what gets
+  // sent to the server (ids only matter there) and for showing extras +
+  // their price in the cart. Optional/defaults to [] so carts persisted
+  // before this field existed keep working (see normalizeCartItem).
+  customizations: SelectedProductOptionItem[];
   // Stock metadata — optional so carts written before this field existed
   // keep working. trackInventory is only enforced when explicitly `true`;
   // unknown (undefined) never blocks a quantity change (soft UX guard only,
@@ -18,6 +25,12 @@ export interface CartItem {
   trackInventory?: boolean;
   stock?: number | null;
   isAvailable?: boolean;
+  // Variant metadata — optional for the same backward-compat reason. When
+  // present, this line represents one specific variant of the product, and
+  // is kept as a separate cart line from other variants/the base product.
+  variantId?: string | null;
+  variantLabel?: string | null;
+  variantSku?: string | null;
 }
 
 interface CartContextValue {
@@ -44,8 +57,11 @@ export function getMaxQuantity(item: Pick<CartItem, 'trackInventory' | 'stock'>)
   return null;
 }
 
-export function isOutOfStock(item: Pick<CartItem, 'trackInventory' | 'stock'>): boolean {
-  return item.trackInventory === true && typeof item.stock === 'number' && item.stock <= 0;
+export function isOutOfStock(
+  item: Pick<CartItem, 'trackInventory' | 'stock' | 'isAvailable'>
+): boolean {
+  return item.isAvailable === false
+    || (item.trackInventory === true && typeof item.stock === 'number' && item.stock <= 0);
 }
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -64,12 +80,42 @@ function legacySessionStorageKey(slug: string) {
   return `${STORAGE_KEY_PREFIX}${slug}`;
 }
 
-function buildCartLineId(item: Pick<CartItem, 'productId' | 'unitPrice' | 'customizationNotes'>): string {
+// Sorted by optionItemId so the same set of modifiers always serializes
+// the same way regardless of selection order.
+function serializeCustomizationsForLineId(customizations: SelectedProductOptionItem[]): string {
+  return customizations
+    .map((c) => c.optionItemId)
+    .sort()
+    .join(',');
+}
+
+function buildCartLineId(
+  item: Pick<CartItem, 'productId' | 'unitPrice' | 'customizationNotes' | 'variantId' | 'customizations'>
+): string {
   return JSON.stringify([
     item.productId,
+    item.variantId ?? null,
     item.unitPrice,
     item.customizationNotes?.trim() ?? '',
+    serializeCustomizationsForLineId(item.customizations),
   ]);
+}
+
+function isSelectedProductOptionItem(value: unknown): value is SelectedProductOptionItem {
+  if (!value || typeof value !== 'object') return false;
+  const c = value as Partial<SelectedProductOptionItem>;
+  return (
+    typeof c.optionGroupId === 'string' &&
+    typeof c.optionGroupName === 'string' &&
+    typeof c.optionItemId === 'string' &&
+    typeof c.optionItemLabel === 'string' &&
+    typeof c.priceDelta === 'number'
+  );
+}
+
+function normalizeCustomizations(raw: unknown): SelectedProductOptionItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(isSelectedProductOptionItem);
 }
 
 function normalizeCartItem(raw: unknown): CartItem | null {
@@ -89,6 +135,7 @@ function normalizeCartItem(raw: unknown): CartItem | null {
     typeof candidate.customizationNotes === 'string' && candidate.customizationNotes.trim().length > 0
       ? candidate.customizationNotes.trim()
       : null;
+  const customizations = normalizeCustomizations(candidate.customizations);
 
   const normalized: CartItem = {
     lineId: typeof candidate.lineId === 'string' && candidate.lineId.length > 0
@@ -97,6 +144,8 @@ function normalizeCartItem(raw: unknown): CartItem | null {
           productId: candidate.productId,
           unitPrice: candidate.unitPrice,
           customizationNotes,
+          variantId: typeof candidate.variantId === 'string' ? candidate.variantId : null,
+          customizations,
         }),
     productId: candidate.productId,
     // Carts persisted before this field existed won't have it — default to
@@ -105,13 +154,22 @@ function normalizeCartItem(raw: unknown): CartItem | null {
     storeId: typeof candidate.storeId === 'string' ? candidate.storeId : '',
     productSlug: candidate.productSlug,
     productName: candidate.productName,
+    productType: candidate.productType === 'menu_item'
+      || candidate.productType === 'physical_product'
+      || candidate.productType === 'service'
+      ? candidate.productType
+      : undefined,
     imageUrl: typeof candidate.imageUrl === 'string' ? candidate.imageUrl : null,
     unitPrice: candidate.unitPrice,
     quantity: Number.isFinite(candidate.quantity) && candidate.quantity > 0 ? Math.floor(candidate.quantity) : 1,
     customizationNotes,
+    customizations,
     trackInventory: typeof candidate.trackInventory === 'boolean' ? candidate.trackInventory : undefined,
     stock: typeof candidate.stock === 'number' ? candidate.stock : null,
     isAvailable: typeof candidate.isAvailable === 'boolean' ? candidate.isAvailable : undefined,
+    variantId: typeof candidate.variantId === 'string' ? candidate.variantId : null,
+    variantLabel: typeof candidate.variantLabel === 'string' ? candidate.variantLabel : null,
+    variantSku: typeof candidate.variantSku === 'string' ? candidate.variantSku : null,
   };
 
   return normalized;
@@ -238,9 +296,17 @@ export function CartProvider({ storeSlug, children }: { storeSlug: string; child
       productId: normalizedIncoming.productId,
       unitPrice: normalizedIncoming.unitPrice,
       customizationNotes: normalizedIncoming.customizationNotes,
+      variantId: normalizedIncoming.variantId ?? null,
+      customizations: normalizedIncoming.customizations,
     });
     const max = getMaxQuantity(normalizedIncoming);
     const existing = items.find((i) => i.lineId === lineId);
+
+    if (normalizedIncoming.isAvailable === false) {
+      // A manually sold-out item stays visible in restaurant menus, but can
+      // never enter the cart.
+      return null;
+    }
 
     if (!existing && max !== null && max <= 0) {
       // Out of stock — nothing to add.
@@ -277,6 +343,7 @@ export function CartProvider({ storeSlug, children }: { storeSlug: string; child
       return 0;
     }
     const current = items.find((i) => i.lineId === lineId);
+    if (current?.isAvailable === false) return current.quantity;
     const max = current ? getMaxQuantity(current) : null;
     const applied = max !== null ? Math.min(quantity, Math.max(max, 1)) : quantity;
 

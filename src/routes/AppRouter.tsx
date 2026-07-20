@@ -4,6 +4,8 @@ import { PublicLayout } from '@/components/layout/PublicLayout';
 import { ProtectedRoute } from './ProtectedRoute';
 import { PlatformAdminRoute } from './PlatformAdminRoute';
 import { StoreAccessRoute } from './StoreAccessRoute';
+import { CustomDomainRoute } from './CustomDomainRoute';
+import { StorefrontDomainProvider } from '@/components/layout/StorefrontDomainProvider';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { AuthCallbackPage } from '@/pages/auth/AuthCallbackPage';
 import { SetPasswordPage } from '@/pages/auth/SetPasswordPage';
@@ -12,6 +14,7 @@ import { StoresPage } from '@/pages/admin/StoresPage';
 import { StoreFormPage } from '@/pages/admin/StoreFormPage';
 import { StoreDetailPage } from '@/pages/admin/StoreDetailPage';
 import { StoreSettingsPage } from '@/pages/admin/StoreSettingsPage';
+import { HomeBuilderPage } from '@/pages/admin/HomeBuilderPage';
 import { ProductsPage } from '@/pages/admin/ProductsPage';
 import { ProductFormPage } from '@/pages/admin/ProductFormPage';
 import { OffersPage } from '@/pages/admin/OffersPage';
@@ -26,6 +29,8 @@ import { PaymentsPage } from '@/pages/admin/PaymentsPage';
 import { MyStoresPage } from '@/pages/admin/MyStoresPage';
 import { StoreHomePage } from '@/pages/public/StoreHomePage';
 import { StoreCatalogPage } from '@/pages/public/StoreCatalogPage';
+import { StoreCartPage } from '@/pages/public/StoreCartPage';
+import { StoreCheckoutPage } from '@/pages/public/StoreCheckoutPage';
 import { ProductLandingPage } from '@/pages/public/ProductLandingPage';
 import { OfferLandingPage } from '@/pages/public/OfferLandingPage';
 import { StorePoliciesPage } from '@/pages/public/StorePoliciesPage';
@@ -36,7 +41,8 @@ import { NotFoundPage } from '@/pages/NotFoundPage';
 export function AppRouter() {
   return (
     <BrowserRouter>
-      <Routes>
+      <StorefrontDomainProvider>
+        <Routes>
         {/* Public auth */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
@@ -62,6 +68,7 @@ export function AppRouter() {
             <Route element={<StoreAccessRoute />}>
               <Route path="/admin/stores/:storeId" element={<StoreDetailPage />} />
               <Route path="/admin/stores/:storeId/settings" element={<StoreSettingsPage />} />
+              <Route path="/admin/stores/:storeId/home-builder" element={<HomeBuilderPage />} />
               <Route path="/admin/stores/:storeId/locations" element={<LocationsPage />} />
               <Route path="/admin/stores/:storeId/products" element={<ProductsLayout />}>
                 <Route index element={<ProductsPage />} />
@@ -90,15 +97,29 @@ export function AppRouter() {
         <Route element={<PublicLayout />}>
           <Route path="/s/:storeSlug" element={<StoreHomePage />} />
           <Route path="/s/:storeSlug/catalog" element={<StoreCatalogPage />} />
+          <Route path="/s/:storeSlug/cart" element={<StoreCartPage />} />
+          <Route path="/s/:storeSlug/checkout" element={<StoreCheckoutPage />} />
           <Route path="/s/:storeSlug/p/:productSlug" element={<ProductLandingPage />} />
           <Route path="/s/:storeSlug/o/:offerSlug" element={<OfferLandingPage />} />
           <Route path="/s/:storeSlug/policies" element={<StorePoliciesPage />} />
           <Route path="/s/:storeSlug/payment-result" element={<PaymentResultPage />} />
+
+          <Route element={<CustomDomainRoute />}>
+            <Route path="/" element={<StoreHomePage />} />
+            <Route path="/catalog" element={<StoreCatalogPage />} />
+            <Route path="/cart" element={<StoreCartPage />} />
+            <Route path="/checkout" element={<StoreCheckoutPage />} />
+            <Route path="/p/:productSlug" element={<ProductLandingPage />} />
+            <Route path="/o/:offerSlug" element={<OfferLandingPage />} />
+            <Route path="/policies" element={<StorePoliciesPage />} />
+            <Route path="/payment-result" element={<PaymentResultPage />} />
+          </Route>
         </Route>
 
         {/* 404 */}
         <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+        </Routes>
+      </StorefrontDomainProvider>
     </BrowserRouter>
   );
 }

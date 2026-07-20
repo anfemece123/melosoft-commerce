@@ -1,7 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import type { Product, ProductInsert, ProductUpdate, ProductImage, ProductCountStats } from './products.types';
 import type { ProductFacetValue, ProductCollectionAssignment, PublicProductImage, PublicProductPage } from '@/types/common.types';
-import type { PublicProductImageRow } from '@/types/database.types';
+import type { PublicProductImageRow, PublicProductPageRow } from '@/types/database.types';
 import {
   mapProductRowToProduct,
   mapProductInsertToRow,
@@ -9,6 +9,29 @@ import {
   mapPublicProductPageRowToPublicProductPage,
   mapProductImageRowToProductImage,
 } from './products.mapper';
+
+async function removeStorageFolderFiles(bucket: string, folder: string): Promise<void> {
+  const { data: files, error: listError } = await supabase.storage.from(bucket).list(folder);
+  if (listError) throw new Error(listError.message);
+
+  const filePaths = (files ?? [])
+    .filter((file) => file.name && file.name !== '.emptyFolderPlaceholder')
+    .map((file) => `${folder}/${file.name}`);
+
+  if (filePaths.length === 0) return;
+
+  const { error: removeError } = await supabase.storage.from(bucket).remove(filePaths);
+  if (removeError) throw new Error(removeError.message);
+}
+
+function snapshotContainsProduct(snapshot: unknown, productId: string): boolean {
+  if (!Array.isArray(snapshot)) return false;
+
+  return snapshot.some((item) => {
+    if (!item || typeof item !== 'object') return false;
+    return 'product_id' in item && item.product_id === productId;
+  });
+}
 
 async function getOwnerId(): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
@@ -153,6 +176,37 @@ async function attachPublicImages(products: PublicProductPage[]): Promise<Public
   });
 }
 
+interface PublicCatalogSearchParams {
+  storeSlug: string;
+  categorySlug?: string;
+  categoryParentId?: string | null;
+  subcategorySlug?: string;
+  collectionSlug?: string;
+  query?: string;
+  onlyFeatured?: boolean;
+  onlyOnSale?: boolean;
+  sortKey?: 'relevance' | 'price_asc' | 'price_desc' | 'name_asc' | 'newest' | 'featured';
+  offset: number;
+  limit: number;
+}
+
+interface PublicCatalogBaseFilterParams {
+  storeSlug: string;
+  categorySlug?: string;
+  categoryParentId?: string | null;
+  subcategorySlug?: string;
+  collectionSlug?: string;
+  query?: string;
+  onlyFeatured?: boolean;
+  onlyOnSale?: boolean;
+}
+
+type UntypedRpcClient = {
+  rpc: (fn: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
+};
+
+const rpcClient = supabase as unknown as UntypedRpcClient;
+
 export const productsService = {
   async getProductsByStore(storeId: string): Promise<Product[]> {
     const { data, error } = await supabase
@@ -205,6 +259,89 @@ export const productsService = {
       .order('product_name', { ascending: true });
     if (error) throw new Error(error.message);
     return attachPublicImages((data ?? []).map(mapPublicProductPageRowToPublicProductPage));
+  },
+
+  async getPublicProductsPageByStoreSlug(
+    storeSlug: string,
+    offset: number,
+    limit: number,
+  ): Promise<{ products: PublicProductPage[]; totalCount: number }> {
+    const from = Math.max(0, offset);
+    const to = Math.max(from, from + Math.max(1, limit) - 1);
+
+    const { data, error, count } = await supabase
+      .from('public_product_pages')
+      .select('*', { count: 'exact' })
+      .eq('store_slug', storeSlug)
+      .order('product_name', { ascending: true })
+      .range(from, to);
+
+    if (error) throw new Error(error.message);
+
+    return {
+      products: await attachPublicImages((data ?? []).map(mapPublicProductPageRowToPublicProductPage)),
+      totalCount: count ?? 0,
+    };
+  },
+
+  async searchPublicCatalogPage(params: PublicCatalogSearchParams): Promise<{ products: PublicProductPage[]; totalCount: number }> {
+    const rpcArgs = {
+      p_store_slug: params.storeSlug,
+      p_category_slug: params.categorySlug || null,
+      p_category_parent_id: params.categoryParentId || null,
+      p_subcategory_slug: params.subcategorySlug || null,
+      p_collection_slug: params.collectionSlug || null,
+      p_query: params.query?.trim() || null,
+      p_only_featured: params.onlyFeatured ?? false,
+      p_only_on_sale: params.onlyOnSale ?? false,
+      p_sort_key: params.sortKey ?? 'relevance',
+      p_offset: params.offset,
+      p_limit: params.limit,
+    };
+
+    const [pageResult, countResult] = await Promise.all([
+      rpcClient.rpc('public_catalog_search_page', rpcArgs),
+      rpcClient.rpc('public_catalog_search_count', {
+        p_store_slug: rpcArgs.p_store_slug,
+        p_category_slug: rpcArgs.p_category_slug,
+        p_category_parent_id: rpcArgs.p_category_parent_id,
+        p_subcategory_slug: rpcArgs.p_subcategory_slug,
+        p_collection_slug: rpcArgs.p_collection_slug,
+        p_query: rpcArgs.p_query,
+        p_only_featured: rpcArgs.p_only_featured,
+        p_only_on_sale: rpcArgs.p_only_on_sale,
+      }),
+    ]);
+
+    if (pageResult.error) throw new Error(pageResult.error.message);
+    if (countResult.error) throw new Error(countResult.error.message);
+
+    const rows = (pageResult.data ?? []) as PublicProductPageRow[];
+    return {
+      products: await attachPublicImages(rows.map(mapPublicProductPageRowToPublicProductPage)),
+      totalCount: Number(countResult.data ?? 0),
+    };
+  },
+
+  async getPublicCatalogPriceBounds(params: PublicCatalogBaseFilterParams): Promise<{ min: number; max: number }> {
+    const { data, error } = await rpcClient.rpc('public_catalog_search_price_bounds', {
+      p_store_slug: params.storeSlug,
+      p_category_slug: params.categorySlug || null,
+      p_category_parent_id: params.categoryParentId || null,
+      p_subcategory_slug: params.subcategorySlug || null,
+      p_collection_slug: params.collectionSlug || null,
+      p_query: params.query?.trim() || null,
+      p_only_featured: params.onlyFeatured ?? false,
+      p_only_on_sale: params.onlyOnSale ?? false,
+    });
+
+    if (error) throw new Error(error.message);
+
+    const row = (Array.isArray(data) ? data[0] : data) as { min_price?: number | string | null; max_price?: number | string | null } | undefined;
+    return {
+      min: Number(row?.min_price ?? 0),
+      max: Number(row?.max_price ?? 0),
+    };
   },
 
   async countProductsByStore(storeId: string): Promise<ProductCountStats> {
@@ -262,6 +399,82 @@ export const productsService = {
   },
 
   async deleteProduct(id: string): Promise<void> {
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('id, store_id, owner_id')
+      .eq('id', id)
+      .single();
+    if (productError) throw new Error(productError.message);
+
+    const { data: images, error: imagesError } = await supabase
+      .from('product_images')
+      .select('storage_path')
+      .eq('product_id', id);
+    if (imagesError) throw new Error(imagesError.message);
+
+    const storagePaths = (images ?? [])
+      .map((image) => image.storage_path)
+      .filter((path): path is string => typeof path === 'string' && path.length > 0);
+
+    if (storagePaths.length > 0) {
+      const { error: storageError } = await supabase.storage.from('store-assets').remove(storagePaths);
+      if (storageError) throw new Error(storageError.message);
+    }
+
+    const { data: offers, error: offersError } = await supabase
+      .from('offers')
+      .select('id')
+      .eq('product_id', id);
+    if (offersError) throw new Error(offersError.message);
+
+    for (const offer of offers ?? []) {
+      const { data: offerImages, error: offerImagesError } = await supabase
+        .from('offer_images')
+        .select('storage_path')
+        .eq('offer_id', offer.id);
+      if (offerImagesError) throw new Error(offerImagesError.message);
+
+      const offerStoragePaths = (offerImages ?? [])
+        .map((image) => image.storage_path)
+        .filter((path): path is string => typeof path === 'string' && path.length > 0);
+
+      if (offerStoragePaths.length > 0) {
+        const { error: offerStorageError } = await supabase.storage.from('store-assets').remove(offerStoragePaths);
+        if (offerStorageError) throw new Error(offerStorageError.message);
+      }
+
+      await removeStorageFolderFiles(
+        'store-assets',
+        `${product.owner_id}/stores/${product.store_id}/offers/${offer.id}`
+      );
+    }
+
+    const { data: checkoutSessions, error: checkoutSessionsError } = await supabase
+      .from('checkout_sessions')
+      .select('id, items_snapshot')
+      .is('order_id', null);
+    if (checkoutSessionsError) throw new Error(checkoutSessionsError.message);
+
+    const checkoutSessionIdsToDelete = (checkoutSessions ?? [])
+      .filter((session) => snapshotContainsProduct(session.items_snapshot, id))
+      .map((session) => session.id);
+
+    if (checkoutSessionIdsToDelete.length > 0) {
+      const { error: checkoutSessionsDeleteError } = await supabase
+        .from('checkout_sessions')
+        .delete()
+        .in('id', checkoutSessionIdsToDelete);
+      if (checkoutSessionsDeleteError) throw new Error(checkoutSessionsDeleteError.message);
+    }
+
+    const { error: offersDeleteError } = await supabase.from('offers').delete().eq('product_id', id);
+    if (offersDeleteError) throw new Error(offersDeleteError.message);
+
+    await removeStorageFolderFiles(
+      'store-assets',
+      `${product.owner_id}/stores/${product.store_id}/products/${product.id}`
+    );
+
     const { error } = await supabase.from('products').delete().eq('id', id);
     if (error) throw new Error(error.message);
   },

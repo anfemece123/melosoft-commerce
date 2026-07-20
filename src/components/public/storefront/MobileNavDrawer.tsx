@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import type { CatalogType, PublicHeaderSettings, PublicStoreCategory, PublicStoreCollection } from '@/types/common.types';
 import type { StorefrontTheme } from './storefrontTheme';
 import { PublicStoreLogo } from './PublicStoreLogo';
+import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 
 interface MobileNavDrawerProps {
   open: boolean;
@@ -73,7 +74,7 @@ export function MobileNavDrawer({
         >
           {(settings.showLogo || settings.showStoreName) ? (
             <Link
-              to={`/s/${storeSlug}`}
+              to={buildStorefrontPath(storeSlug)}
               onClick={onClose}
               className="flex min-w-0 items-center gap-2.5"
             >
@@ -115,7 +116,7 @@ export function MobileNavDrawer({
         <nav className="flex-1 overflow-y-auto py-2">
           {settings.showHomeLink && (
             <Link
-              to={`/s/${storeSlug}`}
+              to={buildStorefrontPath(storeSlug)}
               onClick={onClose}
               className="flex items-center gap-3 px-5 py-3.5 text-sm font-medium transition-opacity hover:opacity-70"
               style={{ color: theme.primary }}
@@ -128,7 +129,7 @@ export function MobileNavDrawer({
           {inCategoriesMode ? (
             <>
               <Link
-                to={`/s/${storeSlug}/catalog`}
+                to={buildStorefrontPath(storeSlug, '/catalog')}
                 onClick={onClose}
                 className="flex items-center gap-3 px-5 py-3.5 text-sm font-medium transition-opacity hover:opacity-70"
                 style={{ color: theme.mode === 'dark' ? theme.text : '#374151' }}
@@ -145,7 +146,7 @@ export function MobileNavDrawer({
               {visibleRootCats.map((cat) => (
                 <div key={cat.id} className="border-b border-transparent">
                   <Link
-                    to={`/s/${storeSlug}/catalog?cat=${encodeURIComponent(cat.slug)}`}
+                    to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(cat.slug)}`)}
                     onClick={onClose}
                     className="flex items-center justify-between px-5 py-3 text-sm transition-opacity hover:opacity-70"
                     style={{ color: theme.mode === 'dark' ? theme.text : '#374151' }}
@@ -161,7 +162,7 @@ export function MobileNavDrawer({
                       {(cat.children ?? []).map((child) => (
                         <Link
                           key={child.id}
-                          to={`/s/${storeSlug}/catalog?cat=${encodeURIComponent(cat.slug)}&sub=${encodeURIComponent(child.slug)}`}
+                          to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(cat.slug)}&sub=${encodeURIComponent(child.slug)}`)}
                           onClick={onClose}
                           className="block px-9 py-2 text-sm transition-opacity hover:opacity-70"
                           style={{ color: theme.mutedText }}
@@ -176,7 +177,7 @@ export function MobileNavDrawer({
             </>
           ) : (
             <Link
-              to={`/s/${storeSlug}/catalog`}
+              to={buildStorefrontPath(storeSlug, '/catalog')}
               onClick={onClose}
               className="flex items-center gap-3 px-5 py-3.5 text-sm font-medium transition-opacity hover:opacity-70"
               style={{
@@ -205,7 +206,7 @@ export function MobileNavDrawer({
               {visibleCollections.map((collection) => (
                 <Link
                   key={collection.id}
-                  to={`/s/${storeSlug}/catalog?collection=${encodeURIComponent(collection.slug)}`}
+                  to={buildStorefrontPath(storeSlug, `/catalog?collection=${encodeURIComponent(collection.slug)}`)}
                   onClick={onClose}
                   className="flex items-center gap-3 px-5 py-3 text-sm transition-opacity hover:opacity-70"
                   style={{ color: theme.mode === 'dark' ? theme.text : '#374151' }}

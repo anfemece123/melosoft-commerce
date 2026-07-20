@@ -188,10 +188,15 @@ export function ProductFacetAssignments({
     <div className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="max-w-3xl">
-          <h3 className="text-lg font-semibold text-gray-900">Características para filtros</h3>
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="h-4 w-4 text-violet-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Atributos del producto</h3>
+            <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">
+              Filtro
+            </span>
+          </div>
           <p className="mt-1 text-sm text-gray-500">
-            Agrega datos como marca, talla, color, nivel o material. Estos datos ayudan a tus
-            clientes a filtrar productos en el catálogo.
+            Datos que describen el producto y ayudan a filtrarlo en el catálogo. No manejan stock, precio ni SKU.
           </p>
         </div>
 

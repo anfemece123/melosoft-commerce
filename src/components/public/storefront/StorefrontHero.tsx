@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { PublicStoreLogo } from './PublicStoreLogo';
 import { StorefrontActionButton } from './StorefrontActionButton';
-import type { StorefrontTheme } from './storefrontTheme';
+import { STOREFRONT_CONTAINER_CLASS, type StorefrontTheme } from './storefrontTheme';
 import type { PublicStoreHeroSlide } from '@/types/common.types';
 
 interface StorefrontHeroProps {
@@ -85,7 +85,7 @@ export function StorefrontHero({
           <DecorativeBlob className="right-28 top-5 h-16 w-16 rounded-[24px] opacity-30" />
           <DecorativeBlob className="bottom-8 right-10 h-16 w-16 rounded-[24px] opacity-30" />
 
-          <div className="relative mx-auto grid max-w-7xl items-center gap-8 px-4 md:px-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] lg:gap-10">
+          <div className={`relative mx-auto grid ${STOREFRONT_CONTAINER_CLASS} items-center gap-8 px-4 md:px-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] lg:gap-10`}>
             <div className="order-2 flex items-center lg:order-1 lg:min-h-[460px]">
               <div className="mx-auto flex w-full max-w-[620px] flex-col items-center text-center lg:mx-0 lg:max-w-[560px] lg:items-start lg:text-left">
                 {title ? (

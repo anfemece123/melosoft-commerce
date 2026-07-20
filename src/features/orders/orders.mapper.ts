@@ -1,8 +1,12 @@
-import type { OrderRow, OrderRowInsert, OrderRowUpdate, OrderItemRow, OrderItemRowInsert } from '@/types/database.types';
+import type {
+  OrderRow, OrderRowInsert, OrderRowUpdate, OrderItemRow, OrderItemRowInsert,
+  OrderItemCustomizationRow,
+} from '@/types/database.types';
 
-type OrderRowWithItems = OrderRow & { order_items?: OrderItemRow[] };
+type OrderItemRowWithCustomizations = OrderItemRow & { order_item_customizations?: OrderItemCustomizationRow[] };
+type OrderRowWithItems = OrderRow & { order_items?: OrderItemRowWithCustomizations[] };
 import type { OrderStatus, PaymentStatus, FulfillmentMethod, OrderSource, OrderPaymentMethod } from '@/types/common.types';
-import type { Order, OrderItem, OrderInsert, OrderUpdate, OrderItemInsert } from './orders.types';
+import type { Order, OrderItem, OrderItemCustomization, OrderInsert, OrderUpdate, OrderItemInsert } from './orders.types';
 
 // ── Row → App model ─────────────────────────────────────────
 
@@ -30,7 +34,7 @@ export function mapOrderRowToOrder(row: OrderRowWithItems): Order {
     status: row.status as OrderStatus,
     paymentStatus: row.payment_status as PaymentStatus,
     paymentMethod: (row.payment_method as OrderPaymentMethod) ?? 'cash_on_delivery',
-    fulfillmentMethod: (row.fulfillment_method as FulfillmentMethod) ?? 'delivery',
+    fulfillmentMethod: (row.fulfillment_method as FulfillmentMethod) ?? 'local_delivery',
     notes: row.notes,
     items: row.order_items ? row.order_items.map(mapOrderItemRowToOrderItem) : undefined,
     createdAt: row.created_at,
@@ -38,20 +42,39 @@ export function mapOrderRowToOrder(row: OrderRowWithItems): Order {
   };
 }
 
-export function mapOrderItemRowToOrderItem(row: OrderItemRow): OrderItem {
+export function mapOrderItemCustomizationRowToOrderItemCustomization(
+  row: OrderItemCustomizationRow
+): OrderItemCustomization {
+  return {
+    id: row.id,
+    orderItemId: row.order_item_id,
+    optionGroupId: row.option_group_id ?? null,
+    optionItemId: row.option_item_id ?? null,
+    optionGroupName: row.option_group_name,
+    optionItemLabel: row.option_item_label,
+    priceDelta: Number(row.price_delta),
+    createdAt: row.created_at,
+  };
+}
+
+export function mapOrderItemRowToOrderItem(row: OrderItemRowWithCustomizations): OrderItem {
   return {
     id: row.id,
     orderId: row.order_id,
     productId: row.product_id,
+    variantId: row.variant_id ?? null,
     offerId: row.offer_id,
     productNameSnapshot: row.product_name_snapshot ?? null,
     productSlugSnapshot: row.product_slug_snapshot ?? null,
     productImageUrlSnapshot: row.product_image_url_snapshot ?? null,
+    variantLabelSnapshot: row.variant_label_snapshot ?? null,
+    variantSkuSnapshot: row.variant_sku_snapshot ?? null,
     name: row.name,
     quantity: row.quantity,
     unitPrice: Number(row.unit_price),
     totalPrice: Number(row.total_price),
     customerNote: row.customer_note,
+    customizations: (row.order_item_customizations ?? []).map(mapOrderItemCustomizationRowToOrderItemCustomization),
     createdAt: row.created_at,
   };
 }
@@ -113,9 +136,12 @@ export function mapOrderItemInsertToRow(data: OrderItemInsert): OrderItemRowInse
   return {
     order_id: data.orderId,
     product_id: data.productId ?? null,
+    variant_id: data.variantId ?? null,
     offer_id: data.offerId ?? null,
     product_name_snapshot: data.productNameSnapshot ?? null,
     product_slug_snapshot: data.productSlugSnapshot ?? null,
+    variant_label_snapshot: data.variantLabelSnapshot ?? null,
+    variant_sku_snapshot: data.variantSkuSnapshot ?? null,
     name: data.name,
     quantity: data.quantity,
     unit_price: data.unitPrice,

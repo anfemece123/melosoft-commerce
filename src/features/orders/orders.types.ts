@@ -7,19 +7,38 @@ import type {
   OrderPaymentMethod,
 } from '@/types/common.types';
 
+// Snapshot of a priced modifier/adición on a placed order — text columns
+// are the source of truth for display (product_option_groups/items rows
+// get replaced wholesale on every catalog edit, so an id can go stale
+// the moment an owner edits their menu). ids are traceability-only.
+export interface OrderItemCustomization {
+  id: string;
+  orderItemId: string;
+  optionGroupId: string | null;
+  optionItemId: string | null;
+  optionGroupName: string;
+  optionItemLabel: string;
+  priceDelta: number;
+  createdAt: string;
+}
+
 export interface OrderItem {
   id: string;
   orderId: string;
   productId: string | null;
+  variantId: string | null;
   offerId: string | null;
   productNameSnapshot: string | null;
   productSlugSnapshot: string | null;
   productImageUrlSnapshot: string | null;
+  variantLabelSnapshot: string | null;
+  variantSkuSnapshot: string | null;
   name: string;
   quantity: number;
   unitPrice: number;
   totalPrice: number;
   customerNote: string | null;
+  customizations: OrderItemCustomization[];
   createdAt: string;
 }
 
@@ -67,10 +86,20 @@ export interface OrdersState {
 
 // Web checkout flow types
 
+// Only ids are sent for pricing purposes — the server re-resolves and
+// re-prices every modifier from product_option_groups/items, it never
+// trusts a client-sent label or price_delta.
+export interface WebOrderCartItemCustomization {
+  optionGroupId: string;
+  optionItemId: string;
+}
+
 export interface WebOrderCartItem {
   productId: string;
+  variantId?: string | null;
   quantity: number;
   customizationNotes: string | null;
+  customizations: WebOrderCartItemCustomization[];
 }
 
 export interface CreateWebOrderPayload {

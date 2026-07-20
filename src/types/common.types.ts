@@ -97,7 +97,7 @@ export type CountdownMode = 'fixed_window' | 'per_visitor';
 // Orders
 export type OrderStatus = 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
 export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'expired' | 'refunded';
-export type FulfillmentMethod = 'delivery' | 'pickup';
+export type FulfillmentMethod = 'delivery' | 'pickup' | 'local_delivery' | 'national_shipping';
 export type OrderSource = 'web' | 'whatsapp' | 'admin';
 export type OrderPaymentMethod = 'cash_on_delivery' | 'online';
 
@@ -192,6 +192,10 @@ export interface PublicStorePage {
   defaultOrderMethod: OrderMethod | null;
   localDeliveryNotes: string | null;
   shippingNotes: string | null;
+  localDeliveryBaseFee: number | null;
+  localDeliveryFreeFrom: number | null;
+  nationalShippingBaseFee: number | null;
+  nationalShippingFreeFrom: number | null;
   headerSettings: PublicHeaderSettings | null;
 }
 
@@ -259,6 +263,12 @@ export interface PublicStoreFacetValue {
   value: string;
   slug: string;
   sortOrder: number;
+  // Where this value comes from — a real per-product facet assignment, a
+  // purchasable variant option value, or both (same normalized value exists
+  // via each path). Absent/undefined means "attribute" (every value read
+  // straight from the DB facet tables, pre-merge). Only set by
+  // buildUnifiedPublicFacets in variantFilters.ts.
+  sources?: ('attribute' | 'variant')[];
 }
 
 export interface FacetApplicableCategory {
@@ -279,6 +289,10 @@ export interface PublicStoreFacet {
   applicableCategories: FacetApplicableCategory[];
   sortOrder: number;
   values: PublicStoreFacetValue[];
+  // Informational only (not read by any matching/filtering logic): whether
+  // this facet's values are purely attribute-sourced, purely variant-derived
+  // (no colliding real facet existed), or a merge of both.
+  source?: 'attribute' | 'variant' | 'mixed';
 }
 
 export interface PublicProductPage {
@@ -329,6 +343,15 @@ export interface PublicProductPage {
   commerceMode: CommerceMode | null;
   catalogType: CatalogType | null;
   descriptionSections: ProductDescriptionSection[];
+  hasVariants: boolean;
+  // Per-product catalog display preference: split the controlsMedia option
+  // (usually Color/Modelo) into one card per value (fashion/footwear style)
+  // instead of a single grouped card. See buildCatalogItems.
+  showVariantsAsCards: boolean;
+  sizeChart: PublicSizeChart | null;
+  variantOptions: PublicVariantOption[];
+  variants: PublicProductVariant[];
+  createdAt: string;
 }
 
 export interface PublicProductImage {
@@ -357,6 +380,76 @@ export interface PublicProductOptionItem {
   priceDelta: number;
   isDefault: boolean;
   sortOrder: number;
+}
+
+// A single selected modifier/adición — carried through cart → checkout →
+// order. `optionGroupId`/`optionItemId` are what the client sends to the
+// server (the only fields it's trusted to provide); `optionGroupName`/
+// `optionItemLabel`/`priceDelta` are what the client shows locally for its
+// own UI, but the server always re-resolves and re-prices them from
+// product_option_groups/product_option_items — never trusts these values
+// for the actual charge.
+export interface SelectedProductOptionItem {
+  optionGroupId: string;
+  optionGroupName: string;
+  optionItemId: string;
+  optionItemLabel: string;
+  priceDelta: number;
+}
+
+// Variants (talla/color/etc.) — separate from ProductFacetValue above,
+// which describes general filterable attributes, not purchasable
+// combinations with their own price/sku/stock.
+
+export interface PublicVariantOptionValue {
+  id: string;
+  value: string;
+  normalizedValue: string;
+  colorHex: string | null;
+  // Gallery attached to this specific value (e.g. all "Color: Verde"
+  // photos) — reused by every variant of that color instead of the
+  // owner having to re-upload it per size.
+  images: PublicProductImage[];
+}
+
+export interface PublicVariantOption {
+  id: string;
+  name: string;
+  type: 'size' | 'color' | 'material' | 'style' | 'custom';
+  useAsPublicFilter: boolean;
+  // True for at most the one option (usually Color/Modelo) whose
+  // selected value's images should drive the product gallery — see
+  // resolveVariantGalleryImages in productVariants.utils.ts.
+  controlsMedia: boolean;
+  sortOrder: number;
+  values: PublicVariantOptionValue[];
+}
+
+export interface PublicProductVariantOptionValue {
+  optionId: string;
+  optionName: string;
+  valueId: string;
+  value: string;
+}
+
+export interface PublicProductVariant {
+  id: string;
+  sku: string | null;
+  price: number | null;
+  compareAtPrice: number | null;
+  stockQuantity: number;
+  stockPolicy: 'deny' | 'allow_backorder';
+  isDefault: boolean;
+  imageUrl: string | null;
+  optionValues: PublicProductVariantOptionValue[];
+}
+
+export interface PublicSizeChart {
+  id: string;
+  name: string;
+  chartType: 'shoes' | 'clothing' | 'custom';
+  unit: 'cm' | 'in';
+  content: Record<string, unknown>;
 }
 
 export interface PublicOfferPage {
@@ -461,6 +554,55 @@ export interface CatalogMeta {
   megaMenuFacets: PublicStoreFacet[];
   products?: PublicProductPage[];
   priceRange: { min: number; max: number };
+}
+
+// Home Builder — per-store ordered, togglable homepage sections.
+// 'hero' is a position/visibility marker only; its content stays in
+// stores.hero_enabled + store_hero_slides (edited from StoreSettingsPage).
+// featured_collections/menu_highlights/benefits/gallery are Phase 2
+// placeholders — already valid values, not yet offered in the admin
+// "add section" picker (see PHASE1_SECTION_TYPES in homeSections.types.ts).
+export type HomeSectionType =
+  | 'hero'
+  | 'promo_banners'
+  | 'featured_products'
+  | 'featured_categories'
+  | 'testimonials'
+  | 'image_text'
+  | 'featured_collections'
+  | 'menu_highlights'
+  | 'benefits'
+  | 'gallery'
+  | 'catalog_products';
+
+export interface PublicHomeSectionItem {
+  id: string;
+  sectionId: string;
+  sortOrder: number;
+  linkedEntityType: 'product' | 'category' | 'collection' | null;
+  linkedEntityId: string | null;
+  title: string | null;
+  subtitle: string | null;
+  body: string | null;
+  imageUrl: string | null;
+  linkUrl: string | null;
+  linkLabel: string | null;
+  rating: number | null;
+  /** Type-specific per-item visual settings (currently only used by
+   * promo_banners — see promoBanner.types.ts), decoded the same
+   * defensive way `content` is on the parent section. */
+  settings: Record<string, unknown> | null;
+}
+
+export interface PublicHomeSection {
+  id: string;
+  storeId: string;
+  sectionType: HomeSectionType;
+  sortOrder: number;
+  heading: string | null;
+  subheading: string | null;
+  content: Record<string, unknown>;
+  items: PublicHomeSectionItem[];
 }
 
 export interface CampaignOfferSession {

@@ -1,12 +1,9 @@
 import { CreditCard, Loader2 } from 'lucide-react';
-import { formatCurrency } from '@/utils/formatCurrency';
 import type { StorefrontTheme } from '../storefront/storefrontTheme';
 import type { PaymentChoice } from './CheckoutPaymentSelector';
 
 interface CheckoutActionsProps {
   theme: StorefrontTheme;
-  currency: string;
-  totalPrice: number;
   isSubmitting: boolean;
   hasSelectedLocation: boolean;
   paymentChoice: PaymentChoice;
@@ -15,21 +12,13 @@ interface CheckoutActionsProps {
 
 export function CheckoutActions({
   theme,
-  currency,
-  totalPrice,
   isSubmitting,
   hasSelectedLocation,
   paymentChoice,
   onSubmit,
 }: CheckoutActionsProps) {
   return (
-    <div className="border-t px-5 py-4 space-y-3" style={{ borderColor: theme.border, backgroundColor: theme.surface }}>
-      <div className="flex items-center justify-between text-sm">
-        <span className="opacity-60">Total a pagar</span>
-        <span className="font-bold text-lg" style={{ color: theme.primary }}>
-          {formatCurrency(totalPrice, 'es-CO', currency)}
-        </span>
-      </div>
+    <div className="border-t px-5 py-4" style={{ borderColor: theme.border, backgroundColor: theme.surface }}>
       <button
         type="button"
         disabled={isSubmitting || !hasSelectedLocation}
@@ -48,6 +37,11 @@ export function CheckoutActions({
           'Confirmar pedido'
         )}
       </button>
+      {!hasSelectedLocation ? (
+        <p className="mt-2 text-xs" style={{ color: theme.mutedText }}>
+          Selecciona una sede válida para continuar.
+        </p>
+      ) : null}
     </div>
   );
 }

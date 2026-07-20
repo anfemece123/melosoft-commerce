@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { ImagePlus, Loader2, Trash2 } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { ImagePlus, Loader2, RotateCcw, Trash2 } from 'lucide-react';
 import { ImageCropDialog } from './ImageCropDialog';
 import {
   formatBytes,
@@ -22,6 +23,9 @@ interface ImageUploadFieldProps {
   hint?: string;
   error?: string;
   aspectClassName?: string;
+  clearLabel?: string;
+  clearAction?: 'remove' | 'reset';
+  labelAdornment?: ReactNode;
 }
 
 export function ImageUploadField({
@@ -35,6 +39,9 @@ export function ImageUploadField({
   hint,
   error,
   aspectClassName = 'h-24 w-24 rounded-2xl',
+  clearLabel = 'Quitar',
+  clearAction = 'remove',
+  labelAdornment,
 }: ImageUploadFieldProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [cropSource, setCropSource] = useState<LoadedImageFile | null>(null);
@@ -54,9 +61,12 @@ export function ImageUploadField({
 
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-gray-700">
-        {label}
-      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="block text-sm font-medium text-gray-700">
+          {label}
+        </label>
+        {labelAdornment}
+      </div>
 
       <div className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-4">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -86,8 +96,10 @@ export function ImageUploadField({
                   onClick={onClear}
                   className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
-                  <Trash2 className="h-4 w-4" />
-                  Quitar
+                  {clearAction === 'reset'
+                    ? <RotateCcw className="h-4 w-4" />
+                    : <Trash2 className="h-4 w-4" />}
+                  {clearLabel}
                 </button>
               )}
             </div>

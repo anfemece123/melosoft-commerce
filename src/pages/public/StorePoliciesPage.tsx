@@ -8,9 +8,12 @@ import { StorefrontPoliciesSkeleton } from '@/components/public/storefront/Store
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import { storesService } from '@/features/stores/storesService';
 import type { PublicStorePage } from '@/types/common.types';
+import { useResolvedStoreSlug } from '@/lib/storefront/storefrontDomainContext';
+import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 
 export function StorePoliciesPage() {
-  const { storeSlug } = useParams<{ storeSlug: string }>();
+  const { storeSlug: routeStoreSlug } = useParams<{ storeSlug: string }>();
+  const storeSlug = useResolvedStoreSlug(routeStoreSlug);
   const { branding } = usePublicStoreBranding();
   const { setRouteReady } = usePublicRouteReady();
   const [store, setStore] = useState<PublicStorePage | null>(branding);
@@ -100,7 +103,7 @@ export function StorePoliciesPage() {
         </div>
 
         <p className="mt-10 text-center text-xs" style={{ color: theme.mutedText }}>
-          /s/{storeSlug}/policies — Políticas configurables por tienda.
+          {storeSlug ? buildStorefrontPath(storeSlug, '/policies') : '/policies'} — Políticas configurables por tienda.
         </p>
       </main>
     </div>

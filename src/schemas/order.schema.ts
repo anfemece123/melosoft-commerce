@@ -24,16 +24,37 @@ export const checkoutSchema = Yup.object({
     .required('El teléfono es requerido'),
   customerEmail: Yup.string().trim().email('Email inválido').optional(),
   fulfillmentMethod: Yup.string()
-    .oneOf(['delivery', 'pickup'] as const)
+    .oneOf(['pickup', 'local_delivery', 'national_shipping'] as const)
     .required(),
   shippingAddress: Yup.string()
     .trim()
     .max(300)
     .when('fulfillmentMethod', {
-      is: 'delivery',
-      then: (s) => s.required('La dirección es requerida para domicilio'),
+      is: (value: string) => value === 'local_delivery' || value === 'national_shipping',
+      then: (s) => s.required('La dirección es requerida para este tipo de envío'),
       otherwise: (s) => s.optional(),
     }),
+  shippingDepartmentId: Yup.string().when('fulfillmentMethod', {
+    is: 'national_shipping',
+    then: (s) => s.required('Selecciona un departamento'),
+    otherwise: (s) => s.optional(),
+  }),
+  shippingDepartmentName: Yup.string().when('fulfillmentMethod', {
+    is: 'national_shipping',
+    then: (s) => s.required('Selecciona un departamento'),
+    otherwise: (s) => s.optional(),
+  }),
+  shippingCityId: Yup.string().when('fulfillmentMethod', {
+    is: 'national_shipping',
+    then: (s) => s.required('Selecciona una ciudad'),
+    otherwise: (s) => s.optional(),
+  }),
+  shippingCityName: Yup.string().when('fulfillmentMethod', {
+    is: 'national_shipping',
+    then: (s) => s.required('Selecciona una ciudad'),
+    otherwise: (s) => s.optional(),
+  }),
+  localDeliveryCity: Yup.string().trim().max(120).optional(),
   deliveryNeighborhood: Yup.string().trim().max(100).optional(),
   deliveryReference: Yup.string().trim().max(200).optional(),
   notes: Yup.string().trim().max(500).optional(),
@@ -43,8 +64,13 @@ export interface CheckoutFormValues {
   customerName: string;
   customerPhone: string;
   customerEmail: string;
-  fulfillmentMethod: 'delivery' | 'pickup';
+  fulfillmentMethod: 'pickup' | 'local_delivery' | 'national_shipping';
   shippingAddress: string;
+  shippingDepartmentId: string;
+  shippingDepartmentName: string;
+  shippingCityId: string;
+  shippingCityName: string;
+  localDeliveryCity: string;
   deliveryNeighborhood: string;
   deliveryReference: string;
   notes: string;

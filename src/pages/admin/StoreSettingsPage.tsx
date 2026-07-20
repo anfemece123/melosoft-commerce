@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useFormik } from 'formik';
-import { Palette, FileText, CreditCard, ShoppingBag, Save, CheckCircle, Building2, Sun, Moon, Plus, Images, AlertTriangle, ExternalLink, LayoutTemplate } from 'lucide-react';
+import { Palette, FileText, CreditCard, ShoppingBag, Save, CheckCircle, Building2, Sun, Moon, Plus, Images, AlertTriangle, ExternalLink, LayoutTemplate, CircleHelp } from 'lucide-react';
 import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
 import { paymentsService } from '@/features/payments/paymentsService';
 import type { StorePaymentSettings } from '@/features/payments/payments.types';
@@ -13,11 +13,16 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Input } from '@/components/ui/Input';
 import { SwitchField } from '@/components/ui/SwitchField';
+import { Tooltip } from '@/components/ui/Tooltip';
+import { MoneyInput } from '@/components/forms/MoneyInput';
 import { StoreLogoField } from '@/components/admin/StoreLogoField';
+import { StoreFaviconField } from '@/components/admin/StoreFaviconField';
+import { StoreDomainSettings } from '@/components/admin/StoreDomainSettings';
 import { StoreHeroSlideEditor, type EditableStoreHeroSlide } from '@/components/admin/StoreHeroSlideEditor';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import {
   buildCommerceUpdatePayload,
+  deriveCommerceModeFromCapabilities,
   getCommerceProfile,
   getDefaultHeroCta,
   mapBusinessTypeToBusinessCategory,
@@ -34,10 +39,14 @@ import type { StoreGeneralSettingsFormValues } from '@/schemas/storeGeneralSetti
 import { storeThemeSchema } from '@/schemas/storeTheme.schema';
 import { getThemeColors, THEME_PRESET_LIST } from '@/utils/themePresets';
 import { cn } from '@/utils/cn';
-import type { CatalogType, CommerceMode, DeliveryMode, ThemeMode, ThemePreset, PublicHeaderSettings, PublicHeaderStyle, LogoSize, MenuTextSize, HeaderMenuMode } from '@/types/common.types';
+import type { BusinessCategory, CatalogType, CommerceMode, DeliveryMode, ThemeMode, ThemePreset, PublicHeaderSettings, PublicHeaderStyle, LogoSize, MenuTextSize, HeaderMenuMode } from '@/types/common.types';
+import { COMMERCE_PROFILES } from '@/features/stores/storeCommerceProfiles';
 import { DEFAULT_HEADER_SETTINGS } from '@/types/common.types';
 import type { Store } from '@/features/stores/stores.types';
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
+import { AdminPanelTabs } from '@/components/admin/AdminPanelTabs';
+import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
+import { isPlatformAdmin } from '@/utils/permissions';
 
 
 const CATALOG_TYPE_LABELS: Record<string, string> = {
@@ -47,8 +56,31 @@ const CATALOG_TYPE_LABELS: Record<string, string> = {
   mixed: 'Mixto',
 };
 
+// 'services' is excluded — its own profile comment marks it legacy/DB-only
+// compatibility, never assigned to new stores, so it's not offered here.
+const BUSINESS_CATEGORY_OPTIONS = Object.values(COMMERCE_PROFILES)
+  .filter((profile) => profile.category !== 'services')
+  .map((profile) => ({ value: profile.category, label: profile.label }));
+
 type SellingModeKey = 'catalog_only' | 'whatsapp' | 'web_cod' | 'web_online';
-type DeliveryUXKey = 'none' | 'pickup' | 'local' | 'both' | 'national';
+
+const DELIVERY_CAPABILITY_OPTIONS = [
+  {
+    key: 'allowsPickup' as const,
+    label: 'Recogida en el local',
+    description: 'El cliente elige una sede disponible para retirar el pedido.',
+  },
+  {
+    key: 'allowsLocalDelivery' as const,
+    label: 'Domicilio',
+    description: 'Entregas en tu ciudad o zona de cobertura con reglas de envío local.',
+  },
+  {
+    key: 'allowsNationalShipping' as const,
+    label: 'Envío nacional',
+    description: 'Despachos por transportadora a otras ciudades del país.',
+  },
+] as const;
 
 function getSellingModeOptions(canUseOnline: boolean) {
   return [
@@ -88,14 +120,6 @@ function getSellingModeOptions(canUseOnline: boolean) {
     },
   ];
 }
-
-const DELIVERY_UX_OPTIONS = [
-  { key: 'none' as DeliveryUXKey, label: 'Sin entrega', description: 'Atención presencial, para llevar o sin coordinar entrega online.' },
-  { key: 'pickup' as DeliveryUXKey, label: 'Recogida en el local', description: 'El cliente pide y pasa a recoger en tu local.', needsPickup: true },
-  { key: 'local' as DeliveryUXKey, label: 'Solo domicilio local', description: 'Entregas a domicilio en tu ciudad o zona.', needsLocal: true },
-  { key: 'both' as DeliveryUXKey, label: 'Recogida + domicilio local', description: 'El cliente elige si pasa a recoger o pide a domicilio.', needsPickup: true, needsLocal: true },
-  { key: 'national' as DeliveryUXKey, label: 'Envío nacional (paquetería)', description: 'Despachos a todo el país por empresa de mensajería.', needsNational: true },
-] as const;
 
 type PaymentMethodKey = 'cash_on_delivery' | 'online_only' | 'both';
 
@@ -139,21 +163,6 @@ function deriveSellingMode(values: StoreCommerceFormValues): SellingModeKey {
   return 'catalog_only';
 }
 
-function deriveDeliveryUX(values: StoreCommerceFormValues): DeliveryUXKey {
-  if (values.allowsNationalShipping) return 'national';
-  if (values.allowsLocalDelivery && values.allowsPickup) return 'both';
-  if (values.allowsLocalDelivery) return 'local';
-  if (values.allowsPickup) return 'pickup';
-  return 'none';
-}
-
-function deriveCommerceMode(sellingKey: SellingModeKey, deliveryKey: DeliveryUXKey): CommerceMode {
-  if (sellingKey === 'catalog_only') return 'catalog_only';
-  if (deliveryKey === 'national') return 'national_shipping';
-  if (deliveryKey === 'local' || deliveryKey === 'both') return 'local_delivery_and_pickup';
-  return 'local_orders';
-}
-
 function derivePaymentMethod(values: StoreCommerceFormValues): PaymentMethodKey {
   if (values.cashOnDeliveryEnabled && values.onlineCheckoutEnabled) return 'both';
   if (values.onlineCheckoutEnabled) return 'online_only';
@@ -162,7 +171,6 @@ function derivePaymentMethod(values: StoreCommerceFormValues): PaymentMethodKey 
 
 function generateCommerceSummary(values: StoreCommerceFormValues): string {
   const sellingKey = deriveSellingMode(values);
-  const deliveryKey = deriveDeliveryUX(values);
   const catalogLabel = CATALOG_TYPE_LABELS[values.catalogType] ?? 'catálogo';
   const parts: string[] = [`Tu tienda mostrará un ${catalogLabel.toLowerCase()}.`];
   switch (sellingKey) {
@@ -177,13 +185,16 @@ function generateCommerceSummary(values: StoreCommerceFormValues): string {
       break;
   }
   if (sellingKey !== 'catalog_only') {
-    switch (deliveryKey) {
-      case 'none': parts.push('Sin entrega programada (presencial o para llevar).'); break;
-      case 'pickup': parts.push('Con recogida en tu local.'); break;
-      case 'local': parts.push('Con domicilio local.'); break;
-      case 'both': parts.push('Con recogida en local y domicilio local.'); break;
-      case 'national': parts.push('Con envío nacional por paquetería.'); break;
-    }
+    const enabledDeliveries = [
+      values.allowsPickup ? 'recogida en local' : null,
+      values.allowsLocalDelivery ? 'domicilio' : null,
+      values.allowsNationalShipping ? 'envío nacional' : null,
+    ].filter(Boolean);
+    parts.push(
+      enabledDeliveries.length > 0
+        ? `Opciones de entrega activas: ${enabledDeliveries.join(', ')}.`
+        : 'Sin entrega programada (presencial o para llevar).',
+    );
   }
   return parts.join(' ');
 }
@@ -194,6 +205,7 @@ type SettingsSection =
   | 'commerce'
   | 'theme'
   | 'header'
+  | 'domain'
   | 'policies'
   | 'payments';
 
@@ -253,6 +265,24 @@ function ThemeColorField({
   );
 }
 
+function TooltipAdornment({ content }: { content: string }) {
+  return (
+    <Tooltip
+      content={content}
+      side="top"
+    >
+      <button
+        type="button"
+        tabIndex={0}
+        aria-label="Más información"
+        className="inline-flex h-4 w-4 items-center justify-center rounded-full text-gray-400 transition-colors hover:text-gray-700 focus:outline-none"
+      >
+        <CircleHelp className="h-4 w-4" />
+      </button>
+    </Tooltip>
+  );
+}
+
 function createDefaultHeroSlide(sortOrder: number, store?: Store | null): EditableStoreHeroSlide {
   return {
     id: crypto.randomUUID(),
@@ -289,6 +319,8 @@ export function StoreSettingsPage() {
   const [generalSaved, setGeneralSaved] = useState(false);
   const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [faviconUploadError, setFaviconUploadError] = useState<string | null>(null);
+  const [faviconUploading, setFaviconUploading] = useState(false);
   const [heroEnabled, setHeroEnabled] = useState(true);
   const [heroSlides, setHeroSlides] = useState<EditableStoreHeroSlide[]>([]);
   const [activeHeroSlideId, setActiveHeroSlideId] = useState<string | null>(null);
@@ -318,6 +350,8 @@ export function StoreSettingsPage() {
   });
 
   const currentStore = useAppSelector((s) => s.stores.current);
+  const currentLimits = useAppSelector((s) => s.stores.currentLimits);
+  const profile = useAppSelector((s) => s.auth.profile);
   const currentCommerceSettings = useAppSelector((s) => s.stores.currentCommerceSettings);
   const derivedBusinessCategory = mapBusinessTypeToBusinessCategory(currentStore?.businessType);
 
@@ -493,6 +527,10 @@ export function StoreSettingsPage() {
       defaultOrderMethod: currentCommerceSettings?.defaultOrderMethod ?? 'whatsapp',
       localDeliveryNotes: currentCommerceSettings?.localDeliveryNotes ?? '',
       shippingNotes: currentCommerceSettings?.shippingNotes ?? '',
+      localDeliveryBaseFee: currentCommerceSettings?.localDeliveryBaseFee ?? 0,
+      localDeliveryFreeFrom: currentCommerceSettings?.localDeliveryFreeFrom ?? null,
+      nationalShippingBaseFee: currentCommerceSettings?.nationalShippingBaseFee ?? 0,
+      nationalShippingFreeFrom: currentCommerceSettings?.nationalShippingFreeFrom ?? null,
     }),
     validationSchema: storeCommerceSchema,
     onSubmit: async (values, { setStatus }) => {
@@ -529,12 +567,25 @@ export function StoreSettingsPage() {
   const wompiAvailability = getWompiAvailability(wompiSettings);
 
   const currentSellingMode = deriveSellingMode(formik.values);
-  const currentDeliveryUX = deriveDeliveryUX(formik.values);
   const currentPaymentMethod = derivePaymentMethod(formik.values);
   const showPaymentBlock = currentSellingMode === 'web_cod' || currentSellingMode === 'web_online';
 
+  function buildDerivedCommercePatch(overrides: Partial<StoreCommerceFormValues>): Partial<StoreCommerceFormValues> {
+    const nextValues = { ...formik.values, ...overrides };
+    const sellingEnabled = nextValues.whatsappCheckoutEnabled || nextValues.webOrderEnabled;
+    return {
+      ...overrides,
+      deliveryMode: normalizeCommerceSettings(nextValues).deliveryMode,
+      commerceMode: deriveCommerceModeFromCapabilities({
+        sellingEnabled,
+        allowsPickup: nextValues.allowsPickup,
+        allowsLocalDelivery: nextValues.allowsLocalDelivery,
+        allowsNationalShipping: nextValues.allowsNationalShipping,
+      }),
+    };
+  }
+
   function handleSellingModeChange(key: SellingModeKey) {
-    const newCommerceMode = deriveCommerceMode(key === 'web_online' ? 'web_cod' : key, key === 'catalog_only' ? 'none' : currentDeliveryUX);
     let patch: Partial<StoreCommerceFormValues>;
     switch (key) {
       case 'catalog_only':
@@ -552,13 +603,31 @@ export function StoreSettingsPage() {
         };
         break;
       case 'whatsapp':
-        patch = { commerceMode: newCommerceMode, whatsappCheckoutEnabled: true, webOrderEnabled: false, onlineCheckoutEnabled: false, cashOnDeliveryEnabled: false, defaultOrderMethod: 'whatsapp' };
+        patch = buildDerivedCommercePatch({
+          whatsappCheckoutEnabled: true,
+          webOrderEnabled: false,
+          onlineCheckoutEnabled: false,
+          cashOnDeliveryEnabled: false,
+          defaultOrderMethod: 'whatsapp',
+        });
         break;
       case 'web_cod':
-        patch = { commerceMode: newCommerceMode, whatsappCheckoutEnabled: false, webOrderEnabled: true, onlineCheckoutEnabled: false, cashOnDeliveryEnabled: true, defaultOrderMethod: 'web_order' };
+        patch = buildDerivedCommercePatch({
+          whatsappCheckoutEnabled: false,
+          webOrderEnabled: true,
+          onlineCheckoutEnabled: false,
+          cashOnDeliveryEnabled: true,
+          defaultOrderMethod: 'web_order',
+        });
         break;
       case 'web_online':
-        patch = { commerceMode: newCommerceMode, whatsappCheckoutEnabled: false, webOrderEnabled: true, onlineCheckoutEnabled: true, cashOnDeliveryEnabled: false, defaultOrderMethod: 'online_checkout' };
+        patch = buildDerivedCommercePatch({
+          whatsappCheckoutEnabled: false,
+          webOrderEnabled: true,
+          onlineCheckoutEnabled: true,
+          cashOnDeliveryEnabled: false,
+          defaultOrderMethod: 'online_checkout',
+        });
         break;
     }
     void formik.setValues({ ...formik.values, ...patch });
@@ -578,26 +647,58 @@ export function StoreSettingsPage() {
     }
   }
 
-  function handleDeliveryUXChange(key: DeliveryUXKey) {
-    const newCommerceMode = deriveCommerceMode(currentSellingMode, key);
-    let patch: Partial<StoreCommerceFormValues>;
-    switch (key) {
-      case 'none':
-        patch = { commerceMode: newCommerceMode, deliveryMode: 'none', allowsPickup: false, allowsLocalDelivery: false, allowsNationalShipping: false };
-        break;
-      case 'pickup':
-        patch = { commerceMode: newCommerceMode, deliveryMode: 'pickup_only', allowsPickup: true, allowsLocalDelivery: false, allowsNationalShipping: false };
-        break;
-      case 'local':
-        patch = { commerceMode: newCommerceMode, deliveryMode: 'local_delivery', allowsPickup: false, allowsLocalDelivery: true, allowsNationalShipping: false };
-        break;
-      case 'both':
-        patch = { commerceMode: newCommerceMode, deliveryMode: 'local_delivery', allowsPickup: true, allowsLocalDelivery: true, allowsNationalShipping: false };
-        break;
-      case 'national':
-        patch = { commerceMode: newCommerceMode, deliveryMode: 'national_shipping', allowsPickup: false, allowsLocalDelivery: false, allowsNationalShipping: true };
-        break;
+  // Changing the business category can make some currently-active
+  // capability/channel stop applying (e.g. switching to "Restaurante"
+  // while national shipping is on). Conservative by design: only ever
+  // turns things OFF that the new profile disallows — never turns
+  // anything ON automatically just because the new profile allows it, so
+  // the owner is never surprised by a channel they didn't explicitly
+  // enable. Whatever gets disabled is announced via a toast so it's never
+  // a silent change.
+  function handleBusinessCategoryChange(nextCategory: BusinessCategory) {
+    const nextProfile = getCommerceProfile(nextCategory);
+    const patch: Partial<StoreCommerceFormValues> = { businessCategory: nextCategory };
+    const disabledLabels: string[] = [];
+
+    if (formik.values.allowsPickup && !nextProfile.allowPickup) {
+      patch.allowsPickup = false;
+      disabledLabels.push('Recogida en el local');
     }
+    if (formik.values.allowsLocalDelivery && !nextProfile.allowLocalDelivery) {
+      patch.allowsLocalDelivery = false;
+      disabledLabels.push('Domicilio');
+    }
+    if (formik.values.allowsNationalShipping && !nextProfile.allowNationalShipping) {
+      patch.allowsNationalShipping = false;
+      disabledLabels.push('Envío nacional');
+    }
+    if (formik.values.whatsappCheckoutEnabled && !nextProfile.allowWhatsappOrders) {
+      patch.whatsappCheckoutEnabled = false;
+      disabledLabels.push('Pedidos por WhatsApp');
+    }
+    let disabledWebsiteOrders = false;
+    if (!nextProfile.allowWebsiteOrders && (formik.values.webOrderEnabled || formik.values.onlineCheckoutEnabled)) {
+      patch.webOrderEnabled = false;
+      patch.onlineCheckoutEnabled = false;
+      patch.cashOnDeliveryEnabled = false;
+      disabledWebsiteOrders = true;
+    }
+
+    void formik.setValues({ ...formik.values, ...buildDerivedCommercePatch(patch) });
+
+    if (disabledLabels.length > 0 || disabledWebsiteOrders) {
+      const parts = [...disabledLabels, ...(disabledWebsiteOrders ? ['Pedido desde la página'] : [])];
+      notify.info(
+        `Se desactivó ${parts.join(', ')} porque no aplica para "${nextProfile.label}". Revisa la configuración antes de guardar.`
+      );
+    }
+  }
+
+  function handleDeliveryCapabilityChange(
+    capability: 'allowsPickup' | 'allowsLocalDelivery' | 'allowsNationalShipping',
+    checked: boolean,
+  ) {
+    const patch = buildDerivedCommercePatch({ [capability]: checked } as Partial<StoreCommerceFormValues>);
     void formik.setValues({ ...formik.values, ...patch });
   }
 
@@ -648,13 +749,11 @@ export function StoreSettingsPage() {
   const paymentMethodOptions = getPaymentMethodOptions(wompiAvailability.canUseOnlinePayments);
 
   const hasDeliveryOptions = commerceProfile.allowPickup || commerceProfile.allowLocalDelivery || commerceProfile.allowNationalShipping;
-
-  const visibleDeliveryOptions = DELIVERY_UX_OPTIONS.filter((opt) => {
-    if (opt.key === 'none') return true;
-    if ('needsPickup' in opt && opt.needsPickup && !commerceProfile.allowPickup) return false;
-    if ('needsLocal' in opt && opt.needsLocal && !commerceProfile.allowLocalDelivery) return false;
-    if ('needsNational' in opt && opt.needsNational && !commerceProfile.allowNationalShipping) return false;
-    return true;
+  const visibleDeliveryCapabilities = DELIVERY_CAPABILITY_OPTIONS.filter((option) => {
+    if (option.key === 'allowsPickup') return commerceProfile.allowPickup;
+    if (option.key === 'allowsLocalDelivery') return commerceProfile.allowLocalDelivery;
+    if (option.key === 'allowsNationalShipping') return commerceProfile.allowNationalShipping;
+    return false;
   });
   const activeHeroSlide = heroSlides.find((slide) => slide.id === activeHeroSlideId) ?? heroSlides[0] ?? null;
   const heroPreviewTheme = buildStorefrontTheme({
@@ -687,6 +786,7 @@ export function StoreSettingsPage() {
     { key: 'commerce', label: 'Configuración comercial' },
     { key: 'theme', label: 'Tema y apariencia' },
     { key: 'header', label: 'Header público' },
+    { key: 'domain', label: 'Dominio' },
     { key: 'policies', label: 'Políticas' },
     { key: 'payments', label: 'Pagos' },
   ];
@@ -698,7 +798,11 @@ export function StoreSettingsPage() {
 
     try {
       const logoUrl = await storesService.uploadStoreLogo(storeId, file);
-      const updated = await storesService.updateStore(storeId, { logoUrl });
+      const usesLogoAsFavicon = !currentStore.faviconUrl || currentStore.faviconUrl === currentStore.logoUrl;
+      const updated = await storesService.updateStore(storeId, {
+        logoUrl,
+        ...(usesLogoAsFavicon ? { faviconUrl: null } : {}),
+      });
       dispatch(updateStoreAction(updated));
       dispatch(setCurrentStore(updated));
       notify.success('Logo actualizado.');
@@ -711,15 +815,53 @@ export function StoreSettingsPage() {
   }
 
   async function handleClearLogo() {
-    if (!storeId) return;
+    if (!storeId || !currentStore) return;
     try {
-      const updated = await storesService.updateStore(storeId, { logoUrl: null });
+      const usesLogoAsFavicon = !currentStore.faviconUrl || currentStore.faviconUrl === currentStore.logoUrl;
+      const updated = await storesService.updateStore(storeId, {
+        logoUrl: null,
+        ...(usesLogoAsFavicon ? { faviconUrl: null } : {}),
+      });
       dispatch(updateStoreAction(updated));
       dispatch(setCurrentStore(updated));
       notify.success('Logo eliminado.');
     } catch (err) {
       setLogoUploadError(err instanceof Error ? err.message : 'No se pudo quitar el logo');
       notify.fromError(err, 'No se pudo quitar el logo.');
+    }
+  }
+
+  async function handleFaviconSelect(file: File | null) {
+    if (!file || !storeId) return;
+    setFaviconUploadError(null);
+    setFaviconUploading(true);
+
+    try {
+      const faviconUrl = await storesService.uploadStoreFavicon(storeId, file);
+      const updated = await storesService.updateStore(storeId, { faviconUrl });
+      dispatch(updateStoreAction(updated));
+      dispatch(setCurrentStore(updated));
+      notify.success('Icono de pestaña actualizado.');
+    } catch (err) {
+      setFaviconUploadError(err instanceof Error ? err.message : 'No se pudo subir el icono de pestaña');
+      notify.fromError(err, 'No se pudo subir el icono de pestaña.');
+    } finally {
+      setFaviconUploading(false);
+    }
+  }
+
+  async function handleResetFavicon() {
+    if (!storeId) return;
+    setFaviconUploadError(null);
+
+    try {
+      const updated = await storesService.updateStore(storeId, { faviconUrl: null });
+      dispatch(updateStoreAction(updated));
+      dispatch(setCurrentStore(updated));
+      notify.success('El icono de pestaña volverá a usar el logo automáticamente.');
+    } catch (err) {
+      setFaviconUploadError(err instanceof Error ? err.message : 'No se pudo restablecer el icono de pestaña');
+      notify.fromError(err, 'No se pudo restablecer el icono de pestaña.');
     }
   }
 
@@ -878,35 +1020,28 @@ export function StoreSettingsPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
-      <div className="shrink-0 bg-gray-50/95 pb-3 backdrop-blur supports-[backdrop-filter]:bg-gray-50/85">
-        <PageHeader
-          title="Configuración de tienda"
-          description="Personaliza el modelo de venta, tema y políticas de esta tienda."
-          sticky={false}
-          className="mb-4"
-        />
+    <AdminPanelShell
+      top={(
+        <>
+          <PageHeader
+            title="Configuración de tienda"
+            description="Personaliza el modelo de venta, tema y políticas de esta tienda."
+            sticky={false}
+            className="mb-4"
+          />
 
-        <div className="flex gap-1 overflow-x-auto border-b border-gray-200 bg-gray-50/90 md:overflow-x-visible">
-          {sections.map(({ key, label }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setActiveSection(key)}
-              className={[
-                'whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors -mb-px',
-                activeSection === key
-                  ? 'border-indigo-600 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700',
-              ].join(' ')}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1">
+          <AdminPanelTabs
+            items={sections.map(({ key, label }) => ({
+              key,
+              label,
+              active: activeSection === key,
+              onClick: () => setActiveSection(key),
+            }))}
+            className="mb-0 bg-gray-50/90"
+          />
+        </>
+      )}
+    >
       <div className={cn('space-y-6 pb-6', activeSection === 'hero' ? 'max-w-7xl' : 'max-w-3xl')}>
         {activeSection === 'general' && (
         <Card>
@@ -917,15 +1052,27 @@ export function StoreSettingsPage() {
             </div>
 
             <form onSubmit={generalFormik.handleSubmit} noValidate className="space-y-5">
-              <StoreLogoField
-                id="store-logo-settings"
-                previewUrl={currentStore?.logoUrl ?? null}
-                onFileSelect={(file) => void handleLogoSelect(file)}
-                onClear={() => void handleClearLogo()}
-                uploading={logoUploading}
-                error={logoUploadError ?? undefined}
-                hint="Este logo se usa en el ecommerce público de la empresa."
-              />
+              <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+                <StoreLogoField
+                  id="store-logo-settings"
+                  previewUrl={currentStore?.logoUrl ?? null}
+                  onFileSelect={(file) => void handleLogoSelect(file)}
+                  onClear={() => void handleClearLogo()}
+                  uploading={logoUploading}
+                  error={logoUploadError ?? undefined}
+                  hint="Este logo se usa en el ecommerce público y también como favicon automático."
+                />
+
+                <StoreFaviconField
+                  id="store-favicon-settings"
+                  faviconUrl={currentStore?.faviconUrl ?? null}
+                  logoUrl={currentStore?.logoUrl ?? null}
+                  onFileSelect={(file) => void handleFaviconSelect(file)}
+                  onReset={() => void handleResetFavicon()}
+                  uploading={faviconUploading}
+                  error={faviconUploadError ?? undefined}
+                />
+              </div>
 
               <Input
                 id="name"
@@ -994,6 +1141,14 @@ export function StoreSettingsPage() {
           </CardBody>
         </Card>
         )}
+
+        {activeSection === 'domain' && storeId && currentStore ? (
+          <StoreDomainSettings
+            storeId={storeId}
+            storeSlug={currentStore.slug}
+            canUseCustomDomain={Boolean(currentLimits?.canUseCustomDomain) || isPlatformAdmin(profile)}
+          />
+        ) : null}
 
         {activeSection === 'hero' && (
         <Card>
@@ -1116,20 +1271,28 @@ export function StoreSettingsPage() {
 
             <form onSubmit={formik.handleSubmit} noValidate className="space-y-8">
 
-              {/* Block 1: Perfil del negocio (read-only) */}
+              {/* Block 1: Perfil del negocio (editable) */}
               <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-white p-4">
                 <p className="text-xs font-semibold uppercase tracking-widest text-indigo-500 mb-2">
                   Perfil del negocio
                 </p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-base font-bold text-gray-900">{commerceProfile.label}</h3>
+                <div className="max-w-sm">
+                  <Select
+                    label="Tipo de negocio"
+                    value={formik.values.businessCategory}
+                    onChange={(e) => handleBusinessCategoryChange(e.target.value as BusinessCategory)}
+                    options={BUSINESS_CATEGORY_OPTIONS}
+                  />
+                </div>
+                <div className="mt-3 flex items-center gap-2 flex-wrap">
                   <span className="inline-flex items-center rounded-full border border-gray-200 bg-white px-2.5 py-0.5 text-xs font-medium text-gray-600">
                     {CATALOG_TYPE_LABELS[formik.values.catalogType] ?? formik.values.catalogType}
                   </span>
                 </div>
-                <p className="mt-1 text-sm text-gray-500">{commerceProfile.description}</p>
+                <p className="mt-2 text-sm text-gray-500">{commerceProfile.description}</p>
                 <p className="mt-3 text-xs text-gray-400">
-                  La categoría del negocio se configura al crear la tienda. Para cambiarla, contacta a soporte.
+                  Cambiar el tipo de negocio ajusta qué opciones de entrega y canales de pedido están disponibles
+                  más abajo. Si alguna opción activa deja de aplicar, se desactiva automáticamente y te avisamos.
                 </p>
               </div>
 
@@ -1283,64 +1446,112 @@ export function StoreSettingsPage() {
               {currentSellingMode !== 'catalog_only' && hasDeliveryOptions && (
                 <div>
                   <p className="text-sm font-semibold text-gray-900 mb-0.5">¿Cómo entregas?</p>
-                  <p className="text-xs text-gray-500 mb-3">Selecciona las opciones de entrega disponibles para tus clientes.</p>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {visibleDeliveryOptions.map((opt) => {
-                      const isSelected = currentDeliveryUX === opt.key;
-                      return (
-                        <button
-                          key={opt.key}
-                          type="button"
-                          onClick={() => handleDeliveryUXChange(opt.key)}
-                          className={cn(
-                            'relative flex items-start gap-3 rounded-2xl border p-4 text-left transition-all cursor-pointer',
-                            isSelected
-                              ? 'border-indigo-400 bg-indigo-50 shadow-sm ring-1 ring-indigo-200'
-                              : 'border-gray-200 bg-white hover:border-indigo-200 hover:bg-indigo-50/30'
-                          )}
-                        >
-                          <div
-                            className={cn(
-                              'mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 transition-colors',
-                              isSelected ? 'border-indigo-500 bg-indigo-500' : 'border-gray-300 bg-white'
-                            )}
-                          >
-                            {isSelected && (
-                              <div className="h-full w-full rounded-full bg-white" style={{ transform: 'scale(0.45)' }} />
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-gray-900">{opt.label}</p>
-                            <p className="mt-0.5 text-xs text-gray-500">{opt.description}</p>
-                          </div>
-                        </button>
-                      );
-                    })}
+                  <p className="text-xs text-gray-500 mb-3">
+                    Activa exactamente las modalidades que ofrecerás en la página pública. Puedes combinar recogida, domicilio local y envío nacional según tu operación real.
+                  </p>
+                  <div className="grid grid-cols-1 gap-3">
+                    {visibleDeliveryCapabilities.map((option) => (
+                      <SwitchField
+                        key={option.key}
+                        id={option.key}
+                        label={option.label}
+                        description={option.description}
+                        checked={formik.values[option.key]}
+                        onChange={(checked) => handleDeliveryCapabilityChange(option.key, checked)}
+                      />
+                    ))}
                   </div>
+                  {!formik.values.allowsPickup && !formik.values.allowsLocalDelivery && !formik.values.allowsNationalShipping ? (
+                    <p className="mt-3 text-xs text-gray-500">
+                      No hay ninguna modalidad de entrega activa. La tienda quedará sin opciones de retiro o envío en el checkout.
+                    </p>
+                  ) : null}
                 </div>
               )}
 
               {/* Optional delivery notes */}
               {formik.values.allowsLocalDelivery && (
-                <Textarea
-                  id="localDeliveryNotes"
-                  label="Notas de domicilio local"
-                  placeholder="Ej: Cubrimos los barrios X, Y, Z. Tiempo estimado 30–45 min."
-                  rows={2}
-                  {...formik.getFieldProps('localDeliveryNotes')}
-                  error={formik.touched.localDeliveryNotes ? formik.errors.localDeliveryNotes : undefined}
-                />
+                <div className="space-y-3 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-sm font-semibold text-gray-900">Reglas de domicilio local</p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <MoneyInput
+                      id="localDeliveryBaseFee"
+                      label="Costo base"
+                      labelAdornment={(
+                        <TooltipAdornment content="Es el valor fijo que se cobrará por el domicilio local cuando el pedido no alcance el monto mínimo para envío gratis." />
+                      )}
+                      currency={currentStore?.currency ?? 'COP'}
+                      name="localDeliveryBaseFee"
+                      value={formik.values.localDeliveryBaseFee}
+                      onChange={(value) => void formik.setFieldValue('localDeliveryBaseFee', value === '' ? 0 : value)}
+                      onBlur={() => void formik.setFieldTouched('localDeliveryBaseFee', true)}
+                      error={formik.touched.localDeliveryBaseFee ? formik.errors.localDeliveryBaseFee : undefined}
+                    />
+                    <MoneyInput
+                      id="localDeliveryFreeFrom"
+                      label="Envío gratis desde"
+                      labelAdornment={(
+                        <TooltipAdornment content="Si el subtotal de productos alcanza este monto o lo supera, el costo del domicilio local pasa a ser cero." />
+                      )}
+                      currency={currentStore?.currency ?? 'COP'}
+                      name="localDeliveryFreeFrom"
+                      value={formik.values.localDeliveryFreeFrom ?? ''}
+                      onChange={(value) => void formik.setFieldValue('localDeliveryFreeFrom', value === '' ? null : value)}
+                      onBlur={() => void formik.setFieldTouched('localDeliveryFreeFrom', true)}
+                      error={formik.touched.localDeliveryFreeFrom ? formik.errors.localDeliveryFreeFrom : undefined}
+                    />
+                  </div>
+                  <Textarea
+                    id="localDeliveryNotes"
+                    label="Notas de domicilio local"
+                    placeholder="Ej: Cubrimos los barrios X, Y, Z. Tiempo estimado 30–45 min."
+                    rows={2}
+                    {...formik.getFieldProps('localDeliveryNotes')}
+                    error={formik.touched.localDeliveryNotes ? formik.errors.localDeliveryNotes : undefined}
+                  />
+                </div>
               )}
 
               {formik.values.allowsNationalShipping && (
-                <Textarea
-                  id="shippingNotes"
-                  label="Notas de envío nacional"
-                  placeholder="Ej: Envíos a todo el país por Servientrega. Costo según peso y destino."
-                  rows={2}
-                  {...formik.getFieldProps('shippingNotes')}
-                  error={formik.touched.shippingNotes ? formik.errors.shippingNotes : undefined}
-                />
+                <div className="space-y-3 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="text-sm font-semibold text-gray-900">Reglas de envío nacional</p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <MoneyInput
+                      id="nationalShippingBaseFee"
+                      label="Costo base"
+                      labelAdornment={(
+                        <TooltipAdornment content="Es el valor fijo inicial del envío nacional cuando el pedido no califica para envío gratis." />
+                      )}
+                      currency={currentStore?.currency ?? 'COP'}
+                      name="nationalShippingBaseFee"
+                      value={formik.values.nationalShippingBaseFee}
+                      onChange={(value) => void formik.setFieldValue('nationalShippingBaseFee', value === '' ? 0 : value)}
+                      onBlur={() => void formik.setFieldTouched('nationalShippingBaseFee', true)}
+                      error={formik.touched.nationalShippingBaseFee ? formik.errors.nationalShippingBaseFee : undefined}
+                    />
+                    <MoneyInput
+                      id="nationalShippingFreeFrom"
+                      label="Envío gratis desde"
+                      labelAdornment={(
+                        <TooltipAdornment content="Si el subtotal alcanza este valor, el sistema aplicará envío nacional gratis automáticamente." />
+                      )}
+                      currency={currentStore?.currency ?? 'COP'}
+                      name="nationalShippingFreeFrom"
+                      value={formik.values.nationalShippingFreeFrom ?? ''}
+                      onChange={(value) => void formik.setFieldValue('nationalShippingFreeFrom', value === '' ? null : value)}
+                      onBlur={() => void formik.setFieldTouched('nationalShippingFreeFrom', true)}
+                      error={formik.touched.nationalShippingFreeFrom ? formik.errors.nationalShippingFreeFrom : undefined}
+                    />
+                  </div>
+                  <Textarea
+                    id="shippingNotes"
+                    label="Notas de envío nacional"
+                    placeholder="Ej: Envíos a todo el país por Servientrega. Costo según peso y destino."
+                    rows={2}
+                    {...formik.getFieldProps('shippingNotes')}
+                    error={formik.touched.shippingNotes ? formik.errors.shippingNotes : undefined}
+                  />
+                </div>
               )}
 
               {/* Block 5: Summary */}
@@ -1619,7 +1830,9 @@ export function StoreSettingsPage() {
                 ? 'border-green-200 bg-green-50'
                 : wompiAvailability.reason === 'disabled'
                   ? 'border-amber-200 bg-amber-50'
-                  : 'border-gray-200 bg-gray-50'
+                  : wompiAvailability.reason === 'missing_events_secret'
+                    ? 'border-red-200 bg-red-50'
+                    : 'border-gray-200 bg-gray-50'
             )}>
               <div className="flex items-center gap-2 mb-1">
                 <span className={cn(
@@ -1630,11 +1843,14 @@ export function StoreSettingsPage() {
                       ? 'bg-amber-100 text-amber-700'
                       : wompiAvailability.reason === 'incomplete'
                         ? 'bg-orange-100 text-orange-700'
-                        : 'bg-gray-100 text-gray-600'
+                        : wompiAvailability.reason === 'missing_events_secret'
+                          ? 'bg-red-100 text-red-700'
+                          : 'bg-gray-100 text-gray-600'
                 )}>
                   {wompiAvailability.reason === 'ready' && 'Activo'}
                   {wompiAvailability.reason === 'disabled' && 'Desactivado'}
                   {wompiAvailability.reason === 'incomplete' && 'Configuración incompleta'}
+                  {wompiAvailability.reason === 'missing_events_secret' && 'Falta secreto de webhook'}
                   {wompiAvailability.reason === 'not_configured' && 'No configurado'}
                 </span>
               </div>
@@ -1664,8 +1880,7 @@ export function StoreSettingsPage() {
         </Card>
         )}
       </div>
-      </div>
-    </div>
+    </AdminPanelShell>
   );
 }
 

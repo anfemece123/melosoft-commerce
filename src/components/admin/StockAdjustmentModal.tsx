@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, TrendingUp, TrendingDown, Package } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
+import { IntegerInput } from '@/components/forms/IntegerInput';
 import { inventoryService } from '@/features/products/inventoryService';
 import type { InventoryMovement, MovementType } from '@/features/products/inventory.types';
 import { notify } from '@/lib/notifications';
@@ -47,6 +47,12 @@ interface StockAdjustmentModalProps {
   currentStock: number;
   onClose: () => void;
   onStockUpdated: (productId: string, newStock: number) => void;
+  /** When set, adjusts this variant's stock (adjust_variant_stock RPC)
+   * instead of the parent product's — used from ProductVariantsEditor. */
+  variantId?: string;
+  /** Restaurant menus speak in available portions/units instead of retail
+   * inventory jargon. The underlying audited stock movement is identical. */
+  restaurantMode?: boolean;
 }
 
 export function StockAdjustmentModal({
@@ -57,6 +63,8 @@ export function StockAdjustmentModal({
   currentStock,
   onClose,
   onStockUpdated,
+  variantId,
+  restaurantMode = false,
 }: StockAdjustmentModalProps) {
   const [direction, setDirection] = useState<Direction>('add');
   const [quantity, setQuantity] = useState<number | ''>('');
@@ -75,12 +83,14 @@ export function StockAdjustmentModal({
     setNotes('');
     setQuantityError('');
     setLoadingHistory(true);
-    inventoryService
-      .getProductMovements(productId)
+    const fetchMovements = variantId
+      ? inventoryService.getVariantMovements(variantId)
+      : inventoryService.getProductMovements(productId);
+    fetchMovements
       .then(setMovements)
       .catch(() => setMovements([]))
       .finally(() => setLoadingHistory(false));
-  }, [open, productId]);
+  }, [open, productId, variantId]);
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -101,26 +111,39 @@ export function StockAdjustmentModal({
       return;
     }
     if (direction === 'remove' && qty > currentStock) {
-      setQuantityError(`Stock insuficiente. Disponible: ${currentStock}.`);
+      setQuantityError(
+        restaurantMode
+          ? `Cantidad insuficiente. Disponible: ${currentStock}.`
+          : `Stock insuficiente. Disponible: ${currentStock}.`
+      );
       return;
     }
 
     setSubmitting(true);
     try {
       const quantityChange = direction === 'add' ? qty : -qty;
-      const result = await inventoryService.adjustStock({
-        storeId,
-        productId,
-        movementType: selectedOption.movementType,
-        quantityChange,
-        reason: selectedOption.label,
-        notes: notes.trim() || null,
-      });
+      const result = variantId
+        ? await inventoryService.adjustVariantStock({
+            storeId,
+            variantId,
+            movementType: selectedOption.movementType,
+            quantityChange,
+            reason: selectedOption.label,
+            notes: notes.trim() || null,
+          })
+        : await inventoryService.adjustStock({
+            storeId,
+            productId,
+            movementType: selectedOption.movementType,
+            quantityChange,
+            reason: selectedOption.label,
+            notes: notes.trim() || null,
+          });
       onStockUpdated(productId, result.newStock);
       notify.success(
         direction === 'add'
-          ? `${qty} unidades agregadas. Stock actual: ${result.newStock}.`
-          : `${qty} unidades quitadas. Stock actual: ${result.newStock}.`
+          ? `${qty} unidades agregadas. ${restaurantMode ? 'Disponibles' : 'Stock actual'}: ${result.newStock}.`
+          : `${qty} unidades quitadas. ${restaurantMode ? 'Disponibles' : 'Stock actual'}: ${result.newStock}.`
       );
       onClose();
     } catch (err) {
@@ -142,7 +165,9 @@ export function StockAdjustmentModal({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <Package className="w-4 h-4 text-indigo-500 shrink-0" />
-              <h2 className="font-semibold text-gray-900">Ajustar stock</h2>
+              <h2 className="font-semibold text-gray-900">
+                {restaurantMode ? 'Ajustar unidades disponibles' : 'Ajustar stock'}
+              </h2>
             </div>
             <p className="text-xs text-gray-500 mt-0.5 truncate">{productName}</p>
           </div>
@@ -159,7 +184,9 @@ export function StockAdjustmentModal({
           {/* Stock display */}
           <div className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3">
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">Stock actual</p>
+              <p className="text-xs text-gray-500 mb-0.5">
+                {restaurantMode ? 'Disponibles ahora' : 'Stock actual'}
+              </p>
               <p className="text-2xl font-bold text-gray-900">{currentStock}</p>
               <p className="text-xs text-gray-400">unidades</p>
             </div>
@@ -210,22 +237,15 @@ export function StockAdjustmentModal({
 
           {/* Form */}
           <div className="space-y-4">
-            <Input
+            <IntegerInput
               id="stock-qty"
               label={`Cantidad a ${direction === 'add' ? 'agregar' : 'quitar'} *`}
-              type="number"
-              min="1"
+              min={1}
               placeholder="0"
-              value={quantity === '' ? '' : String(quantity)}
-              onChange={(e) => {
+              value={quantity}
+              onChange={(value) => {
                 setQuantityError('');
-                const raw = e.target.value;
-                if (raw === '') {
-                  setQuantity('');
-                } else {
-                  const n = parseInt(raw, 10);
-                  setQuantity(isNaN(n) || n < 0 ? 0 : n);
-                }
+                setQuantity(value);
               }}
               error={quantityError}
             />
@@ -329,7 +349,9 @@ export function StockAdjustmentModal({
             isLoading={submitting}
             onClick={() => void handleSubmit()}
           >
-            {direction === 'add' ? 'Agregar stock' : 'Quitar stock'}
+            {direction === 'add'
+              ? (restaurantMode ? 'Agregar unidades' : 'Agregar stock')
+              : (restaurantMode ? 'Quitar unidades' : 'Quitar stock')}
           </Button>
         </div>
       </div>

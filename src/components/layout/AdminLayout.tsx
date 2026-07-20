@@ -5,6 +5,7 @@ import {
   Store,
   Home,
   Settings,
+  LayoutTemplate,
   Package,
   Tag,
   ShoppingCart,
@@ -26,6 +27,7 @@ import { selectIsPlatformAdmin } from '@/features/auth/auth.selectors';
 import { selectCurrentStore, selectMyMemberships } from '@/features/stores/stores.selectors';
 import { PendingOrdersBadgeProvider } from '@/features/orders/PendingOrdersBadgeContext';
 import { usePendingOrdersBadge } from '@/features/orders/usePendingOrdersBadge';
+import { domainsService } from '@/features/domains/domainsService';
 
 interface NavItem {
   label: string;
@@ -89,6 +91,7 @@ function AdminLayoutContent() {
   const ownerNav: NavItem[] = storeId ? [
     { label: 'Inicio', to: `/admin/stores/${storeId}`, icon: <Home className="w-5 h-5" />, end: true },
     { label: 'Configuración', to: `/admin/stores/${storeId}/settings`, icon: <Settings className="w-5 h-5" /> },
+    { label: 'Diseño de inicio', to: `/admin/stores/${storeId}/home-builder`, icon: <LayoutTemplate className="w-5 h-5" /> },
     { label: 'Sucursales', to: `/admin/stores/${storeId}/locations`, icon: <MapPin className="w-5 h-5" /> },
     { label: 'Productos', to: `/admin/stores/${storeId}/products`, icon: <Package className="w-5 h-5" /> },
     { label: 'Ofertas', to: `/admin/stores/${storeId}/offers`, icon: <Tag className="w-5 h-5" /> },
@@ -216,7 +219,7 @@ function AdminLayoutContent() {
           {/* Public ecommerce link — owner only */}
           {!isAdmin && storeSlug && (
             <a
-              href={`/s/${storeSlug}`}
+              href={domainsService.getPlatformStoreUrl(storeSlug)}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors duration-150"

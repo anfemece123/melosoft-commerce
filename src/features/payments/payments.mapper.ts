@@ -3,6 +3,7 @@ import type {
   StorePaymentSettingsRow,
   StorePaymentSettingsRowUpdate,
   PaymentTransactionRow,
+  CheckoutSessionRow,
 } from '@/types/database.types';
 import type { PaymentEnvironment, TransactionStatus } from '@/types/common.types';
 import type {
@@ -11,6 +12,7 @@ import type {
   PaymentTransaction,
   StorePaymentSettingsUpsert,
   StorePaymentSettingsUpdate,
+  StockUnavailablePayment,
 } from './payments.types';
 
 // ── Row → App model ──────────────────────────────────────────
@@ -26,18 +28,24 @@ export function mapPaymentProviderRowToPaymentProvider(row: PaymentProviderRow):
 }
 
 export function mapStorePaymentSettingsRowToStorePaymentSettings(
-  row: StorePaymentSettingsRow & { events_secret?: string | null }
+  row: Pick<
+    StorePaymentSettingsRow,
+    | 'id' | 'store_id' | 'provider_id' | 'public_key' | 'environment' | 'is_active'
+    | 'created_at' | 'updated_at' | 'has_private_key' | 'has_integrity_secret' | 'has_events_secret'
+    | 'private_key_preview' | 'integrity_secret_preview' | 'events_secret_preview'
+  >
 ): StorePaymentSettings {
   return {
     id: row.id,
     storeId: row.store_id,
     providerId: row.provider_id,
     publicKey: row.public_key,
-    // private_key_reference stores the actual private key
-    privateKey: row.private_key_reference,
-    // integrity_secret_reference stores the actual integrity secret
-    integritySecret: row.integrity_secret_reference,
-    eventsSecret: row.events_secret ?? null,
+    hasPrivateKey: row.has_private_key,
+    privateKeyPreview: row.private_key_preview,
+    hasIntegritySecret: row.has_integrity_secret,
+    integritySecretPreview: row.integrity_secret_preview,
+    hasEventsSecret: row.has_events_secret,
+    eventsSecretPreview: row.events_secret_preview,
     environment: row.environment as PaymentEnvironment,
     isActive: row.is_active,
     createdAt: row.created_at,
@@ -68,6 +76,23 @@ export function mapPaymentTransactionRowToPaymentTransaction(
     paidAt: row.paid_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+export function mapCheckoutSessionRowToStockUnavailablePayment(
+  row: Pick<
+    CheckoutSessionRow,
+    'id' | 'created_at' | 'customer_name' | 'customer_phone' | 'total_amount' | 'currency' | 'provider_reference'
+  >
+): StockUnavailablePayment {
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    customerName: row.customer_name,
+    customerPhone: row.customer_phone,
+    totalAmount: Number(row.total_amount),
+    currency: row.currency,
+    providerReference: row.provider_reference,
   };
 }
 

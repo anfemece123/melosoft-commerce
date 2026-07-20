@@ -2,8 +2,9 @@ import type { CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Search, ShoppingCart, UtensilsCrossed } from 'lucide-react';
 import { PublicStoreLogo } from './PublicStoreLogo';
-import { buildStorefrontTheme } from './storefrontTheme';
+import { buildStorefrontTheme, STOREFRONT_CONTAINER_CLASS } from './storefrontTheme';
 import type { PublicStorePage } from '@/types/common.types';
+import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 
 interface StorefrontBrandingLike {
   storeName?: string | null;
@@ -76,7 +77,7 @@ function HomeSkeletonHeader({
         WebkitBackdropFilter: hasHero ? 'none' : 'blur(20px)',
       }}
     >
-      <div className="relative mx-auto max-w-7xl px-4 py-4 md:px-6">
+      <div className={`relative mx-auto ${STOREFRONT_CONTAINER_CLASS} px-4 py-4 md:px-6`}>
         <div className="flex items-center justify-between gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr]">
           <div className="flex min-w-0 items-center gap-3 md:gap-4">
             <PublicStoreLogo
@@ -178,7 +179,7 @@ export function StorefrontHomeSkeleton({
         {hasHero ? (
           <section className="w-full pb-8 pt-0 md:pb-12">
             <div className="relative overflow-hidden px-6 pb-10 pt-[130px] md:px-10 md:pb-12 md:pt-[144px] lg:px-14">
-              <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 md:px-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] lg:gap-12">
+              <div className={`mx-auto grid ${STOREFRONT_CONTAINER_CLASS} items-center gap-10 px-4 md:px-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] lg:gap-12`}>
                 <div className="order-2 flex items-center lg:order-1 lg:min-h-[460px]">
                   <div className="mx-auto flex w-full max-w-[620px] flex-col items-center text-center lg:mx-0 lg:max-w-[560px] lg:items-start lg:text-left">
                     <div className="space-y-3">
@@ -249,7 +250,7 @@ export function StorefrontHomeSkeleton({
 
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
             {Array.from({ length: 6 }).map((_, index) => (
-              <div key={index} className="overflow-hidden rounded-[28px] border p-3 shadow-sm" style={{ borderColor: theme.border, backgroundColor: theme.surface }}>
+              <div key={index} className="overflow-hidden rounded-[28px] p-3" style={{ backgroundColor: theme.surface }}>
                 <SkeletonBlock className="aspect-square w-full rounded-[22px]" style={{ backgroundColor: theme.surfaceAlt }} />
                 <div className="mt-3 flex flex-col">
                   <SkeletonBlock className="h-3 w-20 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
@@ -291,7 +292,7 @@ export function StorefrontCatalogGridSkeleton({
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
         {Array.from({ length: 6 }).map((_, index) => (
-          <div key={index} className="overflow-hidden rounded-[28px] border p-3 shadow-sm" style={{ borderColor: theme.border, backgroundColor: theme.surface }}>
+          <div key={index} className="overflow-hidden rounded-[28px] p-3" style={{ backgroundColor: theme.surface }}>
             <SkeletonBlock className="aspect-square w-full rounded-[22px]" style={{ backgroundColor: theme.surfaceAlt }} />
             <div className="mt-3 flex flex-1 flex-col">
               <SkeletonBlock className="h-3 w-20 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
@@ -324,7 +325,7 @@ export function StorefrontProductDetailSkeleton({
     <div style={{ backgroundColor: theme.background, color: theme.text, minHeight: '100vh' }}>
       <main className="mx-auto max-w-5xl px-4 py-10">
         <Link
-          to={`/s/${storeSlug}`}
+          to={buildStorefrontPath(storeSlug)}
           className="mb-6 inline-flex items-center gap-1.5 text-sm transition-opacity hover:opacity-70"
           style={{ color: theme.text }}
         >
@@ -380,7 +381,7 @@ export function StorefrontOfferDetailSkeleton({
     <div style={{ backgroundColor: theme.background, color: theme.text, minHeight: '100vh' }}>
       <main className="mx-auto max-w-2xl px-4 py-8">
         <Link
-          to={`/s/${storeSlug}`}
+          to={buildStorefrontPath(storeSlug)}
           className="mb-6 inline-flex items-center gap-1.5 text-sm transition-opacity hover:opacity-70"
           style={{ color: theme.text }}
         >
@@ -423,7 +424,7 @@ export function StorefrontPoliciesSkeleton({
       <header className="border-b" style={{ backgroundColor: theme.background, borderColor: theme.border }}>
         <div className="mx-auto max-w-3xl px-4 py-4">
           <Link
-            to={`/s/${storeSlug}`}
+            to={buildStorefrontPath(storeSlug)}
             className="inline-flex items-center gap-1.5 text-sm transition-opacity hover:opacity-70"
             style={{ color: theme.mutedText }}
           >

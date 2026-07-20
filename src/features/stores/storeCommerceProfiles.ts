@@ -73,7 +73,7 @@ export const COMMERCE_PROFILES: Record<BusinessCategory, CommerceProfile> = {
   beauty: {
     category: 'beauty',
     label: 'Belleza',
-    description: 'Venta de productos de belleza y cosméticos. Domicilio local y retiro en tienda.',
+    description: 'Venta de productos de belleza y cosméticos. Domicilio y recogida en tienda.',
     allowedCatalogTypes: ['physical_products'],
     allowedCommerceModes: ['catalog_only', 'local_orders', 'local_delivery_and_pickup'],
     allowedDeliveryModes: ['none', 'pickup_only', 'local_delivery'],
@@ -321,18 +321,42 @@ export interface NormalizableCommerceSettings {
   defaultOrderMethod: OrderMethod;
   localDeliveryNotes?: string | null;
   shippingNotes?: string | null;
+  localDeliveryBaseFee?: number | null;
+  localDeliveryFreeFrom?: number | null;
+  nationalShippingBaseFee?: number | null;
+  nationalShippingFreeFrom?: number | null;
+}
+
+export function deriveDeliveryModeFromCapabilities(input: {
+  allowsPickup: boolean;
+  allowsLocalDelivery: boolean;
+  allowsNationalShipping: boolean;
+}): DeliveryMode {
+  if (input.allowsLocalDelivery && input.allowsNationalShipping) return 'local_and_national';
+  if (input.allowsNationalShipping) return 'national_shipping';
+  if (input.allowsLocalDelivery) return 'local_delivery';
+  if (input.allowsPickup) return 'pickup_only';
+  return 'none';
+}
+
+export function deriveCommerceModeFromCapabilities(input: {
+  sellingEnabled: boolean;
+  allowsPickup: boolean;
+  allowsLocalDelivery: boolean;
+  allowsNationalShipping: boolean;
+}): CommerceMode {
+  if (!input.sellingEnabled) return 'catalog_only';
+  if (input.allowsNationalShipping && (input.allowsPickup || input.allowsLocalDelivery)) return 'mixed';
+  if (input.allowsNationalShipping) return 'national_shipping';
+  if (input.allowsPickup && input.allowsLocalDelivery) return 'local_delivery_and_pickup';
+  if (input.allowsPickup || input.allowsLocalDelivery) return 'local_orders';
+  return 'local_orders';
 }
 
 export function normalizeCommerceSettings<T extends NormalizableCommerceSettings>(values: T): T {
   const profile = getCommerceProfile(values.businessCategory);
   const catalogType = profile.lockedCatalogType
     ?? (profile.allowedCatalogTypes.includes(values.catalogType) ? values.catalogType : profile.allowedCatalogTypes[0]);
-  const commerceMode = profile.allowedCommerceModes.includes(values.commerceMode)
-    ? values.commerceMode
-    : profile.allowedCommerceModes[0];
-  const deliveryMode = profile.allowedDeliveryModes.includes(values.deliveryMode)
-    ? values.deliveryMode
-    : profile.allowedDeliveryModes[0];
 
   const allowsPickup = profile.allowPickup ? values.allowsPickup : false;
   const allowsLocalDelivery = profile.allowLocalDelivery ? values.allowsLocalDelivery : false;
@@ -346,10 +370,22 @@ export function normalizeCommerceSettings<T extends NormalizableCommerceSettings
     ? values.cashOnDeliveryEnabled
     : false;
 
-  if (!whatsappCheckoutEnabled && !webOrderEnabled && commerceMode !== 'catalog_only') {
+  if (!whatsappCheckoutEnabled && !webOrderEnabled && values.commerceMode !== 'catalog_only') {
     if (profile.allowWhatsappOrders) whatsappCheckoutEnabled = true;
     else if (profile.allowWebsiteOrders) webOrderEnabled = true;
   }
+
+  const deliveryMode = deriveDeliveryModeFromCapabilities({
+    allowsPickup,
+    allowsLocalDelivery,
+    allowsNationalShipping,
+  });
+  const commerceMode = deriveCommerceModeFromCapabilities({
+    sellingEnabled: whatsappCheckoutEnabled || webOrderEnabled,
+    allowsPickup,
+    allowsLocalDelivery,
+    allowsNationalShipping,
+  });
 
   let defaultOrderMethod: OrderMethod;
   if (webOrderEnabled && onlineCheckoutEnabled && !cashOnDeliveryEnabled) {
@@ -376,6 +412,10 @@ export function normalizeCommerceSettings<T extends NormalizableCommerceSettings
     defaultOrderMethod,
     localDeliveryNotes: allowsLocalDelivery ? values.localDeliveryNotes ?? null : '',
     shippingNotes: allowsNationalShipping ? values.shippingNotes ?? null : '',
+    localDeliveryBaseFee: allowsLocalDelivery ? Number(values.localDeliveryBaseFee ?? 0) : 0,
+    localDeliveryFreeFrom: allowsLocalDelivery ? values.localDeliveryFreeFrom ?? null : null,
+    nationalShippingBaseFee: allowsNationalShipping ? Number(values.nationalShippingBaseFee ?? 0) : 0,
+    nationalShippingFreeFrom: allowsNationalShipping ? values.nationalShippingFreeFrom ?? null : null,
   };
 }
 
@@ -396,5 +436,9 @@ export function buildCommerceUpdatePayload(values: NormalizableCommerceSettings)
     defaultOrderMethod: normalized.defaultOrderMethod,
     localDeliveryNotes: normalized.localDeliveryNotes ?? null,
     shippingNotes: normalized.shippingNotes ?? null,
+    localDeliveryBaseFee: Number(normalized.localDeliveryBaseFee ?? 0),
+    localDeliveryFreeFrom: normalized.localDeliveryFreeFrom ?? null,
+    nationalShippingBaseFee: Number(normalized.nationalShippingBaseFee ?? 0),
+    nationalShippingFreeFrom: normalized.nationalShippingFreeFrom ?? null,
   };
 }

@@ -1,4 +1,14 @@
 import { supabase } from '@/lib/supabase';
+
+// The only columns `authenticated` can SELECT on store_payment_settings
+// (migration 086) — the raw secret columns are select-revoked at the DB
+// level, so listing them here would make every read fail outright rather
+// than silently leak them. Never change this to '*'.
+// (Written as one literal, not Array#join or `+` concatenation — either of
+// those widens to plain `string`, and supabase-js's typed query builder
+// needs a literal string to parse the select shape at compile time.)
+const SAFE_PAYMENT_SETTINGS_COLUMNS =
+  'id, store_id, provider_id, public_key, environment, is_active, created_at, updated_at, has_private_key, has_integrity_secret, has_events_secret, private_key_preview, integrity_secret_preview, events_secret_preview';
 import type {
   PaymentProvider,
   StorePaymentSettings,
@@ -8,6 +18,7 @@ import type {
   WompiCheckoutPayload,
   WompiCheckoutInitResult,
   PaymentResultData,
+  StockUnavailablePayment,
 } from './payments.types';
 import {
   mapPaymentProviderRowToPaymentProvider,
@@ -15,6 +26,7 @@ import {
   mapStorePaymentSettingsUpsertToRow,
   mapStorePaymentSettingsUpdateToRow,
   mapPaymentTransactionRowToPaymentTransaction,
+  mapCheckoutSessionRowToStockUnavailablePayment,
 } from './payments.mapper';
 
 export const paymentsService = {
@@ -40,7 +52,7 @@ export const paymentsService = {
   async getStorePaymentSettings(storeId: string): Promise<StorePaymentSettings | null> {
     const { data, error } = await supabase
       .from('store_payment_settings')
-      .select('*, payment_providers!inner(code)')
+      .select(`${SAFE_PAYMENT_SETTINGS_COLUMNS}, payment_providers!inner(code)`)
       .eq('store_id', storeId)
       .eq('payment_providers.code', 'wompi')
       .maybeSingle();
@@ -56,7 +68,7 @@ export const paymentsService = {
     const { data, error } = await supabase
       .from('store_payment_settings')
       .upsert(row, { onConflict: 'store_id,provider_id' })
-      .select()
+      .select(SAFE_PAYMENT_SETTINGS_COLUMNS)
       .single();
     if (error) throw new Error(error.message);
     if (!data) throw new Error('No data returned after upsert');
@@ -76,7 +88,7 @@ export const paymentsService = {
       .update(row)
       .eq('store_id', storeId)
       .eq('provider_id', providerId)
-      .select()
+      .select(SAFE_PAYMENT_SETTINGS_COLUMNS)
       .single();
     if (error) throw new Error(error.message);
     if (!data) throw new Error('No data returned after update');
@@ -139,8 +151,13 @@ export const paymentsService = {
         store_location_id:     payload.storeLocationId ?? null,
         items: payload.items.map(i => ({
           product_id:          i.productId,
+          variant_id:          i.variantId ?? null,
           quantity:            i.quantity,
           customization_notes: i.customizationNotes ?? null,
+          customizations: i.customizations.map(c => ({
+            option_group_id: c.optionGroupId,
+            option_item_id:  c.optionItemId,
+          })),
         })),
         redirect_url: redirectUrl,
       },
@@ -148,6 +165,25 @@ export const paymentsService = {
     if (error) throw new Error(error.message ?? 'Failed to create Wompi checkout session');
     if (!data?.checkoutUrl) throw new Error('Invalid response from payment service');
     return data as WompiCheckoutInitResult;
+  },
+
+  // Wompi payments approved after their stock reservation was already
+  // released (migration 092) — never became a normal order, need manual
+  // review/refund. RLS on checkout_sessions (checkout_sessions_select_members)
+  // already scopes this to stores the caller belongs to.
+  async getStockUnavailablePayments(storeId: string): Promise<StockUnavailablePayment[]> {
+    const { data, error } = await supabase
+      .from('checkout_sessions')
+      .select('id, created_at, customer_name, customer_phone, total_amount, currency, provider_reference')
+      .eq('store_id', storeId)
+      .eq('status', 'paid_stock_unavailable')
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(r =>
+      mapCheckoutSessionRowToStockUnavailablePayment(
+        r as Parameters<typeof mapCheckoutSessionRowToStockUnavailablePayment>[0]
+      )
+    );
   },
 
   // Queries the get_payment_result RPC (SECURITY DEFINER, safe for anon).

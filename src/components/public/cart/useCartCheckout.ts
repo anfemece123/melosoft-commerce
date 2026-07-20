@@ -1,13 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useFormik } from 'formik';
 import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
 import { useCart } from '@/lib/cart/cartContext';
 import { useSelectedLocation } from '@/lib/locations/locationContext';
 import { env } from '@/lib/env';
+import { buildStorefrontPath, isUsingStorefrontHostname } from '@/lib/storefront/storefrontPaths';
 import { ordersService } from '@/features/orders/ordersService';
 import { paymentsService } from '@/features/payments/paymentsService';
 import { notify } from '@/lib/notifications';
 import { checkoutSchema, type CheckoutFormValues } from '@/schemas/order.schema';
+import {
+  getAvailableFulfillmentMethods,
+  getLocalDeliveryLocations,
+  getUniqueLocationCities,
+  normalizeFulfillmentMethod,
+  resolveOperationalLocation,
+} from '@/lib/orders/fulfillment';
+import { calculateShippingAmount } from '@/lib/commerce/shippingRules';
 import type { WebOrderResult } from '@/features/orders/orders.types';
 import type { PaymentChoice } from './CheckoutPaymentSelector';
 
@@ -17,34 +26,29 @@ interface UseCartCheckoutParams {
   storeSlug: string;
   allowsPickup: boolean | null;
   allowsLocalDelivery: boolean | null;
+  allowsNationalShipping: boolean | null;
+  localDeliveryBaseFee?: number | null;
+  localDeliveryFreeFrom?: number | null;
+  nationalShippingBaseFee?: number | null;
+  nationalShippingFreeFrom?: number | null;
   cashOnDeliveryEnabled?: boolean | null;
   onlineCheckoutEnabled?: boolean | null;
-}
-
-function resolveDefaultFulfillment(
-  allowsPickup: boolean | null,
-  allowsLocalDelivery: boolean | null
-): 'delivery' | 'pickup' {
-  if (allowsPickup === true && allowsLocalDelivery !== true) return 'pickup';
-  return 'delivery';
-}
-
-function showFulfillmentChoice(
-  allowsPickup: boolean | null,
-  allowsLocalDelivery: boolean | null
-): boolean {
-  return allowsPickup === true && allowsLocalDelivery !== false;
 }
 
 export function useCartCheckout({
   storeSlug,
   allowsPickup,
   allowsLocalDelivery,
+  allowsNationalShipping,
+  localDeliveryBaseFee,
+  localDeliveryFreeFrom,
+  nationalShippingBaseFee,
+  nationalShippingFreeFrom,
   cashOnDeliveryEnabled,
   onlineCheckoutEnabled,
 }: UseCartCheckoutParams) {
   const { items, totalItems, totalPrice, updateQuantity, removeItem, clearCart } = useCart();
-  const { selectedLocation } = useSelectedLocation();
+  const { locations, selectedLocation, setSelectedLocation } = useSelectedLocation();
 
   const [step, setStep] = useState<DrawerStep>('cart');
   const [orderResult, setOrderResult] = useState<WebOrderResult | null>(null);
@@ -57,8 +61,13 @@ export function useCartCheckout({
   const defaultPayment: PaymentChoice = showOnline && !showCod ? 'online' : 'cash_on_delivery';
   const [paymentChoice, setPaymentChoice] = useState<PaymentChoice>(defaultPayment);
 
-  const defaultFulfillment = resolveDefaultFulfillment(allowsPickup, allowsLocalDelivery);
-  const hasFulfillmentChoice = showFulfillmentChoice(allowsPickup, allowsLocalDelivery);
+  const availableFulfillmentMethods = getAvailableFulfillmentMethods({
+    allowsPickup,
+    allowsLocalDelivery,
+    allowsNationalShipping,
+  });
+  const defaultFulfillment = availableFulfillmentMethods[0] ?? 'pickup';
+  const hasFulfillmentChoice = availableFulfillmentMethods.length > 1;
 
   const formik = useFormik<CheckoutFormValues>({
     initialValues: {
@@ -67,6 +76,11 @@ export function useCartCheckout({
       customerEmail: '',
       fulfillmentMethod: defaultFulfillment,
       shippingAddress: '',
+      shippingDepartmentId: '',
+      shippingDepartmentName: '',
+      shippingCityId: '',
+      shippingCityName: '',
+      localDeliveryCity: '',
       deliveryNeighborhood: '',
       deliveryReference: '',
       notes: '',
@@ -74,21 +88,50 @@ export function useCartCheckout({
     validationSchema: checkoutSchema,
     enableReinitialize: false,
     onSubmit: async (values) => {
-      if (!selectedLocation) {
-        notify.error('Selecciona una sede para continuar.');
-        return;
-      }
-      setStep('submitting');
-
       try {
+        const fulfillmentMethod = normalizeFulfillmentMethod(values.fulfillmentMethod);
+        const operationalLocation = resolveOperationalLocation({
+          fulfillmentMethod,
+          locations,
+          selectedLocation,
+          localDeliveryCity: values.localDeliveryCity,
+        });
+
+        if (!operationalLocation) {
+          notify.error(
+            fulfillmentMethod === 'pickup'
+              ? 'No hay un punto de retiro disponible para este pedido.'
+              : 'No encontramos una sede operativa para procesar este pedido.',
+          );
+          return;
+        }
+
+        setStep('submitting');
+        const shippingAddress = fulfillmentMethod === 'pickup'
+          ? null
+          : (values.shippingAddress.trim() || null);
+        const city = fulfillmentMethod === 'national_shipping'
+          ? (values.shippingCityName.trim() || null)
+          : operationalLocation.city;
+        const department = fulfillmentMethod === 'national_shipping'
+          ? (values.shippingDepartmentName.trim() || null)
+          : operationalLocation.department;
+        const deliveryNeighborhood = fulfillmentMethod === 'pickup'
+          ? null
+          : (values.deliveryNeighborhood.trim() || null);
+        const deliveryReference = fulfillmentMethod === 'pickup'
+          ? null
+          : (values.deliveryReference.trim() || null);
+
         if (paymentChoice === 'online') {
           // For online payment: create a checkout session, NOT an order.
           // The order is created only after the Wompi webhook confirms APPROVED.
 
           // Wompi rejects HTTP and localhost — require a public HTTPS URL.
-          const redirectBase =
-            env.publicSiteUrl ??
-            (window.location.origin.startsWith('https://') ? window.location.origin : null);
+          const redirectBase = isUsingStorefrontHostname(storeSlug)
+            ? window.location.origin
+            : env.publicSiteUrl ??
+              (window.location.origin.startsWith('https://') ? window.location.origin : null);
 
           if (!redirectBase) {
             setStep('form');
@@ -100,7 +143,10 @@ export function useCartCheckout({
             return;
           }
 
-          const redirectUrl = `${redirectBase}/s/${storeSlug}/payment-result`;
+          const redirectUrl = new URL(
+            buildStorefrontPath(storeSlug, '/payment-result'),
+            redirectBase,
+          ).toString();
 
           const checkout = await paymentsService.initiateWompiCheckout(
             {
@@ -108,19 +154,23 @@ export function useCartCheckout({
               customerName:         values.customerName.trim(),
               customerPhone:        values.customerPhone.trim(),
               customerEmail:        values.customerEmail.trim() || null,
-              fulfillmentMethod:    values.fulfillmentMethod,
-              shippingAddress:      values.fulfillmentMethod === 'delivery'
-                ? (values.shippingAddress.trim() || null) : null,
-              city:                 selectedLocation.city,
-              department:           selectedLocation.department,
-              deliveryNeighborhood: values.deliveryNeighborhood.trim() || null,
-              deliveryReference:    values.deliveryReference.trim() || null,
+              fulfillmentMethod,
+              shippingAddress,
+              city,
+              department,
+              deliveryNeighborhood,
+              deliveryReference,
               notes:                values.notes.trim() || null,
-              storeLocationId:      selectedLocation.locationId,
+              storeLocationId:      operationalLocation.locationId,
               items: items.map(item => ({
                 productId:          item.productId,
+                variantId:          item.variantId ?? null,
                 quantity:           item.quantity,
                 customizationNotes: item.customizationNotes,
+                customizations:     item.customizations.map(c => ({
+                  optionGroupId: c.optionGroupId,
+                  optionItemId:  c.optionItemId,
+                })),
               })),
             },
             redirectUrl,
@@ -140,20 +190,24 @@ export function useCartCheckout({
             customerName:         values.customerName.trim(),
             customerPhone:        values.customerPhone.trim(),
             customerEmail:        values.customerEmail.trim() || null,
-            fulfillmentMethod:    values.fulfillmentMethod,
-            shippingAddress:      values.fulfillmentMethod === 'delivery'
-              ? (values.shippingAddress.trim() || null) : null,
-            city:                 selectedLocation.city,
-            department:           selectedLocation.department,
-            deliveryNeighborhood: values.deliveryNeighborhood.trim() || null,
-            deliveryReference:    values.deliveryReference.trim() || null,
+            fulfillmentMethod,
+            shippingAddress,
+            city,
+            department,
+            deliveryNeighborhood,
+            deliveryReference,
             notes:                values.notes.trim() || null,
-            storeLocationId:      selectedLocation.locationId,
+            storeLocationId:      operationalLocation.locationId,
             paymentMethod:        'cash_on_delivery',
             items: items.map(item => ({
               productId:          item.productId,
+              variantId:          item.variantId ?? null,
               quantity:           item.quantity,
               customizationNotes: item.customizationNotes,
+              customizations:     item.customizations.map(c => ({
+                optionGroupId: c.optionGroupId,
+                optionItemId:  c.optionItemId,
+              })),
             })),
           });
           setOrderResult(result);
@@ -173,13 +227,94 @@ export function useCartCheckout({
     isSubmitting: formik.isSubmitting,
   });
 
+  useEffect(() => {
+    if (availableFulfillmentMethods.length === 0) return;
+    const normalizedCurrent = normalizeFulfillmentMethod(formik.values.fulfillmentMethod);
+    if (!availableFulfillmentMethods.includes(normalizedCurrent)) {
+      void formik.setFieldValue('fulfillmentMethod', defaultFulfillment);
+    }
+  }, [availableFulfillmentMethods, defaultFulfillment, formik, formik.values.fulfillmentMethod]);
+
+  const localDeliveryLocations = useMemo(
+    () => getLocalDeliveryLocations(locations),
+    [locations],
+  );
+
+  const localDeliveryCities = useMemo(
+    () => getUniqueLocationCities(localDeliveryLocations),
+    [localDeliveryLocations],
+  );
+
+  useEffect(() => {
+    if (formik.values.fulfillmentMethod !== 'local_delivery') return;
+    if (localDeliveryCities.length !== 1) return;
+    const onlyCity = localDeliveryCities[0]?.city ?? '';
+    if (onlyCity && formik.values.localDeliveryCity !== onlyCity) {
+      void formik.setFieldValue('localDeliveryCity', onlyCity);
+    }
+  }, [formik, formik.values.fulfillmentMethod, formik.values.localDeliveryCity, localDeliveryCities]);
+
+  useEffect(() => {
+    const method = normalizeFulfillmentMethod(formik.values.fulfillmentMethod);
+    if (method !== 'local_delivery') return;
+    const operationalLocation = resolveOperationalLocation({
+      fulfillmentMethod: method,
+      locations,
+      selectedLocation,
+      localDeliveryCity: formik.values.localDeliveryCity,
+    });
+    if (
+      operationalLocation &&
+      selectedLocation?.locationId !== operationalLocation.locationId
+    ) {
+      setSelectedLocation(operationalLocation);
+    }
+  }, [formik.values.fulfillmentMethod, formik.values.localDeliveryCity, locations, selectedLocation, setSelectedLocation]);
+
+  const operationalLocation = useMemo(
+    () =>
+      resolveOperationalLocation({
+        fulfillmentMethod: formik.values.fulfillmentMethod,
+        locations,
+        selectedLocation,
+        localDeliveryCity: formik.values.localDeliveryCity,
+      }),
+    [formik.values.fulfillmentMethod, formik.values.localDeliveryCity, locations, selectedLocation],
+  );
+
+  const shipping = useMemo(
+    () =>
+      calculateShippingAmount(totalPrice, formik.values.fulfillmentMethod, {
+        localDeliveryBaseFee,
+        localDeliveryFreeFrom,
+        nationalShippingBaseFee,
+        nationalShippingFreeFrom,
+      }),
+    [
+      totalPrice,
+      formik.values.fulfillmentMethod,
+      localDeliveryBaseFee,
+      localDeliveryFreeFrom,
+      nationalShippingBaseFee,
+      nationalShippingFreeFrom,
+    ],
+  );
+  const grandTotal = totalPrice + shipping.fee;
+
   return {
     items,
     totalItems,
     totalPrice,
+    subtotalPrice: totalPrice,
+    shippingAmount: shipping.fee,
+    shippingThreshold: shipping.threshold,
+    shippingIsFree: shipping.isFree,
+    grandTotal,
     updateQuantity,
     removeItem,
     selectedLocation,
+    operationalLocation,
+    localDeliveryCities,
     step,
     setStep,
     orderResult,
@@ -189,6 +324,7 @@ export function useCartCheckout({
     showOnline,
     showPaymentChoice,
     hasAnyPaymentMethod,
+    availableFulfillmentMethods,
     hasFulfillmentChoice,
     formik,
   };

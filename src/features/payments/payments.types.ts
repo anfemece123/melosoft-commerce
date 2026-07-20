@@ -8,21 +8,24 @@ export interface PaymentProvider {
   createdAt: string;
 }
 
-// StorePaymentSettings — keys are stored server-side.
-// The frontend receives them for display purposes but should only show
-// masked versions (e.g., ••••••1234) in the UI.
-// Never expose these values in public views or anon-accessible endpoints.
+// StorePaymentSettings — the raw private_key/integrity_secret/events_secret
+// are NEVER included here. The DB (migration 086) revokes SELECT on those
+// columns for `authenticated`, so the frontend only ever sees whether each
+// secret is configured (hasX) and a masked last-4 preview computed by
+// Postgres (xPreview) — never the real value. To set a NEW secret, write
+// through StorePaymentSettingsUpsert/Update; there is no way to read one
+// back once saved.
 export interface StorePaymentSettings {
   id: string;
   storeId: string;
   providerId: string;
   publicKey: string | null;
-  // Stored as private_key_reference in DB — contains the actual private key.
-  privateKey: string | null;
-  // Stored as integrity_secret_reference in DB — contains the actual secret.
-  integritySecret: string | null;
-  // Stored as events_secret in DB — used to validate Wompi webhooks.
-  eventsSecret: string | null;
+  hasPrivateKey: boolean;
+  privateKeyPreview: string | null;
+  hasIntegritySecret: boolean;
+  integritySecretPreview: string | null;
+  hasEventsSecret: boolean;
+  eventsSecretPreview: string | null;
   environment: PaymentEnvironment;
   isActive: boolean;
   createdAt: string;
@@ -87,8 +90,10 @@ export interface WompiCheckoutPayload {
   storeLocationId?: string | null;
   items: Array<{
     productId: string;
+    variantId?: string | null;
     quantity: number;
     customizationNotes?: string | null;
+    customizations: Array<{ optionGroupId: string; optionItemId: string }>;
   }>;
 }
 
@@ -106,4 +111,18 @@ export interface PaymentResultData {
   sessionStatus: string | null;
   orderNumber: string | null;
   orderStatus: string | null;
+}
+
+// A Wompi payment Wompi confirmed as APPROVED after its stock reservation
+// had already been released (migration 092) — flagged for manual
+// review/refund instead of silently creating an order. See wompi-webhook's
+// "reservation freshness check".
+export interface StockUnavailablePayment {
+  id: string;
+  createdAt: string;
+  customerName: string;
+  customerPhone: string;
+  totalAmount: number;
+  currency: string;
+  providerReference: string;
 }

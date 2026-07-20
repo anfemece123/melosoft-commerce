@@ -108,6 +108,10 @@ export const storesService = {
     return storesService.uploadStoreBrandingAsset(storeKey, file, 'logo');
   },
 
+  async uploadStoreFavicon(storeKey: string, file: File): Promise<string> {
+    return storesService.uploadStoreBrandingAsset(storeKey, file, 'favicon');
+  },
+
   async uploadStoreHeroImage(storeKey: string, file: File): Promise<string> {
     return storesService.uploadStoreBrandingAsset(storeKey, file, 'hero-image');
   },
@@ -123,7 +127,7 @@ export const storesService = {
   async uploadStoreBrandingAsset(
     storeKey: string,
     file: File,
-    assetKind: 'logo' | 'hero-image' | 'hero-background' | 'hero-badge'
+    assetKind: 'logo' | 'favicon' | 'hero-image' | 'hero-background' | 'hero-badge'
   ): Promise<string> {
     const ownerId = await getOwnerId();
     const ext = (file.name.split('.').pop() ?? 'png').toLowerCase();

@@ -1,6 +1,7 @@
 import { formatCurrency } from '@/utils/formatCurrency';
 import type { Order } from '@/features/orders/orders.types';
 import type { OrderViewContext } from '@/pages/admin/orders/OrderStatusBadge';
+import { getFulfillmentMethodLabel } from '@/lib/orders/fulfillmentLabels';
 
 export function normalizePhoneForWhatsApp(phone: string): string | null {
   const digits = phone.replace(/\D/g, '');
@@ -26,7 +27,15 @@ function buildItemsSummary(order: Order): string {
   if (!order.items || order.items.length === 0) return '';
   const shown = order.items.slice(0, 3);
   const rest = order.items.length - 3;
-  const lines = shown.map(i => `• ${i.quantity}× ${i.productNameSnapshot ?? i.name}`);
+  const lines = shown.flatMap(i => {
+    const name = i.productNameSnapshot ?? i.name;
+    const variant = i.variantLabelSnapshot ? ` (${i.variantLabelSnapshot})` : '';
+    const itemLine = `• ${i.quantity}× ${name}${variant}`;
+    const customizationLines = i.customizations.map(
+      c => `   + ${c.optionItemLabel} (+${formatCurrency(c.priceDelta)})`
+    );
+    return [itemLine, ...customizationLines];
+  });
   if (rest > 0) lines.push(`• +${rest} producto${rest > 1 ? 's' : ''} más`);
   return lines.join('\n');
 }
@@ -41,7 +50,7 @@ export function buildOrderConfirmationMessage(
   const storeLabel = locationName ? `${storeName} — ${locationName}` : storeName;
   const itemsSummary = buildItemsSummary(order);
   const total = formatCurrency(order.totalAmount);
-  const delivery = order.fulfillmentMethod === 'delivery' ? 'Domicilio' : 'Recogida en tienda';
+  const delivery = getFulfillmentMethodLabel(order.fulfillmentMethod, { city: order.city });
   const payment = order.paymentMethod === 'cash_on_delivery' ? 'Pago contraentrega' : 'Pago en línea';
 
   const lines: string[] = [

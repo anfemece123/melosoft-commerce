@@ -50,6 +50,9 @@ export interface Product {
   mainImageUrl: string | null;
   category: string | null;
   categoryId: string | null;
+  hasVariants: boolean;
+  showVariantsAsCards: boolean;
+  sizeChartId: string | null;
   collections: ProductCollectionAssignment[];
   facetValues: ProductFacetValue[];
   images?: ProductImage[];

@@ -26,6 +26,7 @@ import type { ThemePreset, ThemeMode } from '@/types/common.types';
 import { cn } from '@/utils/cn';
 import { geoService } from '@/features/geo/geoService';
 import type { GeoDepartment, GeoCity } from '@/features/geo/geo.types';
+import { env } from '@/lib/env';
 
 // ── Business vertical constants ──────────────────────────────
 
@@ -108,7 +109,7 @@ const VERTICAL_PRESET_SUMMARY: Record<BusinessVertical, string[]> = {
   food_restaurant: [
     'Menú digital con categorías de platos',
     'Carrito y pedidos web habilitados',
-    'Domicilio local y recogida en local',
+    'Domicilio y recogida en tienda',
     'WhatsApp habilitado',
     'Tablero Kanban de pedidos en tiempo real',
   ],
@@ -116,7 +117,7 @@ const VERTICAL_PRESET_SUMMARY: Record<BusinessVertical, string[]> = {
     'Catálogo de productos físicos',
     'Carrito y pedidos web habilitados',
     'WhatsApp habilitado',
-    'Envío nacional, domicilio local y recogida',
+    'Envío nacional, domicilio y recogida',
     'Vista de pedidos tipo ecommerce',
   ],
   catalog_quote: [
@@ -588,7 +589,7 @@ export function StoreFormPage() {
                 onClear={() => void formik.setFieldValue('logoUrl', '')}
                 uploading={logoUploading}
                 error={logoUploadError ?? fieldError('logoUrl')}
-                hint="Sube el logo que se mostrará en el ecommerce público y en el header de la tienda."
+                hint="Se mostrará en el ecommerce, en el header y automáticamente como icono de la pestaña. Después podrás personalizar ese icono en Configuración."
               />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input
@@ -603,7 +604,7 @@ export function StoreFormPage() {
                   required
                 />
                 <Input
-                  label="Slug (URL pública)"
+                  label="Dirección gratuita de la empresa"
                   id="slug"
                   name="slug"
                   placeholder="tienda-nova"
@@ -611,7 +612,9 @@ export function StoreFormPage() {
                   onChange={formik.handleChange}
                   onBlur={formik.handleBlur}
                   error={fieldError('slug')}
-                  hint={`/s/${formik.values.slug || '...'}`}
+                  hint={env.storefrontRootDomain
+                    ? `${formik.values.slug || 'nombre-empresa'}.${env.storefrontRootDomain}`
+                    : `El nombre que aparecerá al inicio de la URL pública`}
                   required
                 />
               </div>

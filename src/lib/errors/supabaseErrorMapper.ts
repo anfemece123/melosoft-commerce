@@ -4,6 +4,12 @@ const PG_NOT_NULL_VIOLATION = '23502';
 const PG_CHECK_VIOLATION = '23514';
 
 const CONSTRAINT_MESSAGES: Record<string, string> = {
+  stores_slug_global_unique:
+    'Esa dirección pública ya está siendo usada por otra empresa. Elige una diferente.',
+  stores_slug_subdomain_safe:
+    'La dirección debe usar letras minúsculas, números o guiones, sin guiones al inicio o al final.',
+  stores_slug_not_reserved:
+    'Esa dirección está reservada por la plataforma. Elige una diferente.',
   products_store_slug_unique:
     'Ya existe un producto o plato con ese slug en esta tienda. Cambia el nombre o usa un slug diferente.',
   offers_store_slug_unique:
@@ -52,6 +58,10 @@ export function mapSupabaseError(err: unknown): string {
   }
 
   if (code === PG_CHECK_VIOLATION) {
+    const searchIn = `${message} ${details ?? ''}`;
+    for (const [constraint, msg] of Object.entries(CONSTRAINT_MESSAGES)) {
+      if (searchIn.includes(constraint)) return msg;
+    }
     return 'Uno de los valores ingresados no es válido. Revisa los campos.';
   }
 

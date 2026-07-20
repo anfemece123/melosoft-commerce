@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { isLikelyPngAsset } from '@/lib/images/imageFormat';
 
 interface StorefrontMediaFrameProps {
@@ -9,6 +9,8 @@ interface StorefrontMediaFrameProps {
   roundedClassName?: string;
   imageClassName?: string;
   pngImageClassName?: string;
+  className?: string;
+  style?: CSSProperties;
 }
 
 export function StorefrontMediaFrame({
@@ -18,18 +20,16 @@ export function StorefrontMediaFrame({
   aspectClassName,
   roundedClassName = 'rounded-xl',
   imageClassName = 'h-full w-full object-cover',
-  pngImageClassName = 'h-full w-full object-contain p-3 drop-shadow-[0_16px_18px_rgba(0,0,0,0.22)]',
+  pngImageClassName = 'h-full w-full object-cover p-0 drop-shadow-[0_10px_14px_rgba(15,23,42,0.08)]',
+  className = '',
+  style,
 }: StorefrontMediaFrameProps) {
   const isPng = isLikelyPngAsset(src);
 
   return (
     <div
-      className={`relative overflow-hidden ${aspectClassName} ${roundedClassName} ${isPng ? '' : 'bg-gray-100'}`.trim()}
-      style={{
-        background: isPng
-          ? 'radial-gradient(circle at 50% 84%, rgba(15,23,42,0.16) 0, rgba(15,23,42,0.08) 16%, transparent 34%)'
-          : undefined,
-      }}
+      className={`relative overflow-hidden ${aspectClassName} ${roundedClassName} ${className}`.trim()}
+      style={style}
     >
       {src ? (
         <img

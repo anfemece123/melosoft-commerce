@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useFormik } from 'formik';
-import { ArrowLeft, Upload, X, Clock, MapPin, Layers } from 'lucide-react';
+import { ArrowLeft, Upload, X, Clock, MapPin, Layers, AlertCircle } from 'lucide-react';
 import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
+import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -16,14 +17,17 @@ import { ProductCategorySelect } from '@/components/admin/ProductCategorySelect'
 import { ProductCollectionsMultiSelect } from '@/components/admin/ProductCollectionsMultiSelect';
 import { ProductFacetAssignments } from '@/components/admin/ProductFacetAssignments';
 import { ProductOptionsEditor } from '@/components/admin/ProductOptionsEditor';
+import { ProductVariantsEditor } from '@/components/admin/ProductVariantsEditor';
 import { ProductDescriptionSectionsEditor } from '@/components/admin/ProductDescriptionSectionsEditor';
 import { StockAdjustmentModal } from '@/components/admin/StockAdjustmentModal';
 import { MoneyInput } from '@/components/forms/MoneyInput';
+import { IntegerInput } from '@/components/forms/IntegerInput';
 import { getProductFormLabels } from '@/lib/products/productFormLabels';
 import { useAppSelector } from '@/app/hooks';
 import { selectCurrentStore, selectCurrentCommerceSettings } from '@/features/stores/stores.selectors';
 import { productOptionsService, type ProductOptionGroupDraft } from '@/features/products/productOptionsService';
 import { productsService } from '@/features/products/productsService';
+import { productVariantsService } from '@/features/products/productVariantsService';
 import { inventoryService } from '@/features/products/inventoryService';
 import { locationsService } from '@/features/locations/locationsService';
 import { productAvailabilityService } from '@/features/products/productAvailabilityService';
@@ -31,6 +35,12 @@ import { categoriesService } from '@/features/categories/categoriesService';
 import { collectionsService } from '@/features/collections/collectionsService';
 import { facetsService } from '@/features/facets/facetsService';
 import type { StoreLocation } from '@/features/locations/locations.types';
+import type {
+  ProductVariant,
+  ProductVariantDraft,
+  ProductVariantOption,
+  ProductVariantOptionDraft,
+} from '@/features/products/productVariants.types';
 import { slugify } from '@/utils/slugify';
 import { formatCurrency } from '@/utils/formatCurrency';
 import {
@@ -94,6 +104,65 @@ function ToggleField({
   );
 }
 
+// Shared by the initial "load product for editing" fetch and by the
+// post-save resync (so local state always matches the DB right after a
+// save, without a second round trip) — same mapping in both cases.
+function mapSavedVariantsToDrafts(
+  options: ProductVariantOption[],
+  variants: ProductVariant[]
+): ProductVariantDraft[] {
+  const valueLookup = new Map(
+    options.flatMap((option) =>
+      option.values.map((value) => [value.id, { optionName: option.name, value: value.value }])
+    )
+  );
+  return variants.map((variant) => ({
+    id: variant.id,
+    sku: variant.sku ?? '',
+    barcode: variant.barcode,
+    price: variant.price ?? '',
+    compareAtPrice: variant.compareAtPrice ?? '',
+    stockQuantity: variant.stockQuantity,
+    stockPolicy: variant.stockPolicy,
+    status: variant.status,
+    isDefault: variant.isDefault,
+    position: variant.position,
+    optionSignature: variant.optionSignature,
+    optionValues: Object.fromEntries(
+      variant.selectedValues
+        .map((sv) => valueLookup.get(sv.optionValueId))
+        .filter((entry): entry is { optionName: string; value: string } => entry !== undefined)
+        .map((entry) => [entry.optionName, entry.value])
+    ),
+    imageUrl: variant.images[0]?.imageUrl ?? null,
+  }));
+}
+
+// Same idea as mapSavedVariantsToDrafts, for the options/values side: keeps
+// local draft state (including each value's uploaded gallery) in sync with
+// the DB right after a save, and clears pendingImageFiles/PreviewUrls so a
+// second "Guardar" click can never re-upload the same files.
+function mapSavedOptionsToDrafts(options: ProductVariantOption[]): ProductVariantOptionDraft[] {
+  return options.map((option) => ({
+    clientKey: option.id,
+    id: option.id,
+    name: option.name,
+    type: option.type,
+    useAsPublicFilter: option.useAsPublicFilter,
+    controlsMedia: option.controlsMedia,
+    isRequired: option.isRequired,
+    isActive: option.isActive,
+    values: option.values.map((value) => ({
+      clientKey: value.id,
+      id: value.id,
+      value: value.value,
+      colorHex: value.colorHex,
+      isActive: value.isActive,
+      images: value.images,
+    })),
+  }));
+}
+
 function SectionHeader({ title, description }: { title: string; description?: string }) {
   return (
     <div className="mb-4">
@@ -124,10 +193,15 @@ export function ProductFormPage() {
   const [pendingPreviews, setPendingPreviews] = useState<string[]>([]);
   const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
   const [loadingProduct, setLoadingProduct] = useState(isEditing);
+  const [productNotFound, setProductNotFound] = useState(false);
   const [confirmDeleteImage, setConfirmDeleteImage] = useState<ProductImage | null>(null);
   const [cropQueue, setCropQueue] = useState<LoadedImageFile[]>([]);
   const [activeCrop, setActiveCrop] = useState<LoadedImageFile | null>(null);
   const [optionGroups, setOptionGroups] = useState<ProductOptionGroupDraft[]>([]);
+  const [hasVariants, setHasVariants] = useState(false);
+  const [showVariantsAsCards, setShowVariantsAsCards] = useState(false);
+  const [variantOptions, setVariantOptions] = useState<ProductVariantOptionDraft[]>([]);
+  const [variantDrafts, setVariantDrafts] = useState<ProductVariantDraft[]>([]);
   const [descriptionSections, setDescriptionSections] = useState<ProductDescriptionSection[]>([]);
   const [activeLocations, setActiveLocations] = useState<StoreLocation[]>([]);
   const [locationAvailability, setLocationAvailability] = useState<Record<string, boolean>>({});
@@ -161,7 +235,10 @@ export function ProductFormPage() {
       discountValue: '',
       salePrice: '',
       sku: '',
-      trackInventory: true,
+      // Restaurant dishes are prepared on demand, so their professional
+      // default is "available without a quantity limit". Retail products
+      // keep the existing counted-inventory default.
+      trackInventory: !isMenu,
       stockQuantity: '',
       status: 'active',
       isAvailable: true,
@@ -176,6 +253,22 @@ export function ProductFormPage() {
     onSubmit: async (values, { setStatus }) => {
       if (!storeId) return;
       try {
+        // Counted variants need an explicit opening quantity. Restaurant
+        // variants configured as "available without limit" intentionally
+        // keep stock empty/0 and are sellable through allow_backorder.
+        if (hasVariants) {
+          const missingStock = variantDrafts.find(
+            (v) => v.status === 'active' && v.stockPolicy === 'deny' && v.stockQuantity === ''
+          );
+          if (missingStock) {
+            const label = Object.values(missingStock.optionValues).join(' / ') || 'variante';
+            const msg = `Ingresa el stock inicial de la variante "${label}" o escribe 0 si no tiene unidades.`;
+            setStatus(msg);
+            notify.error(msg);
+            return;
+          }
+        }
+
         // Resolve the final sale price from discount mode
         const regularPriceNum = Number(values.regularPrice);
         let finalSalePrice: number | null = null;
@@ -210,7 +303,9 @@ export function ProductFormPage() {
           compareAtPrice: null,
           costPrice: null,
           sku: values.sku || null,
-          trackInventory: values.trackInventory,
+          // Variants own their availability/stock policy. Never let a stale
+          // parent stock value make the whole product appear sold out.
+          trackInventory: hasVariants ? false : values.trackInventory,
           isFeatured: values.isFeatured,
           isAvailable: values.isAvailable,
           preparationTimeMinutes:
@@ -223,6 +318,9 @@ export function ProductFormPage() {
           status: values.status,
           mainImageUrl: null,
           descriptionSections,
+          hasVariants,
+          showVariantsAsCards: hasVariants && showVariantsAsCards,
+          sizeChartId: null,
         };
 
         const saved = isEditing && productId
@@ -256,6 +354,149 @@ export function ProductFormPage() {
         await facetsService.setProductFacetValues(saved.id, selectedFacetValueIds);
         await productOptionsService.replaceProductOptionGroups(storeId, saved.id, optionGroups);
 
+        const savedVariantOptions = await productVariantsService.saveVariantOptions(
+          storeId,
+          saved.id,
+          hasVariants ? variantOptions : []
+        );
+
+        const imageFailures: string[] = [];
+        if (hasVariants) {
+          // Upload any pending "Color/Modelo" gallery images the merchant
+          // picked before the option value had a real id. Matched by
+          // POSITION (option index + value index), same reasoning as the
+          // per-variant matching below: saveVariantOptions() processes
+          // options/values in submission order and returns them in that
+          // same order, so savedVariantOptions[i].values[j] is guaranteed
+          // to be variantOptions[i].values[j]'s real saved row.
+          for (let optionIndex = 0; optionIndex < variantOptions.length; optionIndex += 1) {
+            const optionDraft = variantOptions[optionIndex];
+            const savedOption = savedVariantOptions[optionIndex];
+            if (!savedOption) continue;
+            for (let valueIndex = 0; valueIndex < optionDraft.values.length; valueIndex += 1) {
+              const valueDraft = optionDraft.values[valueIndex];
+              const pendingFiles = valueDraft.pendingImageFiles ?? [];
+              if (pendingFiles.length === 0) continue;
+              const savedValue = savedOption.values[valueIndex];
+              if (!savedValue) continue;
+              const existingCount = savedValue.images.length;
+              for (let i = 0; i < pendingFiles.length; i += 1) {
+                try {
+                  const image = await productVariantsService.uploadOptionValueImage(
+                    storeId,
+                    saved.id,
+                    savedValue.id,
+                    pendingFiles[i],
+                    existingCount + i,
+                    existingCount === 0 && i === 0
+                  );
+                  savedValue.images.push(image);
+                } catch (imgErr) {
+                  imageFailures.push(`${optionDraft.name}: ${valueDraft.value}`);
+                  console.error(imgErr);
+                  break; // one failure per value is enough to flag it
+                }
+              }
+            }
+          }
+          // Resync local option/value state to the real DB result now — the
+          // options/values themselves are already committed either way, and
+          // this clears every pendingImageFiles/pendingImagePreviewUrls so a
+          // second "Guardar" click can never re-upload the same files.
+          for (const optionDraft of variantOptions) {
+            for (const valueDraft of optionDraft.values) {
+              (valueDraft.pendingImagePreviewUrls ?? []).forEach((url) => URL.revokeObjectURL(url));
+            }
+          }
+          setVariantOptions(mapSavedOptionsToDrafts(savedVariantOptions));
+        }
+
+        const savedVariants = await productVariantsService.saveVariants(
+          storeId,
+          saved.id,
+          hasVariants ? variantDrafts : [],
+          savedVariantOptions
+        );
+
+        // Register initial stock for brand-new variants as an audited
+        // "Inventario inicial" movement — mirrors exactly how a brand-new
+        // simple product's initial stock is registered below, so variant
+        // stock never appears from nowhere without a movement record.
+        // Only variants without a pre-existing id go through this (a
+        // variant that already existed keeps its stock untouched here,
+        // and after this block variantDrafts is resynced from savedVariants
+        // so a second "Guardar" click can never re-run this for the same
+        // variant — draft.id will be set by then).
+        const stockFailures: string[] = [];
+        if (hasVariants) {
+          // IMPORTANT: match drafts to their saved row by POSITION, not by
+          // optionSignature. saveVariants() writes `position: index` for
+          // every draft (new or existing) in submission order, and
+          // fetchVariants() (which produces `savedVariants`) always orders
+          // by `position ASC` — so savedVariants[i] is guaranteed to be
+          // variantDrafts[i]'s real row. optionSignature can't be used here:
+          // a brand-new draft's optionSignature is the text-based one built
+          // client-side by generateVariantCombinations ("Color:Azul,Talla:39"),
+          // while the persisted row's optionSignature is recomputed from real
+          // option_value_ids inside saveVariants ("id1|id2") — the two never
+          // string-match, which used to make every new variant's initial
+          // stock/image silently skipped ("savedIndex === -1 → continue").
+          for (let index = 0; index < variantDrafts.length; index += 1) {
+            const draft = variantDrafts[index];
+            if (draft.id) continue;
+            const initialQty = draft.stockQuantity === '' ? 0 : Number(draft.stockQuantity);
+            if (initialQty <= 0) continue; // explicit 0 needs no movement at all
+            const savedVariant = savedVariants[index];
+            if (!savedVariant) continue;
+            try {
+              const result = await inventoryService.adjustVariantStock({
+                storeId,
+                variantId: savedVariant.id,
+                movementType: 'stock_in',
+                quantityChange: initialQty,
+                reason: 'Inventario inicial',
+                notes: null,
+              });
+              savedVariants[index] = { ...savedVariant, stockQuantity: result.newStock };
+            } catch (stockErr) {
+              stockFailures.push(Object.values(draft.optionValues).join(' / ') || 'variante');
+              console.error(stockErr);
+            }
+          }
+
+          // Upload any variant image the merchant picked before the product
+          // (and therefore the variant) had a real id — the file was only
+          // held in memory as `pendingImageFile` until now. Same
+          // position-based matching as above, for the same reason.
+          for (let index = 0; index < variantDrafts.length; index += 1) {
+            const draft = variantDrafts[index];
+            if (!draft.pendingImageFile) continue;
+            const savedVariant = savedVariants[index];
+            if (!savedVariant) continue;
+            try {
+              const image = await productVariantsService.uploadVariantImage(
+                storeId,
+                saved.id,
+                savedVariant.id,
+                draft.pendingImageFile,
+                0,
+                true
+              );
+              savedVariants[index] = { ...savedVariant, images: [image] };
+            } catch (imgErr) {
+              imageFailures.push(Object.values(draft.optionValues).join(' / ') || 'variante');
+              console.error(imgErr);
+            }
+          }
+
+          // Always resync local state to the real DB result — the variant
+          // rows themselves are already committed either way, so the table
+          // must reflect their true ids/stock/images, not the stale pre-save
+          // draft (this also clears pendingImageFile/pendingImagePreviewUrl,
+          // since mapSavedVariantsToDrafts never sets them).
+          setVariantDrafts(mapSavedVariantsToDrafts(savedVariantOptions, savedVariants));
+        }
+
         // Save per-location availability
         for (const loc of activeLocations) {
           const isAvailable = locationAvailability[loc.id] ?? true;
@@ -263,7 +504,7 @@ export function ProductFormPage() {
         }
 
         // Register initial stock via RPC so it appears in inventory_movements
-        if (!isEditing && !isMenu && values.trackInventory) {
+        if (!isEditing && !hasVariants && values.trackInventory) {
           const initialQty = values.stockQuantity !== '' ? Number(values.stockQuantity) : 0;
           if (initialQty > 0) {
             try {
@@ -284,13 +525,46 @@ export function ProductFormPage() {
         }
 
         const label = entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1);
-        notify.success(
-          isEditing
-            ? `${label} actualizado correctamente.`
-            : `${label} creado correctamente.`
-        );
 
-        void navigate(`/admin/stores/${storeId}/products`);
+        if (stockFailures.length > 0 || imageFailures.length > 0) {
+          // Don't claim success when a variant's initial stock movement or
+          // pending image upload failed — the variant/product data is
+          // already saved correctly, but say the partial failure out loud
+          // and point at how to fix it, rather than a generic "all good".
+          const parts: string[] = [];
+          if (stockFailures.length > 0) {
+            parts.push(`no se pudo registrar el stock inicial de ${stockFailures.map((l) => `"${l}"`).join(', ')}`);
+          }
+          if (imageFailures.length > 0) {
+            parts.push(`no se pudieron subir imágenes de ${imageFailures.map((l) => `"${l}"`).join(', ')}`);
+          }
+          notify.error(
+            `${label} guardado, pero ${parts.join(' y ')}. Puedes intentarlo nuevamente desde la edición del producto.`
+          );
+          if (!isEditing) {
+            // Still need the real productId in the URL — otherwise "Ajustar"
+            // and variant image upload stay blocked by the missing id.
+            void navigate(`/admin/stores/${storeId}/products/${saved.id}/edit`);
+          }
+          // Already editing: stay on this page — variantDrafts was just
+          // resynced above, so the affected rows already show "Ajustar".
+          return;
+        }
+
+        if (!isEditing && hasVariants && variantDrafts.length > 0) {
+          // Variants (and their images) can only be fully managed once the
+          // product exists — take the merchant straight to editing it so
+          // they can immediately assign images per variant if they want to.
+          notify.success(`${label} guardado. Ahora puedes agregar imágenes a las variantes.`);
+          void navigate(`/admin/stores/${storeId}/products/${saved.id}/edit`);
+        } else {
+          notify.success(
+            isEditing
+              ? `${label} actualizado correctamente.`
+              : `${label} creado correctamente.`
+          );
+          void navigate(`/admin/stores/${storeId}/products`);
+        }
       } catch (err) {
         const msg = mapSupabaseError(err);
         setStatus(msg);
@@ -304,6 +578,20 @@ export function ProductFormPage() {
     submitCount: formik.submitCount,
     isSubmitting: formik.isSubmitting,
   });
+
+  // Commerce settings can arrive just after the form mounts. Correct the
+  // untouched new-product default when the store resolves as a restaurant,
+  // otherwise Formik would retain the retail `true` value from that first
+  // render even though the restaurant UI never chose counted inventory.
+  useEffect(() => {
+    if (!isEditing && isMenu && formik.values.stockQuantity === '') {
+      void formik.setFieldValue('trackInventory', false);
+      void formik.setFieldValue('productType', 'menu_item');
+    }
+    // The transition into restaurant mode is the event that matters here;
+    // including the full Formik object would rerun after every field update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing, isMenu]);
 
   // Compute discount preview from current form values
   const discountPreview = useMemo(() => {
@@ -359,6 +647,16 @@ export function ProductFormPage() {
         setSelectedCategoryId(product.categoryId);
         setSelectedCollectionIds(product.collections.map((collection) => collection.id));
         setSelectedFacetValueIds(product.facetValues.map((value) => value.valueId));
+        setHasVariants(product.hasVariants);
+        setShowVariantsAsCards(product.showVariantsAsCards);
+        if (product.hasVariants) {
+          const [loadedOptions, loadedVariants] = await Promise.all([
+            productVariantsService.getProductVariantOptions(productId),
+            productVariantsService.getProductVariants(productId),
+          ]);
+          setVariantOptions(mapSavedOptionsToDrafts(loadedOptions));
+          setVariantDrafts(mapSavedVariantsToDrafts(loadedOptions, loadedVariants));
+        }
         setOptionGroups(optionGroupsData.map((group) => ({
           id: group.id,
           name: group.name,
@@ -377,6 +675,15 @@ export function ProductFormPage() {
             isActive: item.isActive,
           })),
         })));
+      } else {
+        // Real product id in the URL, but the row is gone (deleted, or a
+        // stale bookmark/back-button to an old edit link) — getProductById
+        // already handles the 0-row case cleanly (PGRST116 -> null), but
+        // nothing downstream was checking for it: the form would silently
+        // stay on its empty "new product" defaults while still believing
+        // isEditing=true, so saving would target a product_id that no
+        // longer exists. Surface it clearly instead.
+        setProductNotFound(true);
       }
       setLoadingProduct(false);
     }
@@ -454,16 +761,15 @@ export function ProductFormPage() {
     void formik.setFieldValue('salePrice', '');
   }
 
-  function handleDiscountValueChange(e: React.ChangeEvent<HTMLInputElement>) {
-    formik.handleChange(e);
-    const val = Number(e.target.value);
+  function handleDiscountValueChange(value: number | '') {
+    void formik.setFieldValue('discountValue', value);
     const rp = Number(formik.values.regularPrice);
-    if (!val || !rp) return;
+    if (value === '' || !rp) return;
 
-    if (formik.values.discountMode === 'percentage' && val >= 1 && val <= 99) {
-      void formik.setFieldValue('salePrice', calculateSalePriceFromPercentage(rp, val));
-    } else if (formik.values.discountMode === 'fixed_amount' && val > 0 && val < rp) {
-      void formik.setFieldValue('salePrice', calculateSalePriceFromFixedAmount(rp, val));
+    if (formik.values.discountMode === 'percentage' && value >= 1 && value <= 99) {
+      void formik.setFieldValue('salePrice', calculateSalePriceFromPercentage(rp, value));
+    } else if (formik.values.discountMode === 'fixed_amount' && value > 0 && value < rp) {
+      void formik.setFieldValue('salePrice', calculateSalePriceFromFixedAmount(rp, value));
     }
   }
 
@@ -529,28 +835,46 @@ export function ProductFormPage() {
     );
   }
 
-  return (
-    <div>
-      <div className="mb-4">
-        <Link
-          to={`/admin/stores/${storeId}/products`}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
-        >
-          <ArrowLeft className="w-4 h-4" />
+  if (productNotFound) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
+        <AlertCircle className="w-10 h-10 text-red-400" />
+        <p className="text-sm text-gray-600">Este {entitySingular} ya no existe.</p>
+        <Link to={`/admin/stores/${storeId}/products`} className="text-sm font-medium text-indigo-600 hover:underline">
           Volver a {isMenu ? 'menú' : 'productos'}
         </Link>
       </div>
+    );
+  }
 
-      <PageHeader
-        title={isEditing ? `Editar ${entitySingular}` : `Nuevo ${entitySingular}`}
-        description={
-          isEditing
-            ? `Modifica los datos de este ${entitySingular}.`
-            : `Completa el formulario para crear un ${entitySingular}.`
-        }
-      />
+  return (
+    <AdminPanelShell
+      top={(
+        <>
+          <div className="mb-4">
+            <Link
+              to={`/admin/stores/${storeId}/products`}
+              className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Volver a {isMenu ? 'menú' : 'productos'}
+            </Link>
+          </div>
 
-      <form onSubmit={formik.handleSubmit} noValidate className="space-y-6 max-w-4xl">
+          <PageHeader
+            title={isEditing ? `Editar ${entitySingular}` : `Nuevo ${entitySingular}`}
+            description={
+              isEditing
+                ? `Modifica los datos de este ${entitySingular}.`
+                : `Completa el formulario para crear un ${entitySingular}.`
+            }
+            sticky={false}
+            className="mb-4"
+          />
+        </>
+      )}
+    >
+      <form onSubmit={formik.handleSubmit} noValidate className="max-w-4xl space-y-6 pb-8">
         {/* Basic info */}
         <Card>
           <CardBody>
@@ -642,6 +966,92 @@ export function ProductFormPage() {
           </CardBody>
         </Card>
 
+        {/* Visibility */}
+        <Card>
+          <CardBody>
+            <h3 className="font-semibold text-gray-900 mb-2">Qué se verá en tu catálogo</h3>
+            <p className="mb-4 text-sm text-gray-600">
+              Define si este {entitySingular} estará publicado, disponible temporalmente o destacado en la tienda.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Estado de publicación
+                </label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  {(
+                    [
+                      { value: 'active', label: 'Publicado', desc: 'Visible en la tienda pública' },
+                      { value: 'draft', label: 'Borrador', desc: 'Guardado, no visible al cliente' },
+                    ] as const
+                  ).map(({ value, label, desc }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => void formik.setFieldValue('status', value)}
+                      className={[
+                        'flex-1 flex items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors',
+                        formik.values.status === value
+                          ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-400'
+                          : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50',
+                      ].join(' ')}
+                    >
+                      <span
+                        className={[
+                          'mt-0.5 h-4 w-4 rounded-full border-2 flex-shrink-0',
+                          formik.values.status === value
+                            ? 'border-indigo-600 bg-indigo-600'
+                            : 'border-gray-300 bg-white',
+                        ].join(' ')}
+                      />
+                      <span>
+                        <span className={`block text-sm font-medium ${formik.values.status === value ? 'text-indigo-700' : 'text-gray-800'}`}>
+                          {label}
+                        </span>
+                        <span className="block text-xs text-gray-500 mt-0.5">{desc}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <ToggleField
+                label={isMenu ? 'Disponible para pedidos' : 'Disponible para pedir'}
+                description={isMenu
+                  ? 'Desactívalo para marcarlo como “Agotado por el momento” sin ocultarlo ni eliminarlo.'
+                  : 'Desactívalo temporalmente si el producto no está disponible sin eliminarlo'}
+                checked={formik.values.isAvailable}
+                onChange={(v) => void formik.setFieldValue('isAvailable', v)}
+              />
+              <ToggleField
+                label="Producto destacado"
+                description="Aparece en la sección de destacados de la tienda"
+                checked={formik.values.isFeatured}
+                onChange={(v) => void formik.setFieldValue('isFeatured', v)}
+              />
+            </div>
+          </CardBody>
+        </Card>
+
+        {storeId ? (
+          <ProductCategorySelect
+            storeId={storeId}
+            categories={storeCategories}
+            selectedCategoryId={selectedCategoryId}
+            onChange={setSelectedCategoryId}
+            onCategoriesChange={setStoreCategories}
+          />
+        ) : null}
+
+        {storeId ? (
+          <ProductCollectionsMultiSelect
+            storeId={storeId}
+            collections={storeCollections}
+            selectedCollectionIds={selectedCollectionIds}
+            onChange={setSelectedCollectionIds}
+            onCollectionsChange={setStoreCollections}
+          />
+        ) : null}
+
         <Card>
           <CardBody>
             <div className="mb-4 flex items-start gap-3">
@@ -650,7 +1060,10 @@ export function ProductFormPage() {
               </div>
               <div>
                 <h3 className="font-semibold text-gray-900">Imágenes del producto</h3>
-                <p className="mt-1 text-sm text-gray-500">La primera imagen será la principal.</p>
+                <p className="mt-1 text-sm text-gray-500">
+                  Galería principal del producto. Se usa siempre para productos simples y como imagen de
+                  respaldo cuando una variante no tiene foto propia.
+                </p>
               </div>
             </div>
 
@@ -781,17 +1194,16 @@ export function ProductFormPage() {
 
               {/* Opción 2 — Porcentaje de descuento */}
               {formik.values.discountMode === 'percentage' && (
-                <Input
+                <IntegerInput
                   id="discountValue"
                   label="Porcentaje de descuento"
-                  type="number"
-                  min="1"
-                  max="99"
-                  step="1"
+                  min={1}
+                  max={99}
                   placeholder="Ej: 20"
                   hint="%"
-                  {...formik.getFieldProps('discountValue')}
+                  value={formik.values.discountValue}
                   onChange={handleDiscountValueChange}
+                  onBlur={() => void formik.setFieldTouched('discountValue', true)}
                   error={formik.touched.discountValue ? formik.errors.discountValue : undefined}
                 />
               )}
@@ -829,30 +1241,205 @@ export function ProductFormPage() {
           </CardBody>
         </Card>
 
-        {/* Categoría, colecciones y características */}
-        <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-4 text-sm text-gray-600">
-          <p><span className="font-medium text-gray-900">Categoría:</span> define dónde vive el producto.</p>
-          <p><span className="font-medium text-gray-900">Colecciones:</span> muestran el producto en grupos especiales.</p>
-          <p><span className="font-medium text-gray-900">Características:</span> permiten filtrar y comparar productos.</p>
-        </div>
+        {/* Type-specific fields */}
+        {isMenu ? (
+          <Card>
+            <CardBody>
+              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-gray-500" />
+                Preparación y disponibilidad
+              </h3>
+              <div className="space-y-5">
+                <IntegerInput
+                  id="preparationTimeMinutes"
+                  label="Tiempo de preparación (minutos)"
+                  min={1}
+                  placeholder="Ej: 20"
+                  value={formik.values.preparationTimeMinutes}
+                  onChange={(value) => void formik.setFieldValue('preparationTimeMinutes', value)}
+                  onBlur={() => void formik.setFieldTouched('preparationTimeMinutes', true)}
+                  error={
+                    formik.touched.preparationTimeMinutes
+                      ? formik.errors.preparationTimeMinutes
+                      : undefined
+                  }
+                />
 
+                <div className="border-t border-gray-100 pt-5">
+                  <p className="text-sm font-medium text-gray-800">Control de unidades</p>
+                  {hasVariants ? (
+                    <p className="mt-1 text-sm text-gray-500">
+                      La disponibilidad se configura por tamaño o variante en la sección “Variantes”.
+                    </p>
+                  ) : (
+                    <div className="mt-3 space-y-4">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {(
+                          [
+                            {
+                              value: false,
+                              label: 'Disponible sin límite',
+                              description: 'Recomendado para platos preparados bajo pedido.',
+                            },
+                            {
+                              value: true,
+                              label: 'Cantidad limitada',
+                              description: 'Úsalo solo si preparas un número exacto de unidades.',
+                            },
+                          ] as const
+                        ).map((option) => (
+                          <button
+                            key={String(option.value)}
+                            type="button"
+                            onClick={() => void formik.setFieldValue('trackInventory', option.value)}
+                            className={[
+                              'rounded-xl border px-4 py-3 text-left transition-colors',
+                              formik.values.trackInventory === option.value
+                                ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-400'
+                                : 'border-gray-200 bg-white hover:border-gray-300',
+                            ].join(' ')}
+                          >
+                            <span className="block text-sm font-medium text-gray-900">{option.label}</span>
+                            <span className="mt-1 block text-xs leading-5 text-gray-500">{option.description}</span>
+                          </button>
+                        ))}
+                      </div>
+
+                      {formik.values.trackInventory && !isEditing && (
+                        <IntegerInput
+                          id="stockQuantity"
+                          label="Unidades disponibles al publicar"
+                          hint="Al llegar a 0, el plato se mostrará como agotado y no podrá agregarse al pedido."
+                          min={0}
+                          placeholder="0"
+                          value={formik.values.stockQuantity}
+                          onChange={(value) => void formik.setFieldValue('stockQuantity', value)}
+                          onBlur={() => void formik.setFieldTouched('stockQuantity', true)}
+                          error={formik.touched.stockQuantity ? formik.errors.stockQuantity : undefined}
+                        />
+                      )}
+
+                      {formik.values.trackInventory && isEditing && (
+                        <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
+                          <div>
+                            <p className="text-xs text-gray-500 mb-0.5">Unidades disponibles</p>
+                            <p className="text-lg font-bold text-gray-900">
+                              {currentStock}{' '}
+                              <span className="text-sm font-normal text-gray-400">unidades</span>
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            leftIcon={<Layers className="w-3.5 h-3.5" />}
+                            onClick={() => setAdjustStockOpen(true)}
+                          >
+                            Ajustar unidades
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+        ) : (
+          <Card>
+            <CardBody>
+              <h3 className="font-semibold text-gray-900 mb-2">Inventario</h3>
+              <p className="mb-4 text-sm text-gray-600">
+                Configura el control interno de stock. Esto no afecta checkout, pedidos ni movimientos fuera del flujo actual.
+              </p>
+              {hasVariants ? (
+                <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                  El SKU y el stock de este producto se gestionan por variante en la sección "Variantes" de abajo.
+                </div>
+              ) : (
+              <div className="space-y-4">
+                <Input
+                  id="sku"
+                  label="SKU (código interno)"
+                  placeholder="Ej: CAM-001"
+                  {...formik.getFieldProps('sku')}
+                />
+                <ToggleField
+                  label="Rastrear inventario"
+                  description="Limita la compra a las unidades registradas"
+                  checked={formik.values.trackInventory}
+                  onChange={(v) => void formik.setFieldValue('trackInventory', v)}
+                />
+                {formik.values.trackInventory && !isEditing && (
+                  <IntegerInput
+                    id="stockQuantity"
+                    label="Inventario inicial"
+                    hint="Cantidad disponible al momento de crear el producto."
+                    min={0}
+                    placeholder="0"
+                    value={formik.values.stockQuantity}
+                    onChange={(value) => void formik.setFieldValue('stockQuantity', value)}
+                    onBlur={() => void formik.setFieldTouched('stockQuantity', true)}
+                    error={
+                      formik.touched.stockQuantity ? formik.errors.stockQuantity : undefined
+                    }
+                  />
+                )}
+                {formik.values.trackInventory && isEditing && (
+                  <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
+                    <div>
+                      <p className="text-xs text-gray-500 mb-0.5">Stock actual</p>
+                      <p className="text-lg font-bold text-gray-900">
+                        {currentStock}{' '}
+                        <span className="text-sm font-normal text-gray-400">unidades</span>
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      leftIcon={<Layers className="w-3.5 h-3.5" />}
+                      onClick={() => setAdjustStockOpen(true)}
+                    >
+                      Ajustar stock
+                    </Button>
+                  </div>
+                )}
+              </div>
+              )}
+            </CardBody>
+          </Card>
+        )}
+
+        {/* Variantes de venta: disponibles para cualquier tipo de tienda —
+            un restaurante puede necesitar Tamaño (Sencilla/Doble) con su
+            propio stock/precio, igual que ropa necesita Color/Talla. */}
         {storeId ? (
-          <ProductCategorySelect
+          <ProductVariantsEditor
             storeId={storeId}
-            categories={storeCategories}
-            selectedCategoryId={selectedCategoryId}
-            onChange={setSelectedCategoryId}
-            onCategoriesChange={setStoreCategories}
+            productId={productId}
+            hasVariants={hasVariants}
+            onHasVariantsChange={setHasVariants}
+            showVariantsAsCards={showVariantsAsCards}
+            onShowVariantsAsCardsChange={setShowVariantsAsCards}
+            options={variantOptions}
+            onOptionsChange={setVariantOptions}
+            variants={variantDrafts}
+            onVariantsChange={setVariantDrafts}
+            baseSku={formik.values.sku}
+            basePrice={formik.values.regularPrice}
+            isMenu={isMenu}
           />
         ) : null}
 
-        {storeId ? (
-          <ProductCollectionsMultiSelect
-            storeId={storeId}
-            collections={storeCollections}
-            selectedCollectionIds={selectedCollectionIds}
-            onChange={setSelectedCollectionIds}
-            onCollectionsChange={setStoreCollections}
+        {/* Modificadores/adiciones: solo para tiendas tipo menú — no crean
+            stock ni variant_id, para no explotar combinaciones (queso,
+            tocineta, sin cebolla...) en variantes exactas. */}
+        {isMenu ? (
+          <ProductOptionsEditor
+            currency={currency}
+            groups={optionGroups}
+            onChange={setOptionGroups}
           />
         ) : null}
 
@@ -884,88 +1471,6 @@ export function ProductFormPage() {
           </CardBody>
         </Card>
 
-        {/* Type-specific fields */}
-        {isMenu ? (
-          <Card>
-            <CardBody>
-              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Clock className="w-4 h-4 text-gray-500" />
-                Tiempo de preparación
-              </h3>
-              <Input
-                id="preparationTimeMinutes"
-                label="Tiempo de preparación (minutos)"
-                type="number"
-                min="1"
-                placeholder="Ej: 20"
-                {...formik.getFieldProps('preparationTimeMinutes')}
-                error={
-                  formik.touched.preparationTimeMinutes
-                    ? formik.errors.preparationTimeMinutes
-                    : undefined
-                }
-              />
-            </CardBody>
-          </Card>
-        ) : (
-          <Card>
-            <CardBody>
-              <h3 className="font-semibold text-gray-900 mb-2">Inventario</h3>
-              <p className="mb-4 text-sm text-gray-600">
-                Configura el control interno de stock. Esto no afecta checkout, pedidos ni movimientos fuera del flujo actual.
-              </p>
-              <div className="space-y-4">
-                <Input
-                  id="sku"
-                  label="SKU (código interno)"
-                  placeholder="Ej: CAM-001"
-                  {...formik.getFieldProps('sku')}
-                />
-                <ToggleField
-                  label="Rastrear inventario"
-                  description="Descuenta stock con cada venta"
-                  checked={formik.values.trackInventory}
-                  onChange={(v) => void formik.setFieldValue('trackInventory', v)}
-                />
-                {formik.values.trackInventory && !isEditing && (
-                  <Input
-                    id="stockQuantity"
-                    label="Inventario inicial"
-                    hint="Cantidad disponible al momento de crear el producto."
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    {...formik.getFieldProps('stockQuantity')}
-                    error={
-                      formik.touched.stockQuantity ? formik.errors.stockQuantity : undefined
-                    }
-                  />
-                )}
-                {formik.values.trackInventory && isEditing && (
-                  <div className="flex items-center justify-between rounded-lg bg-gray-50 px-4 py-3">
-                    <div>
-                      <p className="text-xs text-gray-500 mb-0.5">Stock actual</p>
-                      <p className="text-lg font-bold text-gray-900">
-                        {currentStock}{' '}
-                        <span className="text-sm font-normal text-gray-400">unidades</span>
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      leftIcon={<Layers className="w-3.5 h-3.5" />}
-                      onClick={() => setAdjustStockOpen(true)}
-                    >
-                      Ajustar stock
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </CardBody>
-          </Card>
-        )}
-
         <Card>
           <CardBody>
             <h3 className="mb-2 font-semibold text-gray-900">
@@ -991,13 +1496,14 @@ export function ProductFormPage() {
                     {...formik.getFieldProps('specialInstructionsLabel')}
                     error={formik.touched.specialInstructionsLabel ? formik.errors.specialInstructionsLabel : undefined}
                   />
-                  <Input
+                  <IntegerInput
                     id="specialInstructionsMaxLength"
                     label="Máximo de caracteres"
-                    type="number"
-                    min="40"
-                    max="500"
-                    {...formik.getFieldProps('specialInstructionsMaxLength')}
+                    min={40}
+                    max={500}
+                    value={formik.values.specialInstructionsMaxLength}
+                    onChange={(value) => void formik.setFieldValue('specialInstructionsMaxLength', value)}
+                    onBlur={() => void formik.setFieldTouched('specialInstructionsMaxLength', true)}
                     error={formik.touched.specialInstructionsMaxLength ? formik.errors.specialInstructionsMaxLength : undefined}
                   />
                   <div className="md:col-span-2">
@@ -1011,88 +1517,6 @@ export function ProductFormPage() {
                   </div>
                 </div>
               )}
-            </div>
-          </CardBody>
-        </Card>
-
-        {isMenu ? (
-          <ProductOptionsEditor
-            currency={currency}
-            groups={optionGroups}
-            onChange={setOptionGroups}
-          />
-        ) : store?.businessVertical === 'retail_products' ? (
-          <Card>
-            <CardBody>
-              <h3 className="font-semibold text-gray-900 mb-1">Variantes del producto</h3>
-              <p className="text-sm text-gray-500">
-                Las variantes de talla, color, aroma o presentación estarán disponibles en una
-                próxima actualización. Por ahora puedes detallarlas en la descripción avanzada.
-              </p>
-            </CardBody>
-          </Card>
-        ) : null}
-
-        {/* Visibility */}
-        <Card>
-          <CardBody>
-            <h3 className="font-semibold text-gray-900 mb-2">Qué se verá en tu catálogo</h3>
-            <p className="mb-4 text-sm text-gray-600">
-              Define si este {entitySingular} estará publicado, disponible temporalmente o destacado en la tienda.
-            </p>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Estado de publicación
-                </label>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  {(
-                    [
-                      { value: 'active', label: 'Publicado', desc: 'Visible en la tienda pública' },
-                      { value: 'draft', label: 'Borrador', desc: 'Guardado, no visible al cliente' },
-                    ] as const
-                  ).map(({ value, label, desc }) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => void formik.setFieldValue('status', value)}
-                      className={[
-                        'flex-1 flex items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors',
-                        formik.values.status === value
-                          ? 'border-indigo-500 bg-indigo-50 ring-1 ring-indigo-400'
-                          : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50',
-                      ].join(' ')}
-                    >
-                      <span
-                        className={[
-                          'mt-0.5 h-4 w-4 rounded-full border-2 flex-shrink-0',
-                          formik.values.status === value
-                            ? 'border-indigo-600 bg-indigo-600'
-                            : 'border-gray-300 bg-white',
-                        ].join(' ')}
-                      />
-                      <span>
-                        <span className={`block text-sm font-medium ${formik.values.status === value ? 'text-indigo-700' : 'text-gray-800'}`}>
-                          {label}
-                        </span>
-                        <span className="block text-xs text-gray-500 mt-0.5">{desc}</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <ToggleField
-                label="Disponible para pedir"
-                description="Desactívalo temporalmente si el producto no está disponible sin eliminarlo"
-                checked={formik.values.isAvailable}
-                onChange={(v) => void formik.setFieldValue('isAvailable', v)}
-              />
-              <ToggleField
-                label="Producto destacado"
-                description="Aparece en la sección de destacados de la tienda"
-                checked={formik.values.isFeatured}
-                onChange={(v) => void formik.setFieldValue('isFeatured', v)}
-              />
             </div>
           </CardBody>
         </Card>
@@ -1170,8 +1594,9 @@ export function ProductFormPage() {
           currentStock={currentStock}
           onClose={() => setAdjustStockOpen(false)}
           onStockUpdated={(_id, newStock) => setCurrentStock(newStock)}
+          restaurantMode={isMenu}
         />
       )}
-    </div>
+    </AdminPanelShell>
   );
 }

@@ -29,6 +29,10 @@ export function mapStoreCommerceSettingsRowToStoreCommerceSettings(
     defaultOrderMethod: row.default_order_method as OrderMethod,
     localDeliveryNotes: row.local_delivery_notes,
     shippingNotes: row.shipping_notes,
+    localDeliveryBaseFee: Number(row.local_delivery_base_fee ?? 0),
+    localDeliveryFreeFrom: row.local_delivery_free_from != null ? Number(row.local_delivery_free_from) : null,
+    nationalShippingBaseFee: Number(row.national_shipping_base_fee ?? 0),
+    nationalShippingFreeFrom: row.national_shipping_free_from != null ? Number(row.national_shipping_free_from) : null,
     orderFlowType: (row.order_flow_type as OrderFlowType) ?? 'ecommerce',
     hasInventory: row.has_inventory ?? false,
     hasVariants: row.has_variants ?? false,
@@ -56,6 +60,10 @@ export function mapStoreCommerceSettingsUpdateToRow(
   if (data.defaultOrderMethod !== undefined) row.default_order_method = data.defaultOrderMethod;
   if (data.localDeliveryNotes !== undefined) row.local_delivery_notes = data.localDeliveryNotes;
   if (data.shippingNotes !== undefined) row.shipping_notes = data.shippingNotes;
+  if (data.localDeliveryBaseFee !== undefined) row.local_delivery_base_fee = data.localDeliveryBaseFee;
+  if (data.localDeliveryFreeFrom !== undefined) row.local_delivery_free_from = data.localDeliveryFreeFrom;
+  if (data.nationalShippingBaseFee !== undefined) row.national_shipping_base_fee = data.nationalShippingBaseFee;
+  if (data.nationalShippingFreeFrom !== undefined) row.national_shipping_free_from = data.nationalShippingFreeFrom;
   if (data.orderFlowType !== undefined) row.order_flow_type = data.orderFlowType;
   if (data.hasInventory !== undefined) row.has_inventory = data.hasInventory;
   if (data.hasVariants !== undefined) row.has_variants = data.hasVariants;

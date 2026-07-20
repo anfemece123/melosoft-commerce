@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
-import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { Package, UtensilsCrossed, Search, AlertCircle, SlidersHorizontal, X } from 'lucide-react';
 import { StorefrontBreadcrumbs } from '@/components/public/storefront/StorefrontBreadcrumbs';
 import { CatalogFilterSidebar } from '@/components/public/catalog/CatalogFilterSidebar';
@@ -11,25 +11,24 @@ import { productAvailabilityService } from '@/features/products/productAvailabil
 import { categoriesService, buildCategoryTree } from '@/features/categories/categoriesService';
 import { collectionsService } from '@/features/collections/collectionsService';
 import { facetsService } from '@/features/facets/facetsService';
-import { getContextualFacets, pruneEmptyCategoryTree, pruneEmptyCollections } from '@/lib/storefront/catalogVisibility';
+import { getContextualFacets } from '@/lib/storefront/catalogVisibility';
+import {
+  buildUnifiedPublicFacets,
+  buildFacetConcepts,
+  pruneFacetValuesByCombination,
+} from '@/lib/storefront/variantFilters';
+import { buildCatalogItems, catalogItemMatchesFilters } from '@/lib/storefront/catalogItems';
 import type { PublicProductPage, PublicStoreCategory, PublicStoreCollection, PublicStoreFacet } from '@/types/common.types';
 import { formatCurrency } from '@/utils/formatCurrency';
-import { DiscountBadge } from '@/components/ui/DiscountBadge';
-import { StorefrontActionButton } from '@/components/public/storefront/StorefrontActionButton';
-import { StorefrontMediaFrame } from '@/components/public/storefront/StorefrontMediaFrame';
-import { StorefrontRatingStars } from '@/components/public/storefront/StorefrontRatingStars';
+import { StorefrontProductCard } from '@/components/public/storefront/StorefrontProductCard';
 import { StorefrontPageLoader } from '@/components/public/storefront/StorefrontPageLoader';
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
 import { usePublicRouteReady } from '@/components/layout/PublicRouteReadyContext';
-import { useCart, isOutOfStock } from '@/lib/cart/cartContext';
+import { useCart } from '@/lib/cart/cartContext';
 import { useSelectedLocation } from '@/lib/locations/locationContext';
 import { notify } from '@/lib/notifications';
-import {
-  hasActiveDiscount,
-  getActivePrice,
-  calculateDiscountPercentage,
-} from '@/lib/pricing/pricing.utils';
+import { getActivePrice } from '@/lib/pricing/pricing.utils';
 import {
   getCatalogLabel,
   getProductCardCtaLabel,
@@ -37,11 +36,22 @@ import {
   type PublicCommerceConfig,
 } from '@/lib/commerce/commerceConfig.utils';
 import { writePublicScrollPosition } from '@/lib/storefront/publicScrollRestoration';
+import { useResolvedStoreSlug } from '@/lib/storefront/storefrontDomainContext';
+import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 
 // ── Root component ─────────────────────────────────────────────
 
+const CATALOG_PAGE_SIZE = 24;
+const MIN_FILTER_RESULTS_BEFORE_PREFETCH = 18;
+// Deliberately wider than the shared STOREFRONT_CONTAINER_CLASS (used by
+// home/PDP/header/footer) — the catalog's sidebar+grid layout benefits
+// from more room than a plain content section, and this is the one page
+// asked to feel less boxed-in without widening every other page too.
+const CATALOG_CONTAINER_CLASS = 'max-w-screen-2xl';
+
 export function StoreCatalogPage() {
-  const { storeSlug } = useParams<{ storeSlug: string }>();
+  const { storeSlug: routeStoreSlug } = useParams<{ storeSlug: string }>();
+  const storeSlug = useResolvedStoreSlug(routeStoreSlug);
   if (!storeSlug) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white px-4">
@@ -91,6 +101,9 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
   const { addItem } = useCart();
   const { selectedLocation } = useSelectedLocation();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
+  const nextOffsetRef = useRef(0);
+  const requestVersionRef = useRef(0);
 
   // Derive all state from URL
   const filters = filtersFromUrl(searchParams);
@@ -103,8 +116,16 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
   const [collections, setCollections] = useState<PublicStoreCollection[]>([]);
   const [facets, setFacets] = useState<PublicStoreFacet[]>([]);
   const [contentLoading, setContentLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [unavailableProductIds, setUnavailableProductIds] = useState<Set<string>>(new Set());
+  const [totalProductCount, setTotalProductCount] = useState(0);
+  const [serverPriceRange, setServerPriceRange] = useState({ min: 0, max: 0 });
+  const selectedCategoryIdForQuery = useMemo(
+    () => categories.find((category) => category.slug === filters.categorySlug)?.id ?? null,
+    [categories, filters.categorySlug]
+  );
 
   // Sync local search box when URL query changes externally
   useEffect(() => {
@@ -112,24 +133,122 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams.get('q')]);
 
-  useEffect(() => {
-    let cancelled = false;
-    setContentLoading(true);
-    setError(null);
+  const hasMoreProducts = products.length < totalProductCount;
 
-    productsService.getPublicProductsByStoreSlug(storeSlug)
-      .then((data) => {
-        if (!cancelled) setProducts(data);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Error cargando productos');
-      })
-      .finally(() => {
-        if (!cancelled) setContentLoading(false);
+  const loadNextProductsPage = useCallback(async (reset = false) => {
+    if (!reset && (contentLoading || loadingMore || !hasMoreProducts)) return;
+
+    const requestVersion = reset ? requestVersionRef.current + 1 : requestVersionRef.current;
+    if (reset) {
+      requestVersionRef.current = requestVersion;
+      nextOffsetRef.current = 0;
+      setProducts([]);
+      setTotalProductCount(0);
+      setContentLoading(true);
+      setError(null);
+      setLoadMoreError(null);
+    } else {
+      setLoadingMore(true);
+      setLoadMoreError(null);
+    }
+
+    try {
+      const offset = reset ? 0 : nextOffsetRef.current;
+      const { products: pageProducts, totalCount } = await productsService.searchPublicCatalogPage({
+        storeSlug,
+        categorySlug: filters.categorySlug,
+        categoryParentId: selectedCategoryIdForQuery,
+        subcategorySlug: filters.subcategorySlug,
+        collectionSlug: filters.collectionSlug,
+        query: filters.query,
+        onlyFeatured: filters.onlyFeatured,
+        onlyOnSale: filters.onlyOnSale,
+        sortKey: sort,
+        offset,
+        limit: CATALOG_PAGE_SIZE,
       });
 
+      if (requestVersionRef.current !== requestVersion) return;
+
+      nextOffsetRef.current = offset + pageProducts.length;
+      setTotalProductCount(totalCount);
+      setProducts((current) => {
+        if (reset) return pageProducts;
+        const seen = new Set(current.map((product) => product.productId));
+        const merged = [...current];
+        for (const product of pageProducts) {
+          if (seen.has(product.productId)) continue;
+          seen.add(product.productId);
+          merged.push(product);
+        }
+        return merged;
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error cargando productos';
+      if (reset) setError(message);
+      else setLoadMoreError(message);
+    } finally {
+      if (reset) setContentLoading(false);
+      else setLoadingMore(false);
+    }
+  }, [
+    contentLoading,
+    filters.categorySlug,
+    filters.collectionSlug,
+    filters.onlyFeatured,
+    filters.onlyOnSale,
+    filters.query,
+    filters.subcategorySlug,
+    hasMoreProducts,
+    loadingMore,
+    selectedCategoryIdForQuery,
+    sort,
+    storeSlug,
+  ]);
+
+  useEffect(() => {
+    void loadNextProductsPage(true);
+  // Reset paging when store or server-side catalog query inputs change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    storeSlug,
+    filters.categorySlug,
+    filters.subcategorySlug,
+    filters.collectionSlug,
+    filters.query,
+    filters.onlyFeatured,
+    filters.onlyOnSale,
+    sort,
+    selectedCategoryIdForQuery,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+    productsService.getPublicCatalogPriceBounds({
+      storeSlug,
+      categorySlug: filters.categorySlug,
+      categoryParentId: selectedCategoryIdForQuery,
+      subcategorySlug: filters.subcategorySlug,
+      collectionSlug: filters.collectionSlug,
+      query: filters.query,
+      onlyFeatured: filters.onlyFeatured,
+      onlyOnSale: filters.onlyOnSale,
+    }).then((bounds) => {
+      if (!cancelled) setServerPriceRange(bounds);
+    }).catch(() => {
+      if (!cancelled) setServerPriceRange({ min: 0, max: 0 });
+    });
     return () => { cancelled = true; };
-  }, [storeSlug]);
+  }, [
+    storeSlug,
+    filters.categorySlug,
+    filters.subcategorySlug,
+    filters.collectionSlug,
+    filters.query,
+    filters.onlyFeatured,
+    filters.onlyOnSale,
+    selectedCategoryIdForQuery,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -193,44 +312,26 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
   const currency = store?.currency ?? 'COP';
 
   // ── Derived data ─────────────────────────────────────────────
+  // Unified facet list: real store facets, with any product variant option
+  // of the same normalized name (e.g. "Color" used as a purchasable option
+  // on some products) MERGED into the matching facet's values instead of
+  // being dropped on collision — a variant option with no colliding real
+  // facet still gets its own synthetic facet, same as before. `products`
+  // itself never needs synthetic facetValues injected anymore — matching
+  // reads each product's variantOptions/variants directly (see
+  // productSatisfiesFacetValue/productMatchesFilters).
+  const allFacets = useMemo(() => buildUnifiedPublicFacets(products, facets), [products, facets]);
+  const facetConcepts = useMemo(() => buildFacetConcepts(allFacets), [allFacets]);
+
   // Full (unpruned) root tree — the source of truth for resolving the
   // currently selected category/subcategory from the URL, so that deep
   // linking into a category with zero current products still filters
   // correctly to an empty result instead of silently showing everything.
   const fullCategoryTree = useMemo(() => buildCategoryTree(categories), [categories]);
 
-  // When a collection is selected, narrow category options to only those
-  // with products in that collection (keeps the "Categoría" filter relevant
-  // to what's actually being browsed).
-  const collectionScopedProducts = useMemo(() => {
-    if (!filters.collectionSlug) return products;
-    return products.filter((p) => p.collections.some((c) => c.slug === filters.collectionSlug));
-  }, [products, filters.collectionSlug]);
-
-  // Root-only tree, pruned of categories/subcategories with zero products —
-  // used only for the *selectable* "Categoría"/"Subcategoría" filter options
-  // (the flat `categories` state still holds every level, used elsewhere to
-  // resolve a slug to its display name).
-  const categoryTree = useMemo(
-    () => pruneEmptyCategoryTree(fullCategoryTree, collectionScopedProducts),
-    [fullCategoryTree, collectionScopedProducts]
-  );
-
-  const nonEmptyCollections = useMemo(
-    () => pruneEmptyCollections(collections, products),
-    [collections, products]
-  );
-
-  const priceRange = useMemo(() => {
-    let minPrice = Infinity;
-    let maxPrice = 0;
-    for (const p of products) {
-      const price = getActivePrice(p.regularPrice, p.salePrice);
-      if (price < minPrice) minPrice = price;
-      if (price > maxPrice) maxPrice = price;
-    }
-    return { min: minPrice === Infinity ? 0 : minPrice, max: maxPrice };
-  }, [products]);
+  const categoryTree = fullCategoryTree;
+  const nonEmptyCollections = collections;
+  const priceRange = serverPriceRange;
 
   const selectedCategoryNode = useMemo(
     () => fullCategoryTree.find((c) => c.slug === filters.categorySlug) ?? null,
@@ -248,9 +349,8 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
 
   // Subcategory *options* shown in the filter UI — pruned to non-empty only.
   const sidebarSubcategories = useMemo<PublicStoreCategory[]>(() => {
-    const prunedParent = categoryTree.find((c) => c.slug === filters.categorySlug);
-    return prunedParent?.children ?? [];
-  }, [categoryTree, filters.categorySlug]);
+    return selectedCategoryNode?.children ?? [];
+  }, [selectedCategoryNode]);
 
   // Products already narrowed by category/collection (but not by facet
   // selections themselves) — used only to prune facet values that have no
@@ -273,10 +373,15 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
   // Facets visible for the current category context: global facets always,
   // facets assigned directly to the active category, or inherited from its
   // parent when appliesToChildren=true — pruned to non-empty values only.
-  const visibleFacets = useMemo(
-    () => getContextualFacets(facets, activeCategoryNode, productsInFilterScope),
-    [facets, activeCategoryNode, productsInFilterScope]
-  );
+  // Facets with any variant-sourced value (merged attribute+variant facets,
+  // and pure synthetic ones) get a second, combo-aware pass: once e.g.
+  // Talla=40 is selected, Color only keeps values that actually co-occur
+  // with 40 — not every color that exists on any size. Pure attribute
+  // facets are untouched by this second pass, same as before.
+  const visibleFacets = useMemo(() => {
+    const contextual = getContextualFacets(allFacets, activeCategoryNode, productsInFilterScope, facetConcepts);
+    return pruneFacetValuesByCombination(contextual, productsInFilterScope, filters.facets, facetConcepts);
+  }, [allFacets, activeCategoryNode, productsInFilterScope, filters.facets, facetConcepts]);
 
   // ── Apply filters + sort ─────────────────────────────────────
   const filteredAndSorted = useMemo(() => {
@@ -296,26 +401,6 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
       list = list.filter((p) => p.collections.some((collection) => collection.slug === filters.collectionSlug));
     }
 
-    if (filters.facets.length > 0) {
-      list = list.filter((p) =>
-        filters.facets.every((ff) =>
-          p.facetValues.some(
-            (fv) => fv.facetSlug === ff.facetSlug && fv.valueSlug === ff.valueSlug
-          )
-        )
-      );
-    }
-
-    if (filters.priceMin !== null) {
-      list = list.filter(
-        (p) => getActivePrice(p.regularPrice, p.salePrice) >= (filters.priceMin as number)
-      );
-    }
-    if (filters.priceMax !== null) {
-      list = list.filter(
-        (p) => getActivePrice(p.regularPrice, p.salePrice) <= (filters.priceMax as number)
-      );
-    }
     if (filters.onlyFeatured) {
       list = list.filter((p) => p.isFeatured);
     }
@@ -332,31 +417,41 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
       );
     }
 
+    // From here on, work at the catalog-item (card) level, not the product
+    // level — a product with showVariantsAsCards splits into one item per
+    // visual value (Color/Modelo), each with its OWN price/availability and
+    // its OWN filter match (see catalogItemMatchesFilters). Every other
+    // product still yields exactly one item, so nothing changes for them.
+    let items = buildCatalogItems(list);
+
+    if (filters.facets.length > 0) {
+      items = items.filter((item) => catalogItemMatchesFilters(item, filters.facets, facetConcepts));
+    }
+
+    if (filters.priceMin !== null) {
+      items = items.filter((item) => item.maxPrice >= (filters.priceMin as number));
+    }
+    if (filters.priceMax !== null) {
+      items = items.filter((item) => item.minPrice <= (filters.priceMax as number));
+    }
+
     switch (sort) {
       case 'price_asc':
-        list.sort(
-          (a, b) =>
-            getActivePrice(a.regularPrice, a.salePrice) -
-            getActivePrice(b.regularPrice, b.salePrice)
-        );
+        items.sort((a, b) => a.minPrice - b.minPrice);
         break;
       case 'price_desc':
-        list.sort(
-          (a, b) =>
-            getActivePrice(b.regularPrice, b.salePrice) -
-            getActivePrice(a.regularPrice, a.salePrice)
-        );
+        items.sort((a, b) => b.maxPrice - a.maxPrice);
         break;
       case 'name_asc':
-        list.sort((a, b) => a.productName.localeCompare(b.productName));
+        items.sort((a, b) => a.displayName.localeCompare(b.displayName));
         break;
       case 'featured':
-        list.sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0));
+        items.sort((a, b) => (b.product.isFeatured ? 1 : 0) - (a.product.isFeatured ? 1 : 0));
         break;
     }
 
-    return list;
-  }, [products, filters, selectedCategoryNode, sort]);
+    return items;
+  }, [products, filters, selectedCategoryNode, sort, facetConcepts]);
 
   // ── Helpers ──────────────────────────────────────────────────
   function setFilters(f: CatalogFilters) {
@@ -386,15 +481,21 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
       storeId: storeBranding?.storeId ?? '',
       productSlug: product.productSlug,
       productName: product.productName,
+      productType: product.productType,
       imageUrl: product.mainImageUrl,
       unitPrice: getActivePrice(product.regularPrice, product.salePrice),
       customizationNotes: null,
+      customizations: [],
       stock: product.stock,
       trackInventory: product.trackInventory,
       isAvailable: product.isAvailable,
     });
     if (!added) {
-      notify.warning(`"${product.productName}" no tiene stock disponible.`);
+      notify.warning(
+        product.productType === 'menu_item'
+          ? `"${product.productName}" está agotado por el momento.`
+          : `"${product.productName}" no tiene stock disponible.`
+      );
       return;
     }
     notify.cartSuccess(`"${product.productName}" agregado al pedido`);
@@ -416,6 +517,29 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
     filters.onlyOnSale;
 
   const hasActiveSearch = !!filters.query;
+  const shouldAutoPrefetchForFilters = (hasAnyFilter || hasActiveSearch) && filteredAndSorted.length < MIN_FILTER_RESULTS_BEFORE_PREFETCH;
+
+  useEffect(() => {
+    if (!shouldAutoPrefetchForFilters || contentLoading || loadingMore || !hasMoreProducts) return;
+    void loadNextProductsPage();
+  }, [shouldAutoPrefetchForFilters, contentLoading, loadingMore, hasMoreProducts, loadNextProductsPage]);
+
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel || contentLoading || loadingMore || !hasMoreProducts) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting) return;
+        void loadNextProductsPage();
+      },
+      { rootMargin: '900px 0px' }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [contentLoading, loadingMore, hasMoreProducts, loadNextProductsPage]);
 
   const emptyState = filters.collectionSlug
     ? {
@@ -465,18 +589,18 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
       id="storefront-overview"
       style={{ backgroundColor: bgColor, color: theme.text, minHeight: '100vh', ...theme.cssVars }}
     >
-      <div className="max-w-7xl mx-auto px-4 py-6 md:py-8">
+      <div className={`${CATALOG_CONTAINER_CLASS} mx-auto px-4 py-6 sm:px-6 md:py-8 lg:px-8`}>
         {/* Breadcrumbs */}
         <StorefrontBreadcrumbs
           theme={theme}
           className="mb-4"
           items={[
-            { label: 'Inicio', href: `/s/${storeSlug}` },
+            { label: 'Inicio', href: buildStorefrontPath(storeSlug) },
             ...(filters.categorySlug && selectedCategoryNode
               ? [
-                  { label: catalogLabel, href: `/s/${storeSlug}/catalog` },
+                  { label: catalogLabel, href: buildStorefrontPath(storeSlug, '/catalog') },
                   selectedSubcategoryNode
-                    ? { label: selectedCategoryNode.name, href: `/s/${storeSlug}/catalog?cat=${encodeURIComponent(selectedCategoryNode.slug)}` }
+                    ? { label: selectedCategoryNode.name, href: buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(selectedCategoryNode.slug)}`) }
                     : { label: selectedCategoryNode.name },
                   ...(selectedSubcategoryNode ? [{ label: selectedSubcategoryNode.name }] : []),
                 ]
@@ -500,7 +624,9 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
                 {store.storeName}
                 {!contentLoading && (
                   <span className="ml-1">
-                    · {filteredAndSorted.length} resultado{filteredAndSorted.length !== 1 ? 's' : ''}
+                    · {hasAnyFilter || hasActiveSearch
+                      ? `${filteredAndSorted.length}${hasMoreProducts ? '+' : ''} resultado${filteredAndSorted.length !== 1 ? 's' : ''}`
+                      : `${totalProductCount} resultado${totalProductCount !== 1 ? 's' : ''}`}
                   </span>
                 )}
               </p>
@@ -628,7 +754,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
               />
             )}
             {filters.facets.map((ff) => {
-              const facet = facets.find((f) => f.slug === ff.facetSlug);
+              const facet = allFacets.find((f) => f.slug === ff.facetSlug);
               const val = facet?.values.find((v) => v.slug === ff.valueSlug);
               const label = facet && val ? `${facet.name}: ${val.value}` : ff.valueSlug;
               return (
@@ -688,8 +814,15 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
 
         {/* Main layout: sidebar + grid */}
         <div className="flex gap-6">
-          {/* Desktop sidebar */}
-          <div className="hidden lg:block">
+          {/* Desktop sidebar — sticky so filters stay visible while the
+              product grid scrolls. `sticky` (not `fixed`) inside this same
+              flex row means it naturally un-sticks once the row's own
+              bottom is reached, so it can never overlap the footer. The
+              top offset is a safe estimate for the header's height (both
+              header style variants render as a single content row) —
+              nudge `lg:top-24`/`lg:max-h-[calc(100vh-6rem)]` together if a
+              particular store's header is taller than usual. */}
+          <div className="hidden shrink-0 lg:block lg:sticky lg:top-24 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pr-1">
             {/* Desktop search */}
             <form onSubmit={handleSearchSubmit} className="relative mb-4 w-56">
               <input
@@ -730,7 +863,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
           {/* Product grid */}
           <div className="min-w-0 flex-1">
             {contentLoading ? (
-              <div className="grid grid-cols-2 gap-4 animate-pulse md:grid-cols-3">
+              <div className="grid grid-cols-2 gap-4 animate-pulse sm:grid-cols-3 lg:gap-6 xl:grid-cols-4">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div
                     key={i}
@@ -760,147 +893,71 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
                 <p className="mt-1 text-xs" style={{ color: theme.mutedText }}>{emptyState.subtitle}</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                {filteredAndSorted.map((product) => {
-                  const outOfStock = isOutOfStock(product);
-                  const isUnavailable = unavailableProductIds.has(product.productId) || outOfStock;
-                  return (
-                    <Link
-                      key={product.productId}
-                      to={`/s/${storeSlug}/p/${product.productSlug}`}
-                      state={{
-                        fromStorefront: true,
-                        fromPath: `${location.pathname}${location.search}${location.hash}`,
-                      }}
-                      onClick={persistCurrentScrollPosition}
-                      className={`flex h-full flex-col overflow-hidden transition-opacity hover:opacity-95 ${isUnavailable ? 'opacity-60' : ''}`}
+              <>
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:gap-6 xl:grid-cols-4">
+                  {filteredAndSorted.map((item) => {
+                    const product = item.product;
+                    const isUnavailable = unavailableProductIds.has(product.productId) || item.isOutOfStock;
+                    const categoryLabel = product.categoryParentId
+                      ? `${categories.find((cat) => cat.id === product.categoryParentId)?.name ?? 'Categoría'} > ${product.categoryName}`
+                      : product.categoryName;
+                    return (
+                      <StorefrontProductCard
+                        key={item.id}
+                        item={item}
+                        theme={theme}
+                        storeSlug={storeSlug}
+                        currency={currency}
+                        isMenu={isMenu}
+                        isUnavailable={isUnavailable}
+                        showCartButton={showCartButton}
+                        productCardCtaLabel={productCardCtaLabel}
+                        categoryLabel={categoryLabel}
+                        size="large"
+                        linkState={{ fromStorefront: true, fromPath: `${location.pathname}${location.search}${location.hash}` }}
+                        onLinkClick={persistCurrentScrollPosition}
+                        onAddToCart={handleAddProductToCart}
+                      />
+                    );
+                  })}
+                </div>
+
+                {loadingMore && (
+                  <div className="mt-6 grid grid-cols-2 gap-4 animate-pulse sm:grid-cols-3 lg:gap-6 xl:grid-cols-4">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div
+                        key={`loading-more-${i}`}
+                        className="overflow-hidden rounded-xl"
+                        style={{ backgroundColor: theme.surfaceAlt }}
+                      >
+                        <div className="aspect-square" style={{ backgroundColor: theme.border }} />
+                        <div className="space-y-2 p-3">
+                          <div className="h-3 rounded" style={{ backgroundColor: theme.border }} />
+                          <div className="h-3 w-2/3 rounded" style={{ backgroundColor: theme.border }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {loadMoreError && (
+                  <div className="mt-6 rounded-xl border border-dashed px-4 py-4 text-center" style={{ borderColor: theme.border }}>
+                    <p className="text-sm" style={{ color: theme.mutedText }}>{loadMoreError}</p>
+                    <button
+                      type="button"
+                      onClick={() => void loadNextProductsPage()}
+                      className="mt-2 text-sm font-medium underline underline-offset-2"
+                      style={{ color: theme.primary }}
                     >
-                      <div className="relative">
-                        <StorefrontMediaFrame
-                          src={product.mainImageUrl}
-                          alt={product.productName}
-                          aspectClassName="aspect-square"
-                          fallback={
-                            <div className="flex h-full w-full items-center justify-center">
-                              {isMenu
-                                ? <UtensilsCrossed className="w-8 h-8 text-gray-300" />
-                                : <Package className="w-8 h-8 text-gray-300" />}
-                            </div>
-                          }
-                        />
-                        {isUnavailable && (
-                          <div className="absolute inset-0 flex items-end pb-2 px-2">
-                            <span className="text-xs font-medium bg-black/60 text-white rounded-full px-2 py-0.5">
-                              No disponible
-                            </span>
-                          </div>
-                        )}
-                        {!isUnavailable &&
-                          hasActiveDiscount(product.regularPrice, product.salePrice) && (
-                            <div className="absolute left-3 top-3">
-                              <DiscountBadge
-                                percentage={calculateDiscountPercentage(
-                                  product.regularPrice,
-                                  product.salePrice!
-                                )}
-                                size="md"
-                                className="px-3 py-1.5 text-sm shadow-lg"
-                              />
-                            </div>
-                          )}
-                      </div>
+                      Reintentar
+                    </button>
+                  </div>
+                )}
 
-                      <div className="flex flex-1 flex-col p-3">
-                        <div className="min-h-4">
-                          {product.categoryName && (
-                            <span
-                              className="text-xs font-medium"
-                              style={{ color: theme.primary }}
-                            >
-                              {product.categoryParentId
-                                ? `${categories.find((item) => item.id === product.categoryParentId)?.name ?? 'Categoría'} > ${product.categoryName}`
-                                : product.categoryName}
-                            </span>
-                          )}
-                        </div>
-                        <p
-                          className="mt-0.5 min-h-[2.5rem] line-clamp-2 text-sm font-semibold leading-5"
-                          style={{ color: theme.text }}
-                        >
-                          {product.productName}
-                        </p>
-                        <div className="min-h-[1rem] -mt-0.5">
-                          <StorefrontRatingStars
-                            theme={theme}
-                            rating={5}
-                            count={product.isFeatured ? 24 : 12}
-                          />
-                        </div>
-                        <div className="mt-1.5 min-h-[2rem]">
-                          {hasActiveDiscount(product.regularPrice, product.salePrice) ? (
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              <span
-                                className="text-base font-bold"
-                                style={{ color: theme.text }}
-                              >
-                                {formatCurrency(
-                                  getActivePrice(product.regularPrice, product.salePrice),
-                                  'es-CO',
-                                  currency
-                                )}
-                              </span>
-                              <span
-                                className="text-xs line-through"
-                                style={{ color: theme.mutedText }}
-                              >
-                                {formatCurrency(product.regularPrice, 'es-CO', currency)}
-                              </span>
-                            </div>
-                          ) : (
-                            <span
-                              className="text-base font-bold"
-                              style={{ color: theme.text }}
-                            >
-                              {formatCurrency(product.regularPrice, 'es-CO', currency)}
-                            </span>
-                          )}
-                        </div>
-
-                        {isUnavailable ? (
-                          <div
-                            className="mt-3 flex h-10 items-center justify-center rounded-lg border text-xs font-medium"
-                            style={{ borderColor: theme.border, color: theme.mutedText }}
-                          >
-                            {outOfStock ? 'Sin stock disponible' : 'No disponible en esta sede'}
-                          </div>
-                        ) : showCartButton ? (
-                          <StorefrontActionButton
-                            as="button"
-                            type="button"
-                            theme={theme}
-                            variant="outline"
-                            fullWidth
-                            className="mt-3 h-10 text-sm font-semibold"
-                            onClick={(event) => handleAddProductToCart(event, product)}
-                          >
-                            {productCardCtaLabel}
-                          </StorefrontActionButton>
-                        ) : (
-                          <StorefrontActionButton
-                            as="div"
-                            theme={theme}
-                            variant="outline"
-                            fullWidth
-                            className="mt-3 h-10 text-sm font-semibold"
-                          >
-                            {productCardCtaLabel}
-                          </StorefrontActionButton>
-                        )}
-                      </div>
-                    </Link>
-                  );
-                })}
-              </div>
+                {hasMoreProducts && !loadMoreError && (
+                  <div ref={loadMoreSentinelRef} className="h-10 w-full" aria-hidden="true" />
+                )}
+              </>
             )}
           </div>
         </div>
@@ -919,7 +976,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
         facets={visibleFacets}
         priceRange={priceRange}
         currency={currency}
-        resultCount={filteredAndSorted.length}
+        resultCount={hasAnyFilter || hasActiveSearch ? filteredAndSorted.length : totalProductCount}
       />
 
     </div>

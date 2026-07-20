@@ -16,7 +16,9 @@ export interface ProductOptionItemDraft {
   id?: string;
   label: string;
   description?: string | null;
-  priceDelta: number;
+  /** `''` only while the owner is actively clearing/retyping the field in
+   * ProductOptionsEditor — never persisted as-is, see replaceProductOptionGroups. */
+  priceDelta: number | '';
   isDefault: boolean;
   isActive: boolean;
 }
@@ -26,7 +28,8 @@ export interface ProductOptionGroupDraft {
   name: string;
   description?: string | null;
   selectionType: 'single' | 'multiple';
-  minSelect: number;
+  /** `''` only while mid-edit — see priceDelta. */
+  minSelect: number | '';
   maxSelect: number | null;
   isRequired: boolean;
   isActive: boolean;
@@ -41,32 +44,7 @@ async function getOwnerId(): Promise<string> {
   return session.user.id;
 }
 
-function mapPublicOptionItem(item: ProductOptionItem): PublicProductOptionItem {
-  return {
-    id: item.id,
-    label: item.label,
-    description: item.description,
-    priceDelta: item.priceDelta,
-    isDefault: item.isDefault,
-    sortOrder: item.sortOrder,
-  };
-}
-
-function mapPublicOptionGroup(group: ProductOptionGroup): PublicProductOptionGroup {
-  return {
-    id: group.id,
-    name: group.name,
-    description: group.description,
-    selectionType: group.selectionType,
-    minSelect: group.minSelect,
-    maxSelect: group.maxSelect,
-    isRequired: group.isRequired,
-    sortOrder: group.sortOrder,
-    items: group.items.filter((item) => item.isActive).map(mapPublicOptionItem),
-  };
-}
-
-async function fetchOptionGroups(productId: string, onlyActive = false): Promise<ProductOptionGroup[]> {
+async function fetchOptionGroups(productId: string): Promise<ProductOptionGroup[]> {
   const groupsQuery = supabase
     .from('product_option_groups')
     .select('*')
@@ -83,11 +61,6 @@ async function fetchOptionGroups(productId: string, onlyActive = false): Promise
     .eq('product_option_groups.product_id', productId)
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true });
-
-  if (onlyActive) {
-    groupsQuery.eq('is_active', true);
-    itemsQuery.eq('is_active', true).eq('product_option_groups.is_active', true);
-  }
 
   const [{ data: groups, error: groupsError }, { data: items, error: itemsError }] = await Promise.all([
     groupsQuery,
@@ -110,17 +83,88 @@ async function fetchOptionGroups(productId: string, onlyActive = false): Promise
   );
 }
 
+interface PublicOptionGroupRow {
+  id: string;
+  product_id: string;
+  name: string;
+  description: string | null;
+  selection_type: 'single' | 'multiple';
+  min_select: number;
+  max_select: number | null;
+  is_required: boolean;
+  sort_order: number;
+}
+
+interface PublicOptionItemRow {
+  id: string;
+  group_id: string;
+  product_id: string;
+  label: string;
+  description: string | null;
+  price_delta: number;
+  is_default: boolean;
+  sort_order: number;
+}
+
+// Reads through public_product_option_groups/items (security-definer views)
+// rather than the raw tables — the raw tables' "Public can view active..."
+// RLS policy checks products/stores internally, and anon has never had
+// direct read access to those (by design, same reason public_product_pages
+// exists as a view instead of exposing `products` directly). Querying the
+// raw tables as anon fails one level deeper on `products`/`stores`.
+async function fetchPublicOptionGroups(productId: string): Promise<PublicProductOptionGroup[]> {
+  const [{ data: groups, error: groupsError }, { data: items, error: itemsError }] = await Promise.all([
+    supabase
+      .from('public_product_option_groups')
+      .select('*')
+      .eq('product_id', productId)
+      .order('sort_order', { ascending: true }),
+    supabase
+      .from('public_product_option_items')
+      .select('*')
+      .eq('product_id', productId)
+      .order('sort_order', { ascending: true }),
+  ]);
+
+  if (groupsError) throw new Error(groupsError.message);
+  if (itemsError) throw new Error(itemsError.message);
+
+  const itemsByGroup = new Map<string, PublicProductOptionItem[]>();
+  for (const row of (items ?? []) as PublicOptionItemRow[]) {
+    const list = itemsByGroup.get(row.group_id) ?? [];
+    list.push({
+      id: row.id,
+      label: row.label,
+      description: row.description,
+      priceDelta: Number(row.price_delta),
+      isDefault: row.is_default,
+      sortOrder: row.sort_order,
+    });
+    itemsByGroup.set(row.group_id, list);
+  }
+
+  return ((groups ?? []) as PublicOptionGroupRow[])
+    .map((row): PublicProductOptionGroup => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      selectionType: row.selection_type,
+      minSelect: row.min_select,
+      maxSelect: row.max_select,
+      isRequired: row.is_required,
+      sortOrder: row.sort_order,
+      items: itemsByGroup.get(row.id) ?? [],
+    }))
+    .filter((group) => group.items.length > 0);
+}
+
 export const productOptionsService = {
   async getProductOptionGroups(productId: string): Promise<ProductOptionGroup[]> {
-    return fetchOptionGroups(productId, false);
+    return fetchOptionGroups(productId);
   },
 
   async getPublicProductOptionGroups(productId: string): Promise<PublicProductOptionGroup[]> {
-    const groups = await fetchOptionGroups(productId, true);
-    return groups
-      .filter((group) => group.isActive)
-      .map(mapPublicOptionGroup)
-      .filter((group) => group.items.length > 0);
+    return fetchPublicOptionGroups(productId);
   },
 
   async replaceProductOptionGroups(
@@ -163,7 +207,7 @@ export const productOptionsService = {
       name: group.name,
       description: group.description,
       selection_type: group.selectionType,
-      min_select: group.minSelect,
+      min_select: group.minSelect === '' ? 0 : group.minSelect,
       max_select: group.maxSelect,
       is_required: group.isRequired,
       is_active: group.isActive,
@@ -187,7 +231,7 @@ export const productOptionsService = {
           owner_id: ownerId,
           label: item.label,
           description: item.description,
-          price_delta: item.priceDelta,
+          price_delta: item.priceDelta === '' ? 0 : item.priceDelta,
           is_default: item.isDefault,
           is_active: item.isActive,
           sort_order: item.sortOrder,

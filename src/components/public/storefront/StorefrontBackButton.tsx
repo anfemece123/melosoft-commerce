@@ -1,5 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 
 export function StorefrontBackButton({
   storeSlug,
@@ -28,7 +29,7 @@ export function StorefrontBackButton({
       return;
     }
 
-    navigate(fallbackPath ?? `/s/${storeSlug}`);
+    navigate(fallbackPath ?? buildStorefrontPath(storeSlug));
   }
 
   return (

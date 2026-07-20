@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { ShoppingCart, RefreshCw, Utensils, Package, AlertCircle, Calendar, LayoutGrid, List } from 'lucide-react';
+import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
@@ -198,8 +199,18 @@ export function OrdersPage() {
 
   async function handleStatusChange(orderId: string, newStatus: OrderStatus) {
     try {
-      const updated = await ordersService.updateOrderStatus(orderId, newStatus);
-      dispatch(updateOrder(updated));
+      if (newStatus === 'cancelled') {
+        // Goes through cancel_store_order so any stock the order
+        // decremented gets reversed atomically — never a plain status
+        // update for this transition. The RPC doesn't return a full
+        // order row, so re-fetch it for the Redux update.
+        await ordersService.cancelOrder(orderId);
+        const refreshed = await ordersService.getOrderById(orderId);
+        if (refreshed) dispatch(updateOrder(refreshed));
+      } else {
+        const updated = await ordersService.updateOrderStatus(orderId, newStatus);
+        dispatch(updateOrder(updated));
+      }
       notify.success('Pedido actualizado');
       refreshPendingBadge();
     } catch {
@@ -251,31 +262,37 @@ export function OrdersPage() {
   };
 
   return (
-    <div className="flex flex-col h-full gap-4">
-      <PageHeader
-        title="Pedidos"
-        description={restaurant ? 'Tablero de pedidos en tiempo real' : 'Gestión de pedidos de tu tienda'}
-        action={
-          <div className="flex items-center gap-2">
-            {commerceSettings && (
-              <span className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-500">
-                {restaurant
-                  ? <><Utensils className="w-3.5 h-3.5" /> Restaurante</>
-                  : <><Package className="w-3.5 h-3.5" /> Ecommerce</>}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={fetchOrders}
-              disabled={isLoading}
-              className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-              Actualizar
-            </button>
-          </div>
-        }
-      />
+    <AdminPanelShell
+      top={(
+        <PageHeader
+          title="Pedidos"
+          description={restaurant ? 'Tablero de pedidos en tiempo real' : 'Gestión de pedidos de tu tienda'}
+          action={
+            <div className="flex items-center gap-2">
+              {commerceSettings && (
+                <span className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-500">
+                  {restaurant
+                    ? <><Utensils className="w-3.5 h-3.5" /> Restaurante</>
+                    : <><Package className="w-3.5 h-3.5" /> Ecommerce</>}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={fetchOrders}
+                disabled={isLoading}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                Actualizar
+              </button>
+            </div>
+          }
+          sticky={false}
+          className="mb-4"
+        />
+      )}
+    >
+      <div className="flex flex-col gap-4 pb-6">
 
       {/* Date range filter bar */}
       <div className="flex flex-wrap items-center gap-2">
@@ -404,6 +421,7 @@ export function OrdersPage() {
           <RetailOrdersTable {...sharedProps} />
         )
       )}
-    </div>
+      </div>
+    </AdminPanelShell>
   );
 }

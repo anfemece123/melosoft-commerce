@@ -1,5 +1,9 @@
 import * as Yup from 'yup';
 import { THEME_PRESET_LIST } from '@/utils/themePresets';
+import {
+  RESERVED_STOREFRONT_SUBDOMAINS,
+  STOREFRONT_SUBDOMAIN_PATTERN,
+} from '@/lib/storefront/storefrontSubdomains';
 
 const businessHourSchema = Yup.object({
   dayOfWeek: Yup.number().min(0).max(6).required(),
@@ -35,7 +39,15 @@ export const storeCreationSchema = Yup.object({
   slug: Yup.string()
     .trim()
     .lowercase()
-    .matches(/^[a-z0-9-]+$/, 'Solo letras minúsculas, números y guiones')
+    .matches(
+      STOREFRONT_SUBDOMAIN_PATTERN,
+      'Usa letras minúsculas, números o guiones; no empieces ni termines con guion',
+    )
+    .test(
+      'not-reserved-subdomain',
+      'Ese nombre está reservado por la plataforma',
+      (value) => !value || !RESERVED_STOREFRONT_SUBDOMAINS.has(value),
+    )
     .min(2, 'Mínimo 2 caracteres')
     .max(60, 'Máximo 60 caracteres')
     .required('Slug requerido'),

@@ -2,8 +2,9 @@ import { Link } from 'react-router-dom';
 import { FileText, Globe, Mail, MapPin, MessageCircle } from 'lucide-react';
 import type { PublicStoreLocation } from '@/features/locations/locations.types';
 import type { PublicStorePage } from '@/types/common.types';
-import type { StorefrontTheme } from './storefrontTheme';
+import { STOREFRONT_CONTAINER_CLASS, type StorefrontTheme } from './storefrontTheme';
 import { PublicStoreLogo } from './PublicStoreLogo';
+import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 
 interface StorefrontFooterProps {
   theme: StorefrontTheme;
@@ -64,9 +65,9 @@ export function StorefrontFooter({ theme, branding, locations }: StorefrontFoote
     branding.supportEmail
       ? { href: `mailto:${branding.supportEmail}`, label: 'Email', icon: Mail }
       : null,
-    { href: `/s/${branding.storeSlug}`, label: 'Sitio', icon: Globe, internal: true },
+    { href: buildStorefrontPath(branding.storeSlug), label: 'Sitio', icon: Globe, internal: true },
     hasPolicies
-      ? { href: `/s/${branding.storeSlug}/policies`, label: 'Políticas', icon: FileText, internal: true }
+      ? { href: buildStorefrontPath(branding.storeSlug, '/policies'), label: 'Políticas', icon: FileText, internal: true }
       : null,
   ].filter(Boolean) as Array<{
     href: string;
@@ -80,7 +81,7 @@ export function StorefrontFooter({ theme, branding, locations }: StorefrontFoote
       className="mt-0 border-t"
       style={{ borderColor: footerDivider, backgroundColor: footerBackground }}
     >
-      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className={`mx-auto w-full ${STOREFRONT_CONTAINER_CLASS} px-4 sm:px-6 lg:px-8`}>
         <div className="grid gap-10 py-12 md:grid-cols-2 xl:grid-cols-[1.25fr_1fr_1.05fr]">
           <section className="max-w-sm">
             <div className="flex items-center gap-3">
@@ -188,14 +189,14 @@ export function StorefrontFooter({ theme, branding, locations }: StorefrontFoote
                 </span>
               )}
               <div className="flex flex-col gap-3 pt-2">
-                <Link to={`/s/${branding.storeSlug}`} className="transition-colors hover:opacity-100" style={{ color: footerText }}>
+                <Link to={buildStorefrontPath(branding.storeSlug)} className="transition-colors hover:opacity-100" style={{ color: footerText }}>
                   Inicio
                 </Link>
-                <Link to={`/s/${branding.storeSlug}`} className="transition-colors hover:opacity-100" style={{ color: footerText }}>
+                <Link to={buildStorefrontPath(branding.storeSlug)} className="transition-colors hover:opacity-100" style={{ color: footerText }}>
                   Menú
                 </Link>
                 {hasPolicies && (
-                  <Link to={`/s/${branding.storeSlug}/policies`} className="transition-colors hover:opacity-100" style={{ color: footerText }}>
+                  <Link to={buildStorefrontPath(branding.storeSlug, '/policies')} className="transition-colors hover:opacity-100" style={{ color: footerText }}>
                     Políticas
                   </Link>
                 )}

@@ -22,4 +22,9 @@ export const env = {
   // Dev:  VITE_PUBLIC_SITE_URL=https://xxxx.ngrok.io
   // Prod: VITE_PUBLIC_SITE_URL=https://yourdomain.com
   publicSiteUrl: getOptionalEnvVar('VITE_PUBLIC_SITE_URL'),
+  // Root domain used for the included storefront URL: store-slug.example.com.
+  // The matching wildcard (*.example.com) must be assigned to the Vercel project.
+  storefrontRootDomain: getOptionalEnvVar('VITE_STOREFRONT_ROOT_DOMAIN'),
+  // Optional comma-separated aliases for the platform itself (not stores).
+  platformHostnames: getOptionalEnvVar('VITE_PLATFORM_HOSTNAMES'),
 } as const;

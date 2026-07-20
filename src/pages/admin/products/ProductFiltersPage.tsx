@@ -408,9 +408,9 @@ export function ProductFiltersPage() {
   return (
     <div className="max-w-3xl space-y-4">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900">Filtros del catálogo</h2>
+        <h2 className="text-lg font-semibold text-gray-900">Atributos del producto</h2>
         <p className="mt-0.5 text-sm text-gray-500">
-          Crea características como Marca, Género, Nivel, Talla o Color para que tus clientes puedan filtrar productos.
+          Datos como Marca, Género o Nivel que describen el producto y ayudan a filtrarlo. No manejan stock, precio ni SKU.
         </p>
       </div>
 

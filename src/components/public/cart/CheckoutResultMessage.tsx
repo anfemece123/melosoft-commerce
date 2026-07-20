@@ -2,6 +2,7 @@ import { CheckCircle } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatCurrency';
 import type { StorefrontTheme } from '../storefront/storefrontTheme';
 import type { WebOrderResult } from '@/features/orders/orders.types';
+import { getFulfillmentMethodLabel, type CheckoutFulfillmentMethod } from '@/lib/orders/fulfillmentLabels';
 
 interface CheckoutResultMessageProps {
   theme: StorefrontTheme;
@@ -10,6 +11,22 @@ interface CheckoutResultMessageProps {
   storeName: string;
   whatsappNumber: string | null;
   onClose: () => void;
+  /** The rest are all optional and purely additive — when omitted, the
+   * WhatsApp message falls back to exactly today's short summary (order
+   * number + total + payment method). Passed from StoreCheckoutPage using
+   * values it already has from the same submission, so the sede/address
+   * the customer chose isn't lost. */
+  fulfillmentMethod?: CheckoutFulfillmentMethod | null;
+  /** Sede name — only shown for pickup. */
+  operationalLocationName?: string | null;
+  /** Resolved city — for local_delivery this is already folded into
+   * `fulfillmentMethod`'s own label ("Domicilio en Pasto"), so it's only
+   * rendered as its own line for national_shipping (whose label has no
+   * city in it) to avoid repeating the same fact twice. */
+  city?: string | null;
+  shippingAddress?: string | null;
+  deliveryNeighborhood?: string | null;
+  deliveryReference?: string | null;
 }
 
 export function CheckoutResultMessage({
@@ -19,15 +36,30 @@ export function CheckoutResultMessage({
   storeName,
   whatsappNumber,
   onClose,
+  fulfillmentMethod,
+  operationalLocationName,
+  city,
+  shippingAddress,
+  deliveryNeighborhood,
+  deliveryReference,
 }: CheckoutResultMessageProps) {
   function handleSendWhatsApp() {
     if (!whatsappNumber) return;
     const phone = whatsappNumber.replace(/\D/g, '');
+    const deliveryLabel = fulfillmentMethod ? getFulfillmentMethodLabel(fulfillmentMethod, { city }) : null;
     const lines: string[] = [
       `Hola ${storeName}, acabo de confirmar el pedido ${orderResult.orderNumber}.`,
+    ];
+    if (deliveryLabel) lines.push(`Método de entrega: ${deliveryLabel}`);
+    if (fulfillmentMethod === 'pickup' && operationalLocationName) lines.push(`Sede: ${operationalLocationName}`);
+    if (fulfillmentMethod === 'national_shipping' && city) lines.push(`Ciudad: ${city}`);
+    if (shippingAddress) lines.push(`Dirección: ${shippingAddress}`);
+    if (deliveryNeighborhood) lines.push(`Barrio: ${deliveryNeighborhood}`);
+    if (deliveryReference) lines.push(`Referencia: ${deliveryReference}`);
+    lines.push(
       `Total: ${formatCurrency(orderResult.totalAmount, 'es-CO', currency)}`,
       'Pago: Contraentrega',
-    ];
+    );
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(lines.join('\n'))}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   }

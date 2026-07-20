@@ -15,7 +15,7 @@ export interface OfferFormValues {
   durationMinutes: number | '';
   showCountdown: boolean;
   isVisibleInStore: boolean;
-  sortOrder: number;
+  sortOrder: number | '';
   status: 'draft' | 'active';
   ctaLabel: string;
   whatsappNumber: string;
@@ -74,7 +74,10 @@ export const offerSchema = Yup.object({
     }),
   showCountdown: Yup.boolean().required(),
   isVisibleInStore: Yup.boolean().required(),
-  sortOrder: Yup.number().integer().min(0).required(),
+  sortOrder: Yup.number()
+    .integer('Debe ser un número entero')
+    .min(0, 'Debe ser mayor o igual a 0')
+    .required('El orden de visualización es requerido'),
   status: Yup.string().oneOf(['draft', 'active'] as const).required(),
   ctaLabel: Yup.string().required('El texto del botón es requerido'),
   whatsappNumber: Yup.string(),

@@ -4,6 +4,7 @@ import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { MapPin, Plus, Pencil, Trash2, Star, Eye, EyeOff, Check } from 'lucide-react';
 import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
+import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -219,19 +220,25 @@ export function LocationsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Sucursales"
-        description="Gestiona las sedes y puntos de atención de tu empresa."
-        action={
-          !showForm ? (
-            <Button onClick={() => setShowForm(true)} size="sm">
-              <Plus className="w-4 h-4 mr-1.5" />
-              Nueva sucursal
-            </Button>
-          ) : undefined
-        }
-      />
+    <AdminPanelShell
+      top={(
+        <PageHeader
+          title="Sucursales"
+          description="Gestiona las sedes y puntos de atención de tu empresa."
+          action={
+            !showForm ? (
+              <Button onClick={() => setShowForm(true)} size="sm">
+                <Plus className="w-4 h-4 mr-1.5" />
+                Nueva sucursal
+              </Button>
+            ) : undefined
+          }
+          sticky={false}
+          className="mb-4"
+        />
+      )}
+    >
+      <div className="space-y-6 pb-6">
 
       {loadError && (
         <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
@@ -440,6 +447,7 @@ export function LocationsPage() {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </AdminPanelShell>
   );
 }

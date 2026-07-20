@@ -16,6 +16,10 @@ export interface StoreCommerceFormValues {
   defaultOrderMethod: OrderMethod;
   localDeliveryNotes: string;
   shippingNotes: string;
+  localDeliveryBaseFee: number;
+  localDeliveryFreeFrom: number | null;
+  nationalShippingBaseFee: number;
+  nationalShippingFreeFrom: number | null;
 }
 
 const BUSINESS_CATEGORIES: BusinessCategory[] = ['restaurant', 'retail', 'fashion', 'beauty', 'technology', 'pets', 'home', 'services', 'other'];
@@ -27,6 +31,22 @@ const DELIVERY_MODES: DeliveryMode[] = [
   'none', 'pickup_only', 'local_delivery', 'national_shipping', 'local_and_national',
 ];
 const ORDER_METHODS: OrderMethod[] = ['whatsapp', 'web_order', 'online_checkout'];
+
+function moneyField(requiredMessage: string) {
+  return Yup.number()
+    .transform((value, originalValue) => (originalValue === '' || originalValue == null ? Number.NaN : value))
+    .typeError('Ingresa un valor numérico válido')
+    .min(0, 'El valor no puede ser negativo')
+    .required(requiredMessage);
+}
+
+function optionalMoneyField() {
+  return Yup.number()
+    .transform((value, originalValue) => (originalValue === '' || originalValue == null ? null : value))
+    .nullable()
+    .typeError('Ingresa un valor numérico válido')
+    .min(0, 'El valor no puede ser negativo');
+}
 
 export const storeCommerceSchema = Yup.object({
   businessCategory: Yup.mixed<BusinessCategory>().oneOf(BUSINESS_CATEGORIES).required('Requerido'),
@@ -43,4 +63,8 @@ export const storeCommerceSchema = Yup.object({
   defaultOrderMethod: Yup.mixed<OrderMethod>().oneOf(ORDER_METHODS).required('Requerido'),
   localDeliveryNotes: Yup.string(),
   shippingNotes: Yup.string(),
+  localDeliveryBaseFee: moneyField('Define el costo base del domicilio local'),
+  localDeliveryFreeFrom: optionalMoneyField(),
+  nationalShippingBaseFee: moneyField('Define el costo base del envío nacional'),
+  nationalShippingFreeFrom: optionalMoneyField(),
 });

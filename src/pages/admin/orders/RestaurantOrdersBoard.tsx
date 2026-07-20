@@ -15,6 +15,7 @@ import { Clock, Home, Store, Users } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatCurrency';
 import type { Order } from '@/features/orders/orders.types';
 import type { OrderStatus } from '@/types/common.types';
+import { getFulfillmentBadgeLabel, normalizeFulfillmentMethod } from '@/lib/orders/fulfillmentLabels';
 import { OrderDetailDrawer } from './OrderDetailDrawer';
 import { OrderConfirmDialog } from './OrderConfirmDialog';
 import { getStatusConfig, PaymentStatusBadge, type OrderViewContext } from './OrderStatusBadge';
@@ -166,13 +167,13 @@ function OrderCard({ order, locationMap, ghost = false, overlay = false }: Order
       {/* Footer */}
       <div className="mt-2.5 border-t border-gray-100 pt-2 space-y-1.5">
         <div className="flex items-center gap-1.5 overflow-hidden">
-          {order.fulfillmentMethod === 'delivery' ? (
+          {normalizeFulfillmentMethod(order.fulfillmentMethod) !== 'pickup' ? (
             <span className="inline-flex items-center gap-1 text-[10px] text-gray-400 shrink-0">
-              <Home className="w-3 h-3" /> Domicilio
+              <Home className="w-3 h-3" /> {getFulfillmentBadgeLabel(order.fulfillmentMethod)}
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 text-[10px] text-gray-400 shrink-0">
-              <Store className="w-3 h-3" /> Retiro
+              <Store className="w-3 h-3" /> {getFulfillmentBadgeLabel(order.fulfillmentMethod)}
             </span>
           )}
           {locationName && (

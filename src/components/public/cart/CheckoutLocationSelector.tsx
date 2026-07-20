@@ -7,6 +7,8 @@ interface CheckoutLocationSelectorProps {
   locations: PublicStoreLocation[];
   selectedLocation: PublicStoreLocation | null;
   disabled: boolean;
+  title?: string;
+  helperText?: string | null;
   onSelectLocation: (location: PublicStoreLocation) => void;
 }
 
@@ -29,6 +31,8 @@ export function CheckoutLocationSelector({
   locations,
   selectedLocation,
   disabled,
+  title = 'Sede de atención',
+  helperText = null,
   onSelectLocation,
 }: CheckoutLocationSelectorProps) {
   const uniqueCities = getUniqueCities(locations);
@@ -50,9 +54,16 @@ export function CheckoutLocationSelector({
 
   return (
     <div className="space-y-2">
-      <p className="text-xs font-medium" style={{ color: theme.mutedText }}>
-        Sede de atención
-      </p>
+      {title ? (
+        <p className="text-xs font-medium" style={{ color: theme.mutedText }}>
+          {title}
+        </p>
+      ) : null}
+      {helperText ? (
+        <p className="text-xs leading-5" style={{ color: theme.mutedText }}>
+          {helperText}
+        </p>
+      ) : null}
 
       {/* Case 3: multiple cities → city selector */}
       {hasMultipleCities && (
@@ -122,7 +133,7 @@ export function CheckoutLocationSelector({
           </div>
         </div>
       ) : (
-        <p className="text-xs text-red-500">Selecciona una sede para continuar.</p>
+        <p className="text-xs" style={{ color: theme.primary }}>Selecciona una sede para continuar.</p>
       )}
     </div>
   );

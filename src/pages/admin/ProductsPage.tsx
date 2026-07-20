@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   Plus, Package, UtensilsCrossed, Eye, EyeOff,
-  Archive, Edit, CheckCircle, AlertCircle, Layers,
+  Archive, Edit, CheckCircle, AlertCircle, Layers, Trash2,
 } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
@@ -11,6 +11,7 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { StockAdjustmentModal } from '@/components/admin/StockAdjustmentModal';
 import { DiscountBadge } from '@/components/ui/DiscountBadge';
+import { AdminPanelTabs } from '@/components/admin/AdminPanelTabs';
 import { useAppSelector } from '@/app/hooks';
 import { selectCurrentStore, selectCurrentCommerceSettings, selectCurrentBusinessLimits } from '@/features/stores/stores.selectors';
 import { categoriesService } from '@/features/categories/categoriesService';
@@ -53,6 +54,7 @@ export function ProductsPage() {
   const [tab, setTab] = useState<FilterTab>('all');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [confirmArchiveProduct, setConfirmArchiveProduct] = useState<Product | null>(null);
+  const [confirmDeleteProduct, setConfirmDeleteProduct] = useState<Product | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [adjustingStockProduct, setAdjustingStockProduct] = useState<Product | null>(null);
 
@@ -127,7 +129,9 @@ export function ProductsPage() {
       notify.success(
         updated.isAvailable
           ? `"${product.name}" marcado como disponible.`
-          : `"${product.name}" marcado como no disponible.`
+          : isMenu
+            ? `"${product.name}" marcado como agotado por el momento.`
+            : `"${product.name}" marcado como no disponible.`
       );
     } catch (err) {
       notify.fromError(err);
@@ -149,6 +153,23 @@ export function ProductsPage() {
       const updated = await productsService.archiveProduct(product.id);
       setProducts((prev) => prev.map((p) => p.id === updated.id ? updated : p));
       notify.success(`"${product.name}" archivado.`);
+    } catch (err) {
+      notify.fromError(err);
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleDeleteConfirmed(product: Product) {
+    setActionLoading(product.id);
+    setConfirmDeleteProduct(null);
+    try {
+      await productsService.deleteProduct(product.id);
+      setProducts((prev) => prev.filter((p) => p.id !== product.id));
+      if (adjustingStockProduct?.id === product.id) {
+        setAdjustingStockProduct(null);
+      }
+      notify.success(`"${product.name}" eliminado permanentemente.`);
     } catch (err) {
       notify.fromError(err);
     } finally {
@@ -219,30 +240,24 @@ export function ProductsPage() {
       ) : null}
 
       {/* Filter tabs */}
-      <div className="flex gap-1 mb-6 border-b border-gray-200 overflow-x-auto">
-        {tabs.map(({ key, label, count }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={[
-              'px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors -mb-px',
-              tab === key
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700',
-            ].join(' ')}
-          >
-            {label}
-            {count > 0 && (
-              <span className={[
-                'ml-1.5 text-xs rounded-full px-1.5 py-0.5',
+      <AdminPanelTabs
+        items={tabs.map(({ key, label, count }) => ({
+          key,
+          label,
+          active: tab === key,
+          onClick: () => setTab(key),
+          badge: count > 0 ? (
+            <span
+              className={[
+                'rounded-full px-1.5 py-0.5 text-xs',
                 tab === key ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500',
-              ].join(' ')}>
-                {count}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+              ].join(' ')}
+            >
+              {count}
+            </span>
+          ) : undefined,
+        }))}
+      />
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -294,7 +309,7 @@ export function ProductsPage() {
                             {STATUS_LABEL[product.status] ?? product.status}
                           </Badge>
                           {product.status === 'active' && !product.isAvailable && (
-                            <Badge variant="warning">No disponible</Badge>
+                            <Badge variant="warning">{isMenu ? 'Agotado por el momento' : 'No disponible'}</Badge>
                           )}
                           {product.isFeatured && (
                             <Badge variant="info">Destacado</Badge>
@@ -349,23 +364,23 @@ export function ProductsPage() {
                           {product.preparationTimeMinutes} min prep
                         </span>
                       )}
-                      {!isMenu && product.trackInventory && (
+                      {product.trackInventory && !product.hasVariants && (
                         <span className={`text-xs ${product.stock <= 0 ? 'text-red-500' : 'text-gray-400'}`}>
-                          Stock: {product.stock}
+                          {isMenu ? 'Unidades disponibles' : 'Stock'}: {product.stock}
                         </span>
                       )}
                     </div>
 
                     {/* Actions */}
                     <div className="flex items-center gap-2 mt-3 flex-wrap">
-                      {!isMenu && product.trackInventory && product.status !== 'archived' && (
+                      {product.trackInventory && !product.hasVariants && product.status !== 'archived' && (
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => setAdjustingStockProduct(product)}
                           leftIcon={<Layers className="w-3.5 h-3.5" />}
                         >
-                          Ajustar stock
+                          {isMenu ? 'Ajustar unidades' : 'Ajustar stock'}
                         </Button>
                       )}
                       {product.status === 'draft' && (
@@ -389,7 +404,9 @@ export function ProductsPage() {
                             ? <EyeOff className="w-3.5 h-3.5" />
                             : <Eye className="w-3.5 h-3.5" />}
                         >
-                          {product.isAvailable ? 'Marcar no disponible' : 'Marcar disponible'}
+                          {product.isAvailable
+                            ? (isMenu ? 'Marcar agotado' : 'Marcar no disponible')
+                            : 'Marcar disponible'}
                         </Button>
                       )}
                       <Link to={`/admin/stores/${storeId}/products/${product.id}/edit`}>
@@ -407,6 +424,16 @@ export function ProductsPage() {
                           <span className="text-gray-400">Archivar</span>
                         </Button>
                       )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        isLoading={actionLoading === product.id}
+                        onClick={() => setConfirmDeleteProduct(product)}
+                        leftIcon={<Trash2 className="w-3.5 h-3.5 text-red-500" />}
+                        className="text-red-600 hover:bg-red-50"
+                      >
+                        Eliminar
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -438,6 +465,18 @@ export function ProductsPage() {
         onCancel={() => setConfirmArchiveProduct(null)}
       />
 
+      <ConfirmDialog
+        open={confirmDeleteProduct !== null}
+        title="Eliminar producto"
+        message={`¿Eliminar "${confirmDeleteProduct?.name}" por completo? Esta acción borra el producto, sus imágenes, ofertas asociadas y checkouts pendientes sin pedido. No se puede deshacer.`}
+        confirmLabel="Eliminar"
+        variant="danger"
+        onConfirm={() => {
+          if (confirmDeleteProduct) void handleDeleteConfirmed(confirmDeleteProduct);
+        }}
+        onCancel={() => setConfirmDeleteProduct(null)}
+      />
+
       {adjustingStockProduct && storeId && (
         <StockAdjustmentModal
           open={adjustingStockProduct !== null}
@@ -447,6 +486,7 @@ export function ProductsPage() {
           currentStock={adjustingStockProduct.stock}
           onClose={() => setAdjustingStockProduct(null)}
           onStockUpdated={handleStockUpdated}
+          restaurantMode={isMenu}
         />
       )}
     </div>

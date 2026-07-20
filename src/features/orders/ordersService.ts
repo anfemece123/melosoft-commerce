@@ -27,7 +27,7 @@ export const ordersService = {
   async getOrdersWithItems(storeId: string, params?: OrdersDateParams): Promise<Order[]> {
     let query = supabase
       .from('orders')
-      .select('*, order_items(*)')
+      .select('*, order_items(*, order_item_customizations(*))')
       .eq('store_id', storeId)
       .order('created_at', { ascending: false });
 
@@ -57,7 +57,7 @@ export const ordersService = {
   async getOrderWithItems(id: string): Promise<Order | null> {
     const { data, error } = await supabase
       .from('orders')
-      .select('*, order_items(*)')
+      .select('*, order_items(*, order_item_customizations(*))')
       .eq('id', id)
       .single();
     if (error) {
@@ -92,6 +92,23 @@ export const ordersService = {
     if (error) throw new Error(error.message);
     if (!data) throw new Error('No data returned after update');
     return mapOrderRowToOrder(data);
+  },
+
+  // Cancelling goes through cancel_store_order (not a plain status
+  // update) — it's the only path that also reverses whatever stock
+  // create_store_order decremented, atomically, from the same
+  // inventory_movements it logged. The RPC returns a small summary, not
+  // a full order row — callers should re-fetch (getOrderById) if they
+  // need the updated order in their local state.
+  async cancelOrder(id: string): Promise<{ orderId: string; status: string; stockMovementsReversed: number }> {
+    const { data, error } = await supabase.rpc('cancel_store_order', { p_order_id: id });
+    if (error) throw new Error(error.message);
+    const result = data as { order_id: string; status: string; stock_movements_reversed: number };
+    return {
+      orderId: result.order_id,
+      status: result.status,
+      stockMovementsReversed: result.stock_movements_reversed,
+    };
   },
 
   async updatePaymentStatus(id: string, paymentStatus: PaymentStatus): Promise<Order> {
@@ -130,8 +147,13 @@ export const ordersService = {
       p_payment_method:        payload.paymentMethod ?? 'cash_on_delivery',
       p_items: payload.items.map((item) => ({
         product_id:          item.productId,
+        variant_id:          item.variantId ?? null,
         quantity:            item.quantity,
         customization_notes: item.customizationNotes,
+        customizations: item.customizations.map((c) => ({
+          option_group_id: c.optionGroupId,
+          option_item_id:  c.optionItemId,
+        })),
       })),
     });
     if (error) throw new Error(error.message);

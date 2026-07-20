@@ -12,6 +12,7 @@ interface CartSummaryProps {
   onRemoveUnavailable: () => void;
   paymentSelector: ReactNode;
   hasAnyPaymentMethod: boolean;
+  onViewCart?: () => void;
   onContinue: () => void;
 }
 
@@ -23,6 +24,7 @@ export function CartSummary({
   onRemoveUnavailable,
   paymentSelector,
   hasAnyPaymentMethod,
+  onViewCart,
   onContinue,
 }: CartSummaryProps) {
   const hasUnavailable = unavailableItems.length > 0;
@@ -73,16 +75,28 @@ export function CartSummary({
         </span>
       </div>
       {paymentSelector}
-      <button
-        type="button"
-        onClick={onContinue}
-        disabled={hasUnavailable || !hasAnyPaymentMethod}
-        className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-        style={{ backgroundColor: theme.primary }}
-      >
-        Continuar con el pedido
-        <ChevronRight className="h-4 w-4" />
-      </button>
+      <div className="grid gap-2">
+        {onViewCart && (
+          <button
+            type="button"
+            onClick={onViewCart}
+            className="w-full rounded-2xl border py-3 text-sm font-semibold transition-opacity hover:opacity-90"
+            style={{ borderColor: theme.border, color: theme.text, backgroundColor: theme.background }}
+          >
+            Ver carrito
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onContinue}
+          disabled={hasUnavailable || !hasAnyPaymentMethod}
+          className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          style={{ backgroundColor: theme.primary }}
+        >
+          Continuar con el pedido
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }

@@ -18,13 +18,16 @@ import { getOrCreateVisitorToken } from '@/lib/offers/visitorToken.utils';
 import type { PublicOfferPage, CampaignOfferSession } from '@/types/common.types';
 import { readPublicPageCache, writePublicPageCache } from '@/lib/storefront/publicPageCache';
 import { writePublicScrollPosition } from '@/lib/storefront/publicScrollRestoration';
+import { useResolvedStoreSlug } from '@/lib/storefront/storefrontDomainContext';
+import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 
 interface OfferPageCachePayload {
   offer: PublicOfferPage | null;
 }
 
 export function OfferLandingPage() {
-  const { storeSlug, offerSlug } = useParams<{ storeSlug: string; offerSlug: string }>();
+  const { storeSlug: routeStoreSlug, offerSlug } = useParams<{ storeSlug: string; offerSlug: string }>();
+  const storeSlug = useResolvedStoreSlug(routeStoreSlug);
   const location = useLocation();
   const { branding: storeBranding } = usePublicStoreBranding();
   const { setRouteReady } = usePublicRouteReady();
@@ -103,7 +106,7 @@ export function OfferLandingPage() {
             {error ?? 'Oferta no encontrada'}
           </h1>
           <Link
-            to={`/s/${storeSlug}`}
+            to={storeSlug ? buildStorefrontPath(storeSlug) : '/'}
             className="text-sm text-indigo-600 hover:underline"
           >
             Ver tienda
@@ -392,7 +395,7 @@ export function OfferLandingPage() {
         {offer.productSlug && (
           <div className="text-center mt-4">
             <Link
-              to={`/s/${storeSlug}/p/${offer.productSlug}`}
+              to={storeSlug ? buildStorefrontPath(storeSlug, `/p/${offer.productSlug}`) : '/'}
               state={{ fromStorefront: true, fromPath: `${location.pathname}${location.search}${location.hash}` }}
               onClick={persistCurrentScrollPosition}
               className="text-sm underline hover:opacity-70 transition-opacity"
@@ -474,7 +477,7 @@ function InactiveState({
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           {productSlug && (
             <Link
-              to={`/s/${storeSlug}/p/${productSlug}`}
+              to={buildStorefrontPath(storeSlug, `/p/${productSlug}`)}
               className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-medium text-sm border-2 transition-opacity hover:opacity-80"
               style={{ borderColor: primaryColor, color: primaryColor }}
             >
@@ -483,7 +486,7 @@ function InactiveState({
             </Link>
           )}
           <Link
-            to={`/s/${storeSlug}`}
+            to={buildStorefrontPath(storeSlug)}
             className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-medium text-sm transition-opacity hover:opacity-80"
             style={{ backgroundColor: primaryColor, color: '#fff' }}
           >

@@ -5,6 +5,7 @@ import {
   ArrowRight, Users, BarChart2, MapPin, Globe,
   Building2, Copy, Check, ExternalLink, ShoppingBag,
 } from 'lucide-react';
+import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -18,6 +19,7 @@ import { storesService } from '@/features/stores/storesService';
 import { productsService } from '@/features/products/productsService';
 import { isPlatformAdmin, canManageStore, canManageStoreMembers } from '@/utils/permissions';
 import type { ProductCountStats } from '@/features/products/products.types';
+import { domainsService } from '@/features/domains/domainsService';
 
 const CATALOG_TYPE_LABELS: Record<string, string> = {
   menu: 'Menú / Restaurante',
@@ -53,6 +55,7 @@ export function StoreDetailPage() {
   const dispatch = useAppDispatch();
   const [copied, setCopied] = useState(false);
   const [productStats, setProductStats] = useState<ProductCountStats | null>(null);
+  const [primaryDomain, setPrimaryDomain] = useState<string | null>(null);
 
   const profile = useAppSelector(selectAuthProfile);
   const myMemberships = useAppSelector(selectMyMemberships);
@@ -83,9 +86,25 @@ export function StoreDetailPage() {
     void load();
   }, [storeId, dispatch]);
 
+  useEffect(() => {
+    if (!storeId) return;
+    let cancelled = false;
+    domainsService.list(storeId)
+      .then((domains) => {
+        if (cancelled) return;
+        setPrimaryDomain(domains.find((domain) => domain.isPrimary && domain.status === 'active')?.hostname ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setPrimaryDomain(null);
+      });
+    return () => { cancelled = true; };
+  }, [storeId]);
+
   if (!store) return <LoadingScreen />;
 
-  const publicUrl = `${window.location.origin}/s/${store.slug}`;
+  const publicUrl = primaryDomain
+    ? `https://${primaryDomain}`
+    : domainsService.getPlatformStoreUrl(store.slug);
 
   async function handleCopy() {
     try {
@@ -147,11 +166,17 @@ export function StoreDetailPage() {
   };
 
   return (
-    <div className="max-w-4xl">
-      <PageHeader
-        title={store.name}
-        description={store.slogan ?? 'Panel de gestión de tu empresa.'}
-      />
+    <AdminPanelShell
+      top={(
+        <PageHeader
+          title={store.name}
+          description={store.slogan ?? 'Panel de gestión de tu empresa.'}
+          sticky={false}
+          className="mb-4"
+        />
+      )}
+    >
+      <div className="max-w-4xl pb-6">
 
       {/* Identity row */}
       <div className="flex flex-wrap items-center gap-2 mb-8">
@@ -170,7 +195,9 @@ export function StoreDetailPage() {
             {store.city}
           </span>
         )}
-        <span className="text-xs text-gray-400 font-mono">/s/{store.slug}</span>
+        <span className="text-xs text-gray-400 font-mono">
+          {publicUrl.replace(/^https?:\/\//, '')}
+        </span>
       </div>
 
       {/* Quick stats */}
@@ -380,6 +407,7 @@ export function StoreDetailPage() {
           </Card>
         </div>
       )}
-    </div>
+      </div>
+    </AdminPanelShell>
   );
 }

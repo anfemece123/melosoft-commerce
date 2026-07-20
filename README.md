@@ -6,15 +6,17 @@ Plataforma generadora de ecommerce multiempresa. Desde un panel administrativo c
 
 ```
 Plataforma (Melosoft Commerce)
-  └── Tiendas / Empresas         →  /s/:storeSlug
-        └── Productos            →  /s/:storeSlug/p/:productSlug
-        └── Ofertas              →  /s/:storeSlug/o/:offerSlug
+  └── Tiendas / Empresas         →  https://:storeSlug.tu-dominio.com
+        └── Productos            →  /p/:productSlug
+        └── Ofertas              →  /o/:offerSlug
         └── Pedidos
         └── Pagos (Wompi)
-        └── Políticas            →  /s/:storeSlug/policies
+        └── Políticas            →  /policies
 ```
 
 Cada tienda creada desde el panel genera su propio ecommerce público con logo, colores, productos, ofertas con contador regresivo, WhatsApp y políticas configurables.
+
+Cada empresa recibe un subdominio profesional (`empresa.tu-dominio.com`) y, si su plan lo permite, puede conectar un dominio propio con validación DNS, SSL automático y rutas limpias sobre Vercel. Consulta [URLs profesionales y dominios propios](docs/custom-domains.md) para preparar Namecheap, Vercel y Supabase.
 
 ---
 

@@ -190,6 +190,10 @@ export function mapPublicStorePageRowToPublicStorePage(row: PublicStorePageRow):
     defaultOrderMethod: (row.default_order_method as OrderMethod) ?? null,
     localDeliveryNotes: row.local_delivery_notes ?? null,
     shippingNotes: row.shipping_notes ?? null,
+    localDeliveryBaseFee: row.local_delivery_base_fee != null ? Number(row.local_delivery_base_fee) : null,
+    localDeliveryFreeFrom: row.local_delivery_free_from != null ? Number(row.local_delivery_free_from) : null,
+    nationalShippingBaseFee: row.national_shipping_base_fee != null ? Number(row.national_shipping_base_fee) : null,
+    nationalShippingFreeFrom: row.national_shipping_free_from != null ? Number(row.national_shipping_free_from) : null,
     headerSettings: (row.header_settings as PublicHeaderSettings | null) ?? null,
   };
 }

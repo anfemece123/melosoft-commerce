@@ -6,6 +6,11 @@ import type {
   ProductImageRow,
   ProductOptionGroupRow,
   ProductOptionItemRow,
+  ProductVariantOptionRow,
+  ProductVariantOptionValueRow,
+  ProductVariantRow,
+  ProductVariantSelectedValueRow,
+  ProductSizeChartRow,
   PublicProductPageRow,
 } from '@/types/database.types';
 import type {
@@ -15,7 +20,13 @@ import type {
   ProductOptionSelectionType,
   ProductStatus,
   ProductType,
+  PublicProductImage,
   PublicProductPage,
+  PublicProductVariant,
+  PublicProductVariantOptionValue,
+  PublicSizeChart,
+  PublicVariantOption,
+  PublicVariantOptionValue,
   TemplateKey,
   ThemeMode,
   CatalogType,
@@ -29,6 +40,17 @@ import type {
   ProductOptionItem,
   ProductUpdate,
 } from './products.types';
+import type {
+  ProductSizeChart,
+  ProductVariant,
+  ProductVariantImage,
+  ProductVariantOption,
+  ProductVariantOptionType,
+  ProductVariantOptionValue,
+  ProductVariantSelectedValue,
+  ProductVariantStatus,
+  ProductVariantStockPolicy,
+} from './productVariants.types';
 
 function parseDescriptionSections(raw: unknown): ProductDescriptionSection[] {
   if (!Array.isArray(raw)) return [];
@@ -55,6 +77,72 @@ function parseCollections(raw: unknown): ProductCollectionAssignment[] {
     name: String(item.name ?? ''),
     slug: String(item.slug ?? ''),
   }));
+}
+
+function parsePublicVariantImages(raw: unknown): PublicProductImage[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as Array<Record<string, unknown>>).map((item) => ({
+    imageUrl: String(item.imageUrl ?? ''),
+    altText: (item.altText as string | null) ?? null,
+    sortOrder: Number(item.sortOrder ?? 0),
+    isPrimary: item.isPrimary === true,
+  }));
+}
+
+function parseVariantOptions(raw: unknown): PublicVariantOption[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as Array<Record<string, unknown>>).map((item) => ({
+    id: String(item.id ?? ''),
+    name: String(item.name ?? ''),
+    type: (item.type as PublicVariantOption['type']) ?? 'custom',
+    useAsPublicFilter: item.useAsPublicFilter !== false,
+    controlsMedia: item.controlsMedia === true,
+    sortOrder: Number(item.sortOrder ?? 0),
+    values: Array.isArray(item.values)
+      ? (item.values as Array<Record<string, unknown>>).map((value): PublicVariantOptionValue => ({
+          id: String(value.id ?? ''),
+          value: String(value.value ?? ''),
+          normalizedValue: String(value.normalizedValue ?? ''),
+          colorHex: (value.colorHex as string | null) ?? null,
+          images: parsePublicVariantImages(value.images),
+        }))
+      : [],
+  }));
+}
+
+function parseVariants(raw: unknown): PublicProductVariant[] {
+  if (!Array.isArray(raw)) return [];
+  return (raw as Array<Record<string, unknown>>).map((item) => ({
+    id: String(item.id ?? ''),
+    sku: (item.sku as string | null) ?? null,
+    price: item.price !== null && item.price !== undefined ? Number(item.price) : null,
+    compareAtPrice: item.compareAtPrice !== null && item.compareAtPrice !== undefined ? Number(item.compareAtPrice) : null,
+    stockQuantity: Number(item.stockQuantity ?? 0),
+    stockPolicy: (item.stockPolicy as 'deny' | 'allow_backorder') ?? 'deny',
+    isDefault: item.isDefault === true,
+    imageUrl: (item.imageUrl as string | null) ?? null,
+    optionValues: Array.isArray(item.optionValues)
+      ? (item.optionValues as Array<Record<string, unknown>>).map((value): PublicProductVariantOptionValue => ({
+          optionId: String(value.optionId ?? ''),
+          optionName: String(value.optionName ?? ''),
+          valueId: String(value.valueId ?? ''),
+          value: String(value.value ?? ''),
+        }))
+      : [],
+  }));
+}
+
+function parseSizeChart(raw: unknown): PublicSizeChart | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const item = raw as Record<string, unknown>;
+  if (!item.id) return null;
+  return {
+    id: String(item.id),
+    name: String(item.name ?? ''),
+    chartType: (item.chartType as PublicSizeChart['chartType']) ?? 'custom',
+    unit: (item.unit as PublicSizeChart['unit']) ?? 'cm',
+    content: (item.content as Record<string, unknown>) ?? {},
+  };
 }
 
 export function mapProductRowToProduct(row: ProductRow): Product {
@@ -87,6 +175,9 @@ export function mapProductRowToProduct(row: ProductRow): Product {
     mainImageUrl: row.main_image_url,
     category: row.category,
     categoryId: row.category_id ?? null,
+    hasVariants: row.has_variants ?? false,
+    showVariantsAsCards: row.show_variants_as_cards ?? false,
+    sizeChartId: row.size_chart_id ?? null,
     collections: [],
     facetValues: [],
     createdAt: row.created_at,
@@ -207,6 +298,12 @@ export function mapPublicProductPageRowToPublicProductPage(row: PublicProductPag
     allowsLocalDelivery: row.allows_local_delivery ?? null,
     commerceMode: (row.commerce_mode as CommerceMode) ?? null,
     catalogType: (row.catalog_type as CatalogType) ?? null,
+    hasVariants: row.has_variants ?? false,
+    showVariantsAsCards: row.show_variants_as_cards ?? false,
+    sizeChart: parseSizeChart(row.size_chart),
+    variantOptions: parseVariantOptions(row.variant_options),
+    variants: parseVariants(row.variants),
+    createdAt: row.product_created_at,
   };
 }
 
@@ -239,6 +336,9 @@ export function mapProductInsertToRow(data: ProductInsert, ownerId: string): Pro
     main_image_url: data.mainImageUrl ?? null,
     category: data.category ?? null,
     category_id: data.categoryId ?? null,
+    has_variants: data.hasVariants,
+    show_variants_as_cards: data.showVariantsAsCards,
+    size_chart_id: data.sizeChartId ?? null,
   };
 }
 
@@ -269,5 +369,109 @@ export function mapProductUpdateToRow(data: ProductUpdate): ProductRowUpdate {
   if (data.mainImageUrl !== undefined) row.main_image_url = data.mainImageUrl ?? null;
   if (data.category !== undefined) row.category = data.category ?? null;
   if (data.categoryId !== undefined) row.category_id = data.categoryId ?? null;
+  if (data.hasVariants !== undefined) row.has_variants = data.hasVariants;
+  if (data.showVariantsAsCards !== undefined) row.show_variants_as_cards = data.showVariantsAsCards;
+  if (data.sizeChartId !== undefined) row.size_chart_id = data.sizeChartId ?? null;
   return row;
+}
+
+// ── Variants ──────────────────────────────────────────────────
+
+export function mapProductVariantOptionValueRowToProductVariantOptionValue(
+  row: ProductVariantOptionValueRow,
+  images: ProductVariantImage[] = []
+): ProductVariantOptionValue {
+  return {
+    id: row.id,
+    storeId: row.store_id,
+    optionId: row.option_id,
+    ownerId: row.owner_id,
+    value: row.value,
+    colorHex: row.color_hex ?? null,
+    metadata: (row.metadata as Record<string, unknown>) ?? {},
+    normalizedValue: row.normalized_value ?? '',
+    sortOrder: row.sort_order ?? 0,
+    isActive: row.is_active ?? true,
+    images,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapProductVariantOptionRowToProductVariantOption(
+  row: ProductVariantOptionRow,
+  values: ProductVariantOptionValue[]
+): ProductVariantOption {
+  return {
+    id: row.id,
+    storeId: row.store_id,
+    productId: row.product_id,
+    ownerId: row.owner_id,
+    name: row.name,
+    type: (row.type as ProductVariantOptionType) ?? 'custom',
+    useAsPublicFilter: row.use_as_public_filter ?? true,
+    controlsMedia: row.controls_media ?? false,
+    isRequired: row.is_required ?? true,
+    isActive: row.is_active ?? true,
+    sortOrder: row.sort_order ?? 0,
+    values,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapProductVariantSelectedValueRowToProductVariantSelectedValue(
+  row: ProductVariantSelectedValueRow
+): ProductVariantSelectedValue {
+  return {
+    variantId: row.variant_id,
+    optionId: row.option_id,
+    optionValueId: row.option_value_id,
+  };
+}
+
+export function mapProductVariantRowToProductVariant(
+  row: ProductVariantRow,
+  selectedValues: ProductVariantSelectedValue[]
+): ProductVariant {
+  return {
+    id: row.id,
+    storeId: row.store_id,
+    productId: row.product_id,
+    ownerId: row.owner_id,
+    sku: row.sku ?? null,
+    barcode: row.barcode ?? null,
+    price: row.price !== null ? Number(row.price) : null,
+    compareAtPrice: row.compare_at_price !== null ? Number(row.compare_at_price) : null,
+    cost: row.cost !== null ? Number(row.cost) : null,
+    stockQuantity: row.stock_quantity ?? 0,
+    stockPolicy: (row.stock_policy as ProductVariantStockPolicy) ?? 'deny',
+    lowStockThreshold: row.low_stock_threshold ?? null,
+    weight: row.weight !== null ? Number(row.weight) : null,
+    status: (row.status as ProductVariantStatus) ?? 'active',
+    isDefault: row.is_default ?? false,
+    position: row.position ?? 0,
+    optionSignature: row.option_signature,
+    metadata: (row.metadata as Record<string, unknown>) ?? {},
+    selectedValues,
+    images: [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapProductSizeChartRowToProductSizeChart(row: ProductSizeChartRow): ProductSizeChart {
+  return {
+    id: row.id,
+    storeId: row.store_id,
+    ownerId: row.owner_id,
+    categoryId: row.category_id ?? null,
+    name: row.name,
+    chartType: row.chart_type as ProductSizeChart['chartType'],
+    unit: row.unit as ProductSizeChart['unit'],
+    content: (row.content as Record<string, unknown>) ?? {},
+    isActive: row.is_active ?? true,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }

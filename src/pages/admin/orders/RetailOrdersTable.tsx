@@ -7,6 +7,7 @@ import {
 import { formatCurrency } from '@/utils/formatCurrency';
 import type { Order } from '@/features/orders/orders.types';
 import type { OrderStatus } from '@/types/common.types';
+import { getFulfillmentBadgeLabel, normalizeFulfillmentMethod } from '@/lib/orders/fulfillmentLabels';
 import { OrderDetailDrawer } from './OrderDetailDrawer';
 import { OrderStatusBadge, PaymentStatusBadge, getAllStatuses, type OrderViewContext } from './OrderStatusBadge';
 
@@ -104,7 +105,7 @@ export function RetailOrdersTable({
       );
     }
     if (filters.status) result = result.filter(o => o.status === filters.status);
-    if (filters.fulfillment) result = result.filter(o => o.fulfillmentMethod === filters.fulfillment);
+    if (filters.fulfillment) result = result.filter(o => normalizeFulfillmentMethod(o.fulfillmentMethod) === filters.fulfillment);
     if (filters.paymentMethod) result = result.filter(o => o.paymentMethod === filters.paymentMethod);
     if (locationId) result = result.filter(o => o.storeLocationId === locationId);
 
@@ -190,8 +191,9 @@ export function RetailOrdersTable({
           className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
         >
           <option value="">Tipo de entrega</option>
-          <option value="delivery">Domicilio</option>
-          <option value="pickup">Retiro en tienda</option>
+          <option value="local_delivery">{getFulfillmentBadgeLabel('local_delivery')}</option>
+          <option value="pickup">{getFulfillmentBadgeLabel('pickup')}</option>
+          <option value="national_shipping">{getFulfillmentBadgeLabel('national_shipping')}</option>
         </select>
         <select
           value={filters.paymentMethod}
@@ -294,13 +296,13 @@ export function RetailOrdersTable({
                         {order.city && <p className="text-gray-400 truncate">{order.city}</p>}
                       </td>
                       <td className="px-4 py-3">
-                        {order.fulfillmentMethod === 'delivery' ? (
+                        {normalizeFulfillmentMethod(order.fulfillmentMethod) !== 'pickup' ? (
                           <span className="flex items-center gap-1 text-xs text-gray-500">
-                            <Home className="w-3.5 h-3.5" /> Domicilio
+                            <Home className="w-3.5 h-3.5" /> {getFulfillmentBadgeLabel(order.fulfillmentMethod)}
                           </span>
                         ) : (
                           <span className="flex items-center gap-1 text-xs text-gray-500">
-                            <Store className="w-3.5 h-3.5" /> Retiro
+                            <Store className="w-3.5 h-3.5" /> {getFulfillmentBadgeLabel(order.fulfillmentMethod)}
                           </span>
                         )}
                       </td>

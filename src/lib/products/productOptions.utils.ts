@@ -1,4 +1,5 @@
-import type { PublicProductOptionGroup } from '@/types/common.types';
+import type { PublicProductOptionGroup, SelectedProductOptionItem } from '@/types/common.types';
+import { formatCurrency } from '@/utils/formatCurrency';
 
 export type ProductOptionSelections = Record<string, string[]>;
 
@@ -71,6 +72,43 @@ export function validateProductOptionSelections(
   });
 
   return errors;
+}
+
+// Structured form of the current selections — this is what gets attached
+// to a cart line and sent to the server (ids only matter there; labels/
+// deltas here are for this session's own UI, the server re-resolves and
+// re-prices everything from product_option_groups/items regardless).
+export function buildSelectedProductOptions(
+  groups: PublicProductOptionGroup[],
+  selections: ProductOptionSelections
+): SelectedProductOptionItem[] {
+  const result: SelectedProductOptionItem[] = [];
+
+  groups.forEach((group) => {
+    const selectedIds = selections[group.id] ?? [];
+    group.items
+      .filter((item) => selectedIds.includes(item.id))
+      .forEach((item) => {
+        result.push({
+          optionGroupId: group.id,
+          optionGroupName: group.name,
+          optionItemId: item.id,
+          optionItemLabel: item.label,
+          priceDelta: item.priceDelta,
+        });
+      });
+  });
+
+  return result;
+}
+
+// One line per selected modifier, price included — for WhatsApp messages
+// and anywhere else that needs to show extras with their cost rather than
+// a single flattened "Grupo: A, B" summary.
+export function buildCustomizationPricedLines(customizations: SelectedProductOptionItem[]): string[] {
+  return customizations.map(
+    (c) => `- ${c.optionItemLabel} (+${formatCurrency(c.priceDelta, 'es-CO', 'COP')})`
+  );
 }
 
 export function buildCustomizationSummaryLines(

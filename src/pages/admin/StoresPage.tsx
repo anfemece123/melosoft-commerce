@@ -10,6 +10,7 @@ import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { setStores, setStoresStatus, setStoresError } from '@/features/stores/storesSlice';
 import { storesService } from '@/features/stores/storesService';
+import { domainsService } from '@/features/domains/domainsService';
 import type { StoreStatus, BadgeVariant } from '@/types/common.types';
 
 const STATUS_MAP: Record<StoreStatus, { label: string; variant: BadgeVariant }> = {
@@ -79,6 +80,7 @@ export function StoresPage() {
           {stores.map((store) => {
             const statusInfo = STATUS_MAP[store.status] ?? { label: store.status, variant: 'neutral' as BadgeVariant };
             const typeLabel = store.businessType ? BUSINESS_TYPE_LABELS[store.businessType] : null;
+            const storefrontUrl = domainsService.getPlatformStoreUrl(store.slug);
 
             return (
               <Card key={store.id}>
@@ -89,7 +91,9 @@ export function StoresPage() {
                       {store.slogan && (
                         <p className="text-xs text-gray-400 mt-0.5 truncate italic">{store.slogan}</p>
                       )}
-                      <p className="text-xs text-gray-400 mt-0.5 font-mono">/s/{store.slug}</p>
+                      <p className="text-xs text-gray-400 mt-0.5 truncate font-mono">
+                        {storefrontUrl.replace(/^https?:\/\//, '')}
+                      </p>
                     </div>
                     <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
                   </div>
@@ -116,7 +120,7 @@ export function StoresPage() {
                         Gestionar
                       </Button>
                     </Link>
-                    <a href={`/s/${store.slug}`} target="_blank" rel="noopener noreferrer">
+                    <a href={storefrontUrl} target="_blank" rel="noopener noreferrer">
                       <Button variant="ghost" size="sm">
                         <ExternalLink className="w-4 h-4" />
                       </Button>

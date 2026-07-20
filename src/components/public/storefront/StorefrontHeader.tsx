@@ -4,7 +4,7 @@ import { ChevronDown, Menu, Search, ShoppingCart, X } from 'lucide-react';
 import { PublicStoreLogo } from './PublicStoreLogo';
 import { MobileNavDrawer } from './MobileNavDrawer';
 import { MegaMenuPanel } from './MegaMenuPanel';
-import type { StorefrontTheme } from './storefrontTheme';
+import { STOREFRONT_CONTAINER_CLASS, type StorefrontTheme } from './storefrontTheme';
 import type { CatalogMeta, CatalogType, PublicHeaderSettings, PublicStoreCategory } from '@/types/common.types';
 import { DEFAULT_HEADER_SETTINGS } from '@/types/common.types';
 import {
@@ -14,6 +14,8 @@ import {
   MAX_VISIBLE_HEADER_CATEGORIES,
 } from '@/lib/storefront/headerSettings';
 import { getContextualFacets } from '@/lib/storefront/catalogVisibility';
+import { buildFacetConcepts } from '@/lib/storefront/variantFilters';
+import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 
 function withOpacity(color: string, alpha: number) {
   if (!color.startsWith('#')) return color;
@@ -125,7 +127,13 @@ export function StorefrontHeader({
   }, [catalogMeta?.products, activeCategoryNode]);
 
   const megaMenuFacets = useMemo(
-    () => getContextualFacets(catalogMeta?.megaMenuFacets ?? [], activeCategoryNode, activeCategoryScopedProducts),
+    () =>
+      getContextualFacets(
+        catalogMeta?.megaMenuFacets ?? [],
+        activeCategoryNode,
+        activeCategoryScopedProducts,
+        buildFacetConcepts(catalogMeta?.megaMenuFacets ?? [])
+      ),
     [catalogMeta?.megaMenuFacets, activeCategoryNode, activeCategoryScopedProducts]
   );
 
@@ -208,7 +216,7 @@ export function StorefrontHeader({
   function handleSearchSubmit(e: React.FormEvent) {
     e.preventDefault();
     const q = searchQuery.trim();
-    void navigate(q ? `/s/${storeSlug}/catalog?q=${encodeURIComponent(q)}` : `/s/${storeSlug}/catalog`);
+    void navigate(buildStorefrontPath(storeSlug, q ? `/catalog?q=${encodeURIComponent(q)}` : '/catalog'));
   }
 
   // ── Shared sub-components ──────────────────────────────────
@@ -290,7 +298,7 @@ export function StorefrontHeader({
               {overflowCats.map((cat) => (
                 <Link
                   key={cat.id}
-                  to={`/s/${storeSlug}/catalog?cat=${encodeURIComponent(cat.slug)}`}
+                  to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(cat.slug)}`)}
                   onClick={() => setMoreMenuOpen(false)}
                   className="px-4 py-2.5 text-sm font-medium transition-colors hover:opacity-80"
                   style={{ color: theme.mode === 'dark' ? theme.text : '#374151' }}
@@ -300,7 +308,7 @@ export function StorefrontHeader({
               ))}
               <div className="mx-3 my-1" style={{ borderTop: `1px solid ${controlBorder}` }} />
               <Link
-                to={`/s/${storeSlug}/catalog`}
+                to={buildStorefrontPath(storeSlug, '/catalog')}
                 onClick={() => setMoreMenuOpen(false)}
                 className="px-4 py-2.5 text-sm font-medium transition-colors hover:opacity-80"
                 style={{ color: theme.primary }}
@@ -319,7 +327,7 @@ export function StorefrontHeader({
       <nav className="hidden flex-wrap items-center justify-center gap-6 lg:flex">
         {settings.showHomeLink && (
           <Link
-            to={`/s/${storeSlug}`}
+            to={buildStorefrontPath(storeSlug)}
             className={`${menuTextClass} font-medium whitespace-nowrap transition-opacity hover:opacity-80`}
             style={{ color: theme.primary }}
             onMouseEnter={() => setMegaMenuCategory(null)}
@@ -334,7 +342,7 @@ export function StorefrontHeader({
             {visibleCats.map((cat) => (
               <Link
                 key={cat.id}
-                to={`/s/${storeSlug}/catalog?cat=${encodeURIComponent(cat.slug)}`}
+                to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(cat.slug)}`)}
                 className={`${menuTextClass} font-medium whitespace-nowrap transition-opacity hover:opacity-80`}
                 style={{ color: megaMenuCategory === cat.slug ? theme.primary : navTextColor }}
                 onMouseEnter={() => handleCategoryMouseEnter(cat.slug)}
@@ -348,7 +356,7 @@ export function StorefrontHeader({
 
             {!hasOverflow && (
               <Link
-                to={`/s/${storeSlug}/catalog`}
+                to={buildStorefrontPath(storeSlug, '/catalog')}
                 className={`${menuTextClass} font-medium whitespace-nowrap transition-opacity hover:opacity-80`}
                 style={{ color: navTextColor }}
                 onMouseEnter={() => setMegaMenuCategory(null)}
@@ -359,7 +367,7 @@ export function StorefrontHeader({
           </>
         ) : (
           <Link
-            to={`/s/${storeSlug}/catalog`}
+            to={buildStorefrontPath(storeSlug, '/catalog')}
             className={`${menuTextClass} font-medium whitespace-nowrap transition-opacity hover:opacity-80`}
             style={{ color: settings.showHomeLink ? navTextColor : theme.primary }}
             onMouseEnter={() => setMegaMenuCategory(null)}
@@ -377,14 +385,14 @@ export function StorefrontHeader({
       <>
         <header className={positionClass} style={headerStyle}>
           <div onMouseLeave={() => setMegaMenuCategory(null)}>
-            <div className="relative mx-auto max-w-7xl px-4 py-4 md:px-6">
+            <div className={`relative mx-auto ${STOREFRONT_CONTAINER_CLASS} px-4 py-4 md:px-6`}>
               <div className="flex items-center justify-between gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center">
 
                 {/* LEFT: brand */}
                 <div className="min-w-0">
                   {(settings.showLogo || settings.showStoreName) && (
                     <Link
-                      to={`/s/${storeSlug}`}
+                      to={buildStorefrontPath(storeSlug)}
                       className="flex shrink-0 items-center gap-3 md:gap-4"
                       onMouseEnter={() => setMegaMenuCategory(null)}
                       onClick={closeMenus}
@@ -497,14 +505,14 @@ export function StorefrontHeader({
     <>
       <header className={positionClass} style={headerStyle}>
         <div
-          className="mx-auto max-w-7xl px-4 md:px-6"
+          className={`mx-auto ${STOREFRONT_CONTAINER_CLASS} px-4 md:px-6`}
           onMouseLeave={() => setMegaMenuCategory(null)}
         >
           {/* Row 1 */}
           <div className="flex items-center gap-3 py-3">
             {(settings.showLogo || settings.showStoreName) && (
               <Link
-                to={`/s/${storeSlug}`}
+                to={buildStorefrontPath(storeSlug)}
                 className="flex shrink-0 items-center gap-2.5"
                 onMouseEnter={() => setMegaMenuCategory(null)}
                 onClick={closeMenus}
@@ -581,7 +589,7 @@ export function StorefrontHeader({
             <div className="hidden items-center justify-center gap-6 lg:flex">
               {settings.showHomeLink && (
                 <Link
-                  to={`/s/${storeSlug}`}
+                  to={buildStorefrontPath(storeSlug)}
                   className={`${menuTextClass} font-medium whitespace-nowrap transition-opacity hover:opacity-80`}
                   style={{ color: theme.primary }}
                   onMouseEnter={() => setMegaMenuCategory(null)}
@@ -595,7 +603,7 @@ export function StorefrontHeader({
                   {visibleCats.map((cat) => (
                     <Link
                       key={cat.id}
-                      to={`/s/${storeSlug}/catalog?cat=${encodeURIComponent(cat.slug)}`}
+                      to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(cat.slug)}`)}
                       className={`${menuTextClass} font-medium whitespace-nowrap transition-opacity hover:opacity-80`}
                       style={{ color: megaMenuCategory === cat.slug ? theme.primary : navTextColor }}
                       onMouseEnter={() => handleCategoryMouseEnter(cat.slug)}
@@ -607,7 +615,7 @@ export function StorefrontHeader({
                   <MoreDropdown />
                   {!hasOverflow && (
                     <Link
-                      to={`/s/${storeSlug}/catalog`}
+                      to={buildStorefrontPath(storeSlug, '/catalog')}
                       className={`${menuTextClass} font-medium whitespace-nowrap transition-opacity hover:opacity-80`}
                       style={{ color: navTextColor }}
                       onMouseEnter={() => setMegaMenuCategory(null)}
@@ -618,7 +626,7 @@ export function StorefrontHeader({
                 </>
               ) : (
                 <Link
-                  to={`/s/${storeSlug}/catalog`}
+                  to={buildStorefrontPath(storeSlug, '/catalog')}
                   className={`${menuTextClass} font-medium whitespace-nowrap transition-opacity hover:opacity-80`}
                   style={{ color: settings.showHomeLink ? navTextColor : theme.primary }}
                   onMouseEnter={() => setMegaMenuCategory(null)}

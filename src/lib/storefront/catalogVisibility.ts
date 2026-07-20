@@ -1,4 +1,5 @@
 import type { PublicProductPage, PublicStoreCategory, PublicStoreCollection, PublicStoreFacet } from '@/types/common.types';
+import { productSatisfiesFacetValue } from './variantFilters';
 
 interface CategoryContext {
   id: string;
@@ -12,11 +13,18 @@ interface CategoryContext {
  * only pass when assigned directly to `activeCategory`, or to its parent
  * with appliesToChildren=true. `productsInScope` should already be narrowed
  * to the category/collection being browsed by the caller.
+ *
+ * `concepts` (from buildFacetConcepts, over the SAME unified facet list
+ * passed in as `facets`) lets the value-existence check resolve merged
+ * attribute+variant facets correctly: a value contributed only via a
+ * product's variant option is checked against that product's variants, not
+ * its (nonexistent) facetValues row.
  */
 export function getContextualFacets(
   facets: PublicStoreFacet[],
   activeCategory: CategoryContext | null,
-  productsInScope: PublicProductPage[]
+  productsInScope: PublicProductPage[],
+  concepts: Map<string, string>
 ): PublicStoreFacet[] {
   return facets
     .filter((facet) => {
@@ -31,9 +39,7 @@ export function getContextualFacets(
     .map((facet) => ({
       ...facet,
       values: facet.values.filter((value) =>
-        productsInScope.some((product) =>
-          product.facetValues.some((fv) => fv.facetSlug === facet.slug && fv.valueSlug === value.slug)
-        )
+        productsInScope.some((product) => productSatisfiesFacetValue(product, facet.slug, value.slug, concepts))
       ),
     }))
     .filter((facet) => facet.values.length > 0);

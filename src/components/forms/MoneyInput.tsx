@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { cn } from '@/utils/cn';
 
 interface MoneyInputProps {
   id?: string;
   name?: string;
   label?: string;
+  labelAdornment?: ReactNode;
   value: number | '';
   onChange: (value: number | '') => void;
   onBlur?: () => void;
@@ -35,6 +36,7 @@ export function MoneyInput({
   id,
   name,
   label,
+  labelAdornment,
   value,
   onChange,
   onBlur,
@@ -95,8 +97,9 @@ export function MoneyInput({
   return (
     <div className="space-y-1">
       {label && (
-        <label htmlFor={id} className="block text-sm font-medium text-gray-700">
-          {label}
+        <label htmlFor={id} className="mb-1 flex items-center gap-1.5 text-sm font-medium text-gray-700">
+          <span>{label}</span>
+          {labelAdornment}
         </label>
       )}
       <div className="relative">

@@ -4,6 +4,7 @@ import {
   StickyNote, ChevronRight, Loader2, MessageCircle, ShoppingBag,
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatCurrency';
+import { getFulfillmentMethodLabel, normalizeFulfillmentMethod } from '@/lib/orders/fulfillmentLabels';
 import { normalizePhoneForWhatsApp } from '@/lib/whatsapp/orderWhatsappMessage';
 import type { Order } from '@/features/orders/orders.types';
 import type { OrderStatus } from '@/types/common.types';
@@ -155,11 +156,11 @@ export function OrderDetailDrawer({
 
             {/* Fulfillment */}
             <Section title="Entrega">
-              {order.fulfillmentMethod === 'delivery' ? (
+              {normalizeFulfillmentMethod(order.fulfillmentMethod) !== 'pickup' ? (
                 <div className="flex items-start gap-2">
                   <Home className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
                   <div className="text-sm text-gray-700 space-y-0.5">
-                    <p className="font-medium">Domicilio</p>
+                    <p className="font-medium">{getFulfillmentMethodLabel(order.fulfillmentMethod, { city: order.city })}</p>
                     {order.shippingAddress && <p>{order.shippingAddress}</p>}
                     {order.deliveryNeighborhood && (
                       <p className="text-gray-500">
@@ -177,7 +178,7 @@ export function OrderDetailDrawer({
               ) : (
                 <div className="flex items-center gap-2 text-sm text-gray-700">
                   <Store className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span>Retiro en tienda{locationName ? ` — ${locationName}` : ''}</span>
+                  <span>{getFulfillmentMethodLabel(order.fulfillmentMethod)}{locationName ? ` — ${locationName}` : ''}</span>
                 </div>
               )}
             </Section>
@@ -213,6 +214,19 @@ export function OrderDetailDrawer({
                         <p className="text-xs text-gray-400 mt-0.5">
                           {item.quantity}× · {formatCurrency(item.unitPrice, 'es-CO', 'COP')} c/u
                         </p>
+                        {item.variantLabelSnapshot && (
+                          <p className="text-xs text-gray-500 mt-0.5">Variante: {item.variantLabelSnapshot}</p>
+                        )}
+                        {item.customizations.length > 0 && (
+                          <div className="mt-1">
+                            <p className="text-xs font-medium text-gray-500">Adiciones:</p>
+                            {item.customizations.map((c) => (
+                              <p key={c.id} className="text-xs text-gray-500 pl-2">
+                                {c.optionItemLabel} <span className="text-gray-400">+{formatCurrency(c.priceDelta, 'es-CO', 'COP')}</span>
+                              </p>
+                            ))}
+                          </div>
+                        )}
                         {item.customerNote && (
                           <p className="text-xs text-amber-600 italic mt-0.5 truncate">{item.customerNote}</p>
                         )}

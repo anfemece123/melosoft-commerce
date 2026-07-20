@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
+import { IntegerInput } from '@/components/forms/IntegerInput';
+import { MoneyInput } from '@/components/forms/MoneyInput';
 import type { ProductOptionGroupDraft } from '@/features/products/productOptionsService';
 
 interface ProductOptionsEditorProps {
@@ -140,28 +142,26 @@ export function ProductOptionsEditor({
                   </div>
                 </div>
 
-                <Input
+                <IntegerInput
                   id={`group-min-${groupIndex}`}
                   label="Mínimo"
-                  type="number"
-                  min="0"
+                  min={0}
                   value={group.minSelect}
-                  onChange={(event) => updateGroup(groupIndex, (current) => ({
+                  onChange={(value) => updateGroup(groupIndex, (current) => ({
                     ...current,
-                    minSelect: Number(event.target.value || 0),
+                    minSelect: value,
                   }))}
                 />
 
-                <Input
+                <IntegerInput
                   id={`group-max-${groupIndex}`}
                   label="Máximo"
-                  type="number"
-                  min="1"
+                  min={1}
                   disabled={group.selectionType === 'single'}
                   value={group.maxSelect ?? ''}
-                  onChange={(event) => updateGroup(groupIndex, (current) => ({
+                  onChange={(value) => updateGroup(groupIndex, (current) => ({
                     ...current,
-                    maxSelect: event.target.value === '' ? null : Number(event.target.value),
+                    maxSelect: value === '' ? null : value,
                   }))}
                   hint={group.selectionType === 'single' ? 'Fijo en 1 para selección única' : 'Déjalo vacío si no hay tope'}
                 />
@@ -244,18 +244,16 @@ export function ProductOptionsEditor({
                             )),
                           }))}
                         />
-                        <Input
+                        <MoneyInput
                           id={`item-price-${groupIndex}-${itemIndex}`}
-                          label={`Extra (${currency})`}
-                          type="number"
-                          min="0"
-                          step="0.01"
+                          label="Extra"
+                          currency={currency}
                           value={item.priceDelta}
-                          onChange={(event) => updateGroup(groupIndex, (current) => ({
+                          onChange={(value) => updateGroup(groupIndex, (current) => ({
                             ...current,
                             items: current.items.map((currentItem, currentIndex) => (
                               currentIndex === itemIndex
-                                ? { ...currentItem, priceDelta: Number(event.target.value || 0) }
+                                ? { ...currentItem, priceDelta: value }
                                 : currentItem
                             )),
                           }))}

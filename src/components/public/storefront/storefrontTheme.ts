@@ -1,5 +1,15 @@
 import type { CSSProperties } from 'react';
 
+/** Shared horizontal ceiling for the public storefront's header, footer,
+ * and every Home Builder section — one constant so the whole storefront
+ * widens/narrows together instead of each file guessing its own
+ * `max-w-*`. Wider than Tailwind's `max-w-7xl` (1280px) on purpose, to
+ * read as a more premium/commercial layout on large desktop screens
+ * without going edge-to-edge. `StoreCatalogPage.tsx` deliberately does NOT
+ * use this — it keeps its own existing `max-w-7xl` per an explicit,
+ * repeated instruction to leave that page alone. */
+export const STOREFRONT_CONTAINER_CLASS = 'max-w-[1440px]';
+
 interface StorefrontThemeInput {
   mode?: 'light' | 'dark' | null;
   primaryColor?: string | null;
@@ -48,7 +58,7 @@ function normalizeHexColor(color: string): string | null {
   return null;
 }
 
-function withAlpha(color: string, alpha: number): string {
+export function withAlpha(color: string, alpha: number): string {
   const normalized = normalizeHexColor(color);
   if (!normalized) return color;
 

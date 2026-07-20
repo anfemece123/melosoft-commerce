@@ -13,19 +13,24 @@ interface CartItemsListProps {
 
 export function CartItemsList({ items, theme, currency, onUpdateQuantity, onRemove }: CartItemsListProps) {
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+    <div className="flex-1 overflow-y-auto px-5 py-2">
       {items.length === 0 ? (
         <CartEmptyState />
       ) : (
-        items.map((item) => (
-          <CartItemRow
+        items.map((item, index) => (
+          <div
             key={item.lineId}
-            item={item}
-            theme={theme}
-            currency={currency}
-            onUpdateQuantity={onUpdateQuantity}
-            onRemove={onRemove}
-          />
+            className={index > 0 ? 'border-t' : ''}
+            style={index > 0 ? { borderColor: theme.border } : undefined}
+          >
+            <CartItemRow
+              item={item}
+              theme={theme}
+              currency={currency}
+              onUpdateQuantity={onUpdateQuantity}
+              onRemove={onRemove}
+            />
+          </div>
         ))
       )}
     </div>

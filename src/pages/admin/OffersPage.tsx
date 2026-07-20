@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/Badge';
 import { Card, CardBody } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DiscountBadge } from '@/components/ui/DiscountBadge';
+import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
+import { AdminPanelTabs } from '@/components/admin/AdminPanelTabs';
 import { useAppSelector } from '@/app/hooks';
 import { offersService } from '@/features/offers/offersService';
 import { storesService } from '@/features/stores/storesService';
@@ -21,6 +23,7 @@ import { computeOfferUIStatus } from '@/lib/offers/offerStatus.utils';
 import type { Offer } from '@/features/offers/offers.types';
 import type { Store } from '@/features/stores/stores.types';
 import type { BadgeVariant } from '@/types/common.types';
+import { domainsService } from '@/features/domains/domainsService';
 
 type FilterTab = 'all' | 'active' | 'scheduled' | 'draft' | 'paused' | 'expired' | 'archived';
 
@@ -53,6 +56,7 @@ export function OffersPage() {
   const [tab, setTab] = useState<FilterTab>('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<Offer | null>(null);
+  const [primaryDomain, setPrimaryDomain] = useState<string | null>(null);
 
   const isMenu = currentCommerceSettings?.catalogType === 'menu';
   const entityLabel = isMenu ? 'campañas del menú' : 'campañas de producto';
@@ -81,6 +85,21 @@ export function OffersPage() {
     }
     void load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId]);
+
+  useEffect(() => {
+    if (!storeId) return;
+    let cancelled = false;
+    domainsService.list(storeId)
+      .then((domains) => {
+        if (!cancelled) {
+          setPrimaryDomain(domains.find((domain) => domain.isPrimary && domain.status === 'active')?.hostname ?? null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setPrimaryDomain(null);
+      });
+    return () => { cancelled = true; };
   }, [storeId]);
 
   function getUIStatus(offer: Offer) {
@@ -158,7 +177,10 @@ export function OffersPage() {
       notify.error('No se pudo obtener el link. Recarga la página.');
       return;
     }
-    const url = `${window.location.origin}/s/${storeData.slug}/o/${offer.slug}`;
+    const storeUrl = primaryDomain
+      ? `https://${primaryDomain}`
+      : domainsService.getPlatformStoreUrl(storeData.slug);
+    const url = `${storeUrl}/o/${offer.slug}`;
     navigator.clipboard.writeText(url).then(
       () => notify.success('Link copiado al portapapeles'),
       () => {
@@ -169,48 +191,46 @@ export function OffersPage() {
   }
 
   return (
-    <div>
-      <PageHeader
-        title="Campañas de oferta"
-        description={`Landings de ${entityLabel} con contador regresivo para publicitar.`}
-        action={
-          <Link to={`/admin/stores/${storeId}/offers/new`}>
-            <Button leftIcon={<Plus className="w-4 h-4" />}>{newLabel}</Button>
-          </Link>
-        }
-      />
+    <AdminPanelShell
+      top={(
+        <>
+          <PageHeader
+            title="Campañas de oferta"
+            description={`Landings de ${entityLabel} con contador regresivo para publicitar.`}
+            action={
+              <Link to={`/admin/stores/${storeId}/offers/new`}>
+                <Button leftIcon={<Plus className="w-4 h-4" />}>{newLabel}</Button>
+              </Link>
+            }
+            sticky={false}
+            className="mb-4"
+          />
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-gray-200 overflow-x-auto">
-        {tabs.map(({ key, label }) => {
-          const count = countByTab(key);
-          return (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={[
-                'px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors -mb-px',
-                tab === key
-                  ? 'border-indigo-600 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700',
-              ].join(' ')}
-            >
-              {label}
-              {count > 0 && (
-                <span
-                  className={[
-                    'ml-1.5 text-xs rounded-full px-1.5 py-0.5',
-                    tab === key ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500',
-                  ].join(' ')}
-                >
-                  {count}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
+          <AdminPanelTabs
+            items={tabs.map(({ key, label }) => {
+              const count = countByTab(key);
+              return {
+                key,
+                label,
+                active: tab === key,
+                onClick: () => setTab(key),
+                badge: count > 0 ? (
+                  <span
+                    className={[
+                      'rounded-full px-1.5 py-0.5 text-xs',
+                      tab === key ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-500',
+                    ].join(' ')}
+                  >
+                    {count}
+                  </span>
+                ) : undefined,
+              };
+            })}
+            className="mb-0"
+          />
+        </>
+      )}
+    >
       {loading ? (
         <div className="flex items-center justify-center py-20">
           <div className="w-6 h-6 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
@@ -389,6 +409,6 @@ export function OffersPage() {
         }}
         onCancel={() => setConfirmArchive(null)}
       />
-    </div>
+    </AdminPanelShell>
   );
 }

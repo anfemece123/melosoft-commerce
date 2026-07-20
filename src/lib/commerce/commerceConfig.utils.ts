@@ -1,4 +1,5 @@
 import type { CatalogType, CommerceMode } from '@/types/common.types';
+import { getFulfillmentBadgeLabel } from '@/lib/orders/fulfillmentLabels';
 
 export interface PublicCommerceConfig {
   catalogType: CatalogType | null;
@@ -12,6 +13,10 @@ export interface PublicCommerceConfig {
   onlineCheckoutEnabled: boolean | null;
   localDeliveryNotes: string | null;
   shippingNotes: string | null;
+  localDeliveryBaseFee?: number | null;
+  localDeliveryFreeFrom?: number | null;
+  nationalShippingBaseFee?: number | null;
+  nationalShippingFreeFrom?: number | null;
 }
 
 export function getCatalogLabel(config: PublicCommerceConfig): string {
@@ -114,13 +119,13 @@ export interface DeliveryBadgeInfo {
 export function getDeliveryBadges(config: PublicCommerceConfig): DeliveryBadgeInfo[] {
   const badges: DeliveryBadgeInfo[] = [];
   if (config.allowsPickup) {
-    badges.push({ label: 'Retiro en local', notes: null, icon: 'pickup' });
+    badges.push({ label: getFulfillmentBadgeLabel('pickup'), notes: null, icon: 'pickup' });
   }
   if (config.allowsLocalDelivery) {
-    badges.push({ label: 'Domicilio local', notes: config.localDeliveryNotes ?? null, icon: 'local' });
+    badges.push({ label: getFulfillmentBadgeLabel('local_delivery'), notes: config.localDeliveryNotes ?? null, icon: 'local' });
   }
   if (config.allowsNationalShipping) {
-    badges.push({ label: 'Envío nacional', notes: config.shippingNotes ?? null, icon: 'national' });
+    badges.push({ label: getFulfillmentBadgeLabel('national_shipping'), notes: config.shippingNotes ?? null, icon: 'national' });
   }
   return badges;
 }
