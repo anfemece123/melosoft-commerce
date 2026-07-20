@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 
 const DEFAULT_TITLE = 'Melosoft Commerce';
-const DEFAULT_FAVICON_URL = '/favicon.svg';
+const DEFAULT_FAVICON_URL = '/branding/melosoft-mark.png';
 
 function findFaviconLink(): HTMLLinkElement | null {
   return document.querySelector<HTMLLinkElement>('link[rel="icon"]');

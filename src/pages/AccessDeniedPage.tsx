@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { ShieldOff } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useAppSelector, useAppDispatch } from '@/app/hooks';
@@ -21,6 +21,12 @@ export function AccessDeniedPage() {
     try { await authService.logout(); } catch { /* continue */ }
     dispatch(logout());
     void navigate('/login');
+  }
+
+  // Authorization data can finish hydrating just after a route evaluation.
+  // If the user does have a valid destination, recover without requiring a click.
+  if (isAuthenticated && panelUrl !== '/access-denied') {
+    return <Navigate to={panelUrl} replace />;
   }
 
   return (

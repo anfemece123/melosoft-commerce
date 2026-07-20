@@ -28,6 +28,7 @@ import { selectCurrentStore, selectMyMemberships } from '@/features/stores/store
 import { PendingOrdersBadgeProvider } from '@/features/orders/PendingOrdersBadgeContext';
 import { usePendingOrdersBadge } from '@/features/orders/usePendingOrdersBadge';
 import { domainsService } from '@/features/domains/domainsService';
+import { MelosoftBrand } from '@/components/ui/MelosoftBrand';
 
 interface NavItem {
   label: string;
@@ -146,27 +147,37 @@ function AdminLayoutContent() {
         )}
       >
         {/* Logo / Store identity */}
-        <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200 shrink-0">
-          <div className="flex flex-col leading-tight min-w-0">
-            {isAdmin ? (
-              <>
-                <span className="text-base font-bold text-indigo-600 tracking-tight truncate">
-                  Melosoft Commerce
-                </span>
-                <span className="text-[10px] text-gray-400 font-medium tracking-wide uppercase">
-                  Panel administrativo
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="text-base font-bold text-gray-900 tracking-tight truncate">
-                  {storeName}
-                </span>
-                <span className="text-[10px] text-indigo-500 font-medium tracking-wide uppercase">
-                  Panel de empresa
-                </span>
-              </>
-            )}
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-gray-200 px-4">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="h-9 w-9 shrink-0 overflow-hidden rounded-xl bg-slate-700 shadow-sm ring-1 ring-black/5">
+              <MelosoftBrand
+                variant="mark"
+                alt=""
+                aria-hidden="true"
+                className="h-full w-full scale-[1.55] object-cover"
+              />
+            </div>
+            <div className="flex min-w-0 flex-col leading-tight">
+              {isAdmin ? (
+                <>
+                  <span className="truncate text-base font-bold tracking-tight text-slate-900">
+                    Melosoft Commerce
+                  </span>
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-indigo-500">
+                    Panel administrativo
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="truncate text-base font-bold tracking-tight text-gray-900">
+                    {storeName}
+                  </span>
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-indigo-500">
+                    Panel de empresa
+                  </span>
+                </>
+              )}
+            </div>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}

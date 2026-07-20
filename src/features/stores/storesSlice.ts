@@ -1,5 +1,6 @@
 import { createSlice } from '@reduxjs/toolkit';
 import type { PayloadAction } from '@reduxjs/toolkit';
+import { logout } from '@/features/auth/authSlice';
 import type { Store, StoreMember, StoreLimit, StoreLocation, StoreBusinessHour, StoresState } from './stores.types';
 import type { StoreCommerceSettings } from './storeCommerce.types';
 
@@ -73,6 +74,20 @@ const storesSlice = createSlice({
       state.error = action.payload;
       state.status = 'failed';
     },
+  },
+  extraReducers: (builder) => {
+    builder.addCase(logout, (state) => {
+      state.items = [];
+      state.current = null;
+      state.currentMembers = [];
+      state.currentLimits = null;
+      state.currentLocation = null;
+      state.currentBusinessHours = [];
+      state.currentCommerceSettings = null;
+      state.myMemberships = [];
+      state.status = 'idle';
+      state.error = null;
+    });
   },
 });
 
