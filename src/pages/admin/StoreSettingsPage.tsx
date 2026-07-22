@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useFormik } from 'formik';
-import { Palette, FileText, CreditCard, ShoppingBag, Save, CheckCircle, Building2, Sun, Moon, Plus, Images, AlertTriangle, ExternalLink, LayoutTemplate, CircleHelp } from 'lucide-react';
+import { Palette, FileText, CreditCard, ShoppingBag, Save, CheckCircle, Building2, Sun, Moon, Plus, Images, AlertTriangle, ExternalLink, LayoutTemplate, CircleHelp, MessageCircle } from 'lucide-react';
 import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
 import { paymentsService } from '@/features/payments/paymentsService';
 import type { StorePaymentSettings } from '@/features/payments/payments.types';
@@ -207,7 +207,8 @@ type SettingsSection =
   | 'header'
   | 'domain'
   | 'policies'
-  | 'payments';
+  | 'payments'
+  | 'whatsapp';
 
 interface ThemeAppearanceFormValues {
   mode: ThemeMode;
@@ -789,6 +790,7 @@ export function StoreSettingsPage() {
     { key: 'domain', label: 'Dominio' },
     { key: 'policies', label: 'Políticas' },
     { key: 'payments', label: 'Pagos' },
+    { key: 'whatsapp', label: 'WhatsApp' },
   ];
 
   async function handleLogoSelect(file: File | null) {
@@ -1874,6 +1876,29 @@ export function StoreSettingsPage() {
             >
               <CreditCard className="w-4 h-4" />
               {wompiAvailability.reason === 'not_configured' ? 'Configurar Wompi' : 'Ver configuración de pagos'}
+              <ExternalLink className="w-3.5 h-3.5 opacity-70" />
+            </Link>
+          </CardBody>
+        </Card>
+        )}
+
+        {activeSection === 'whatsapp' && storeId && (
+        <Card>
+          <CardBody>
+            <div className="flex items-center gap-3 mb-4">
+              <MessageCircle className="w-5 h-5 text-green-600" />
+              <h2 className="font-semibold text-gray-900">Notificaciones de WhatsApp</h2>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">
+              Envía confirmaciones de pedido automáticas por WhatsApp usando la API oficial de Meta,
+              identificando siempre el nombre de tu tienda en el mensaje.
+            </p>
+            <Link
+              to={`/admin/stores/${storeId}/whatsapp`}
+              className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700 transition-colors"
+            >
+              <MessageCircle className="w-4 h-4" />
+              Configurar WhatsApp
               <ExternalLink className="w-3.5 h-3.5 opacity-70" />
             </Link>
           </CardBody>

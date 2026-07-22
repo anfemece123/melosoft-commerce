@@ -22,6 +22,8 @@ import type {
   StoreBusinessHour,
   CreateStoreWithOwnerInput,
   CreateStoreWithOwnerResponse,
+  SlugAvailabilityResult,
+  SlugAvailabilityReason,
 } from './stores.types';
 import type { PublicStoreHeroSlide, PublicStorePage } from '@/types/common.types';
 import {
@@ -52,6 +54,32 @@ async function getOwnerId(): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
   return session.user.id;
+}
+
+// supabase-js reports a non-2xx Edge Function response as a generic
+// FunctionsHttpError whose .message is not the JSON body the function
+// actually returned. The real { error: "..." } payload lives on
+// error.context (a Response) — extract it so the superadmin sees
+// "Esta dirección ya está en uso" instead of a generic HTTP message.
+interface FunctionErrorWithContext extends Error {
+  context?: Response;
+}
+
+function hasResponseContext(error: unknown): error is FunctionErrorWithContext {
+  if (!(error instanceof Error) || typeof error !== 'object' || error === null) return false;
+  return 'context' in error && (error as FunctionErrorWithContext).context instanceof Response;
+}
+
+async function extractFunctionErrorMessage(error: Error): Promise<string> {
+  if (hasResponseContext(error) && error.context) {
+    try {
+      const payload = await error.context.clone().json() as { error?: string };
+      if (payload.error) return payload.error;
+    } catch {
+      // Fall back to the SDK error message below if the response is not JSON.
+    }
+  }
+  return error.message;
 }
 
 export const storesService = {
@@ -416,9 +444,26 @@ export const storesService = {
       'create-store-with-owner',
       { body: payload }
     );
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(await extractFunctionErrorMessage(error));
     if (!data) throw new Error('No response from Edge Function');
     return data;
+  },
+
+  // platform_admin-only. Returns availability + reason only — never
+  // store_id, name or owner of a conflicting store. Final authority for
+  // uniqueness is still the DB constraint checked again at creation time.
+  async checkSlugAvailability(rawSlug: string): Promise<SlugAvailabilityResult> {
+    const { data, error } = await supabase.rpc('check_store_slug_availability', {
+      p_slug: rawSlug,
+    });
+    if (error) throw new Error(error.message);
+    const row = data?.[0] as { available: boolean; normalized_slug: string; reason: string } | undefined;
+    if (!row) throw new Error('No se pudo verificar la disponibilidad.');
+    return {
+      available: row.available,
+      normalizedSlug: row.normalized_slug,
+      reason: row.reason as SlugAvailabilityReason,
+    };
   },
 
   // Public

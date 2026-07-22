@@ -22,12 +22,14 @@ import { PublicLocationProvider } from '@/lib/locations/locationContext';
 import { PublicRouteReadyProvider } from './PublicRouteReadyContext';
 import { readPublicScrollPosition, writePublicScrollPosition } from '@/lib/storefront/publicScrollRestoration';
 import { useSelectedLocation } from '@/lib/locations/locationContext';
+import { OrderingStatusNotice } from '@/components/public/cart/OrderingStatusNotice';
 import { pruneEmptyCategoryTree, pruneEmptyCollections } from '@/lib/storefront/catalogVisibility';
 import { useStorefrontDocumentMetadata } from '@/lib/storefront/useStorefrontDocumentMetadata';
 import {
   isStorefrontHostnameMode,
   useStorefrontDomain,
 } from '@/lib/storefront/storefrontDomainContext';
+import { domainsService } from '@/features/domains/domainsService';
 
 export function PublicLayout() {
   const location = useLocation();
@@ -121,17 +123,36 @@ function PublicStoreShell({
   const { mode: domainMode } = useStorefrontDomain();
   const navigationType = useNavigationType();
   const { totalItems } = useCart();
-  const { locations } = useSelectedLocation();
+  const { locations, selectedLocation, orderStatus, scheduleLoading } = useSelectedLocation();
   const [cartOpen, setCartOpen] = useState(false);
   const [routeReady, setRouteReady] = useState(false);
   const [catalogMeta, setCatalogMeta] = useState<CatalogMeta | null>(null);
   const routeKey = `${location.pathname}${location.search}${location.hash}`;
   const pendingScrollModeRef = useRef<'restore' | 'top'>('top');
 
+  // Canonical during the /s/:slug ↔ subdomain transition: on a real
+  // storefront host (subdomain or verified custom domain) the current
+  // page IS the canonical URL. On the platform host (dev, or prod before
+  // the wildcard is configured) it points at whatever
+  // getPlatformStoreUrl resolves to today — the subdomain once
+  // VITE_STOREFRONT_ROOT_DOMAIN is set, or this same /s/:slug page
+  // otherwise — so it is never a fabricated or duplicate-content URL.
+  const legacyPrefix = `/s/${storeSlug}`;
+  const canonicalSuffix = location.pathname === legacyPrefix
+    ? '/'
+    : location.pathname.startsWith(`${legacyPrefix}/`)
+      ? location.pathname.slice(legacyPrefix.length)
+      : location.pathname;
+  const canonicalUrl = isStorefrontHostnameMode(domainMode)
+    ? `${window.location.origin}${canonicalSuffix}${location.search}`
+    : `${domainsService.getPlatformStoreUrl(storeSlug)}${canonicalSuffix === '/' ? '' : canonicalSuffix}${location.search}`;
+
   useStorefrontDocumentMetadata(
     branding?.storeName,
     branding?.faviconUrl,
     branding?.logoUrl,
+    branding?.description,
+    canonicalUrl,
   );
 
   const commerceConfig: PublicCommerceConfig = {
@@ -321,6 +342,12 @@ function PublicStoreShell({
             categories={(catalogMeta?.categoryTree ?? []).filter((c: PublicStoreCategory) => c.showInMenu)}
             catalogMeta={catalogMeta}
           />
+        ) : null}
+
+        {showCart && selectedLocation && (scheduleLoading || orderStatus?.isAcceptingOrders !== true) ? (
+          <div className="mx-auto w-full max-w-[1440px] px-4 pt-3 sm:px-6 lg:px-8">
+            <OrderingStatusNotice theme={theme} showWhenOpen={false} />
+          </div>
         ) : null}
 
         {loading && branding ? (

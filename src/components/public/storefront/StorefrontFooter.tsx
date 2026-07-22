@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom';
-import { FileText, Globe, Mail, MapPin, MessageCircle } from 'lucide-react';
+import { Clock3, FileText, Globe, Mail, MapPin, MessageCircle } from 'lucide-react';
 import type { PublicStoreLocation } from '@/features/locations/locations.types';
 import type { PublicStorePage } from '@/types/common.types';
 import { STOREFRONT_CONTAINER_CLASS, type StorefrontTheme } from './storefrontTheme';
 import { PublicStoreLogo } from './PublicStoreLogo';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
+import { useSelectedLocation } from '@/lib/locations/locationContext';
+import { summarizeWeeklySchedule } from '@/lib/locations/schedule.utils';
 
 interface StorefrontFooterProps {
   theme: StorefrontTheme;
@@ -41,6 +43,7 @@ function buildCompanySummary(branding: PublicStorePage) {
 }
 
 export function StorefrontFooter({ theme, branding, locations }: StorefrontFooterProps) {
+  const { selectedLocation, businessHours, businessStatus, scheduleLoading } = useSelectedLocation();
   const hasPolicies = Boolean(
     branding.shippingPolicy
     || branding.returnsPolicy
@@ -55,6 +58,7 @@ export function StorefrontFooter({ theme, branding, locations }: StorefrontFoote
   const footerDivider = 'rgba(255, 255, 255, 0.12)';
   const socialBorder = withAlpha(theme.primary, 0.85);
   const primaryLocations = locations.slice(0, 3);
+  const scheduleSummary = summarizeWeeklySchedule(businessHours);
   const whatsappHref = branding.whatsappNumber
     ? `https://wa.me/${branding.whatsappNumber.replace(/\D/g, '')}`
     : null;
@@ -155,6 +159,28 @@ export function StorefrontFooter({ theme, branding, locations }: StorefrontFoote
                   <p className="mt-1 text-sm leading-6" style={{ color: footerMuted }}>
                     {buildLocationSummary(location as PublicStoreLocation) || 'Información disponible en tienda'}
                   </p>
+                  {selectedLocation?.locationId === location.locationId && (
+                    <div className="mt-3 border-l pl-3" style={{ borderColor: footerDivider }}>
+                      <div className="flex items-center gap-2 text-xs font-medium" style={{ color: businessStatus?.isOpen ? theme.primary : footerText }}>
+                        <Clock3 className="h-3.5 w-3.5" />
+                        {scheduleLoading
+                          ? 'Consultando horario…'
+                          : businessStatus?.isOpen
+                            ? 'Local abierto ahora'
+                            : 'Local cerrado ahora'}
+                      </div>
+                      {!scheduleLoading && scheduleSummary.length > 0 && (
+                        <div className="mt-2 space-y-1.5">
+                          {scheduleSummary.map((row) => (
+                            <div key={`${row.days}-${row.hours}`} className="flex justify-between gap-4 text-xs" style={{ color: footerMuted }}>
+                              <span>{row.days}</span>
+                              <span className="text-right">{row.hours}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

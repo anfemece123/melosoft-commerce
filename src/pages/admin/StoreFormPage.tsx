@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFormik } from 'formik';
 import type { FormikErrors } from 'formik';
 import {
   User, Building2, Palette, MapPin, Clock, FileText,
   Sun, Moon, CheckCircle2, AlertCircle, Utensils, ShoppingBag, ClipboardList, Home,
+  Loader2, RefreshCw, XCircle,
 } from 'lucide-react';
 import type { BusinessVertical } from '@/types/common.types';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -20,13 +21,14 @@ import { storesService } from '@/features/stores/storesService';
 import { storeCreationSchema } from '@/schemas/storeCreation.schema';
 import type { StoreCreationFormValues } from '@/schemas/storeCreation.schema';
 import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
-import { slugify } from '@/utils/slugify';
+import { useSlugAvailability } from '@/hooks/useSlugAvailability';
 import { getThemeColors, THEME_PRESET_LIST } from '@/utils/themePresets';
 import type { ThemePreset, ThemeMode } from '@/types/common.types';
 import { cn } from '@/utils/cn';
 import { geoService } from '@/features/geo/geoService';
 import type { GeoDepartment, GeoCity } from '@/features/geo/geo.types';
-import { env } from '@/lib/env';
+import { domainsService } from '@/features/domains/domainsService';
+import { normalizeStorefrontSubdomain } from '@/lib/storefront/storefrontSubdomains';
 
 // ── Business vertical constants ──────────────────────────────
 
@@ -376,13 +378,35 @@ export function StoreFormPage() {
     isSubmitting: formik.isSubmitting,
   });
 
-  // Auto-generate slug from store name
+  // Auto-generate the slug from the store name until the superadmin edits
+  // it by hand. Formik's `touched.slug` isn't right for this gate — it
+  // flips true on a mere blur/tab-through with no actual edit — so a
+  // dedicated flag tracks real typing instead (see the slug field's
+  // onChange below and handleRegenerateSlug).
+  const [slugEditedManually, setSlugEditedManually] = useState(false);
   useEffect(() => {
-    if (formik.values.name && !formik.touched.slug) {
-      void formik.setFieldValue('slug', slugify(formik.values.name));
+    if (formik.values.name && !slugEditedManually) {
+      void formik.setFieldValue('slug', normalizeStorefrontSubdomain(formik.values.name));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formik.values.name]);
+  }, [formik.values.name, slugEditedManually]);
+
+  const slugAvailability = useSlugAvailability(formik.values.slug);
+
+  function handleSlugChange(event: ChangeEvent<HTMLInputElement>) {
+    setSlugEditedManually(true);
+    void formik.setFieldValue('slug', event.target.value);
+  }
+
+  function handleRegenerateSlug() {
+    setSlugEditedManually(false);
+    void formik.setFieldValue('slug', normalizeStorefrontSubdomain(formik.values.name));
+  }
+
+  function handlePickSlugSuggestion(suggestion: string) {
+    setSlugEditedManually(true);
+    void formik.setFieldValue('slug', suggestion);
+  }
 
   // Load cities when locationDepartment changes
   useEffect(() => {
@@ -432,7 +456,7 @@ export function StoreFormPage() {
     setLogoUploading(true);
 
     try {
-      const storeKey = formik.values.slug || slugify(formik.values.name) || 'draft';
+      const storeKey = formik.values.slug || normalizeStorefrontSubdomain(formik.values.name) || 'draft';
       const logoUrl = await storesService.uploadStoreLogo(storeKey, file);
       await formik.setFieldValue('logoUrl', logoUrl);
     } catch (err) {
@@ -603,20 +627,70 @@ export function StoreFormPage() {
                   error={fieldError('name')}
                   required
                 />
-                <Input
-                  label="Dirección gratuita de la empresa"
-                  id="slug"
-                  name="slug"
-                  placeholder="tienda-nova"
-                  value={formik.values.slug}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  error={fieldError('slug')}
-                  hint={env.storefrontRootDomain
-                    ? `${formik.values.slug || 'nombre-empresa'}.${env.storefrontRootDomain}`
-                    : `El nombre que aparecerá al inicio de la URL pública`}
-                  required
-                />
+                <div>
+                  <Input
+                    label="URL de la tienda"
+                    labelAdornment={(
+                      <button
+                        type="button"
+                        onClick={handleRegenerateSlug}
+                        disabled={!formik.values.name}
+                        className="ml-auto inline-flex items-center gap-1 text-xs font-normal text-indigo-600 hover:text-indigo-700 disabled:text-gray-300 disabled:cursor-not-allowed"
+                        title="Volver a generar desde el nombre de la empresa"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Regenerar
+                      </button>
+                    )}
+                    id="slug"
+                    name="slug"
+                    placeholder="tienda-nova"
+                    value={formik.values.slug}
+                    onChange={handleSlugChange}
+                    onBlur={formik.handleBlur}
+                    error={fieldError('slug')}
+                    endAdornment={
+                      slugAvailability.status === 'checking' ? (
+                        <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
+                      ) : slugAvailability.status === 'available' ? (
+                        <CheckCircle2 className="w-4 h-4 text-green-600" />
+                      ) : slugAvailability.status === 'unavailable' ? (
+                        <XCircle className="w-4 h-4 text-red-500" />
+                      ) : undefined
+                    }
+                    required
+                  />
+                  <p className="mt-1 text-xs text-gray-500 font-mono truncate">
+                    {domainsService.getPlatformStoreUrl(formik.values.slug || 'nombre-empresa')}
+                  </p>
+                  {slugAvailability.message && (
+                    <p
+                      className={cn(
+                        'mt-1 text-xs',
+                        slugAvailability.status === 'available' && 'text-green-700',
+                        slugAvailability.status === 'unavailable' && 'text-red-600',
+                        slugAvailability.status === 'error' && 'text-amber-600',
+                        slugAvailability.status === 'checking' && 'text-gray-500',
+                      )}
+                    >
+                      {slugAvailability.message}
+                    </p>
+                  )}
+                  {slugAvailability.suggestions.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {slugAvailability.suggestions.map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          onClick={() => handlePickSlugSuggestion(suggestion)}
+                          className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs text-gray-600 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
               <Input
                 label="Eslogan"
@@ -1161,7 +1235,8 @@ export function StoreFormPage() {
           <Button
             type="submit"
             isLoading={formik.isSubmitting}
-            disabled={formik.isSubmitting}
+            disabled={formik.isSubmitting || slugAvailability.status !== 'available'}
+            title={slugAvailability.status !== 'available' ? 'Confirma una URL de tienda disponible antes de continuar' : undefined}
           >
             Crear empresa
           </Button>

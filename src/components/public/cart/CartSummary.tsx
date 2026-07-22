@@ -14,6 +14,7 @@ interface CartSummaryProps {
   hasAnyPaymentMethod: boolean;
   onViewCart?: () => void;
   onContinue: () => void;
+  canContinue?: boolean;
 }
 
 export function CartSummary({
@@ -26,6 +27,7 @@ export function CartSummary({
   hasAnyPaymentMethod,
   onViewCart,
   onContinue,
+  canContinue = true,
 }: CartSummaryProps) {
   const hasUnavailable = unavailableItems.length > 0;
 
@@ -89,7 +91,7 @@ export function CartSummary({
         <button
           type="button"
           onClick={onContinue}
-          disabled={hasUnavailable || !hasAnyPaymentMethod}
+          disabled={hasUnavailable || !hasAnyPaymentMethod || !canContinue}
           className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           style={{ backgroundColor: theme.primary }}
         >

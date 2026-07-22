@@ -186,6 +186,23 @@ export interface StoresState {
   error: string | null;
 }
 
+// ── Slug availability (check_store_slug_availability RPC) ───
+
+export type SlugAvailabilityReason =
+  | 'ok'
+  | 'too_short'
+  | 'too_long'
+  | 'invalid_format'
+  | 'all_numeric'
+  | 'reserved'
+  | 'taken';
+
+export interface SlugAvailabilityResult {
+  available: boolean;
+  normalizedSlug: string;
+  reason: SlugAvailabilityReason;
+}
+
 // ── Edge Function payload types ──────────────────────────────
 
 export interface CreateStoreWithOwnerInput {

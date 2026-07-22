@@ -149,6 +149,7 @@ export const paymentsService = {
         delivery_reference:    payload.deliveryReference ?? null,
         notes:                 payload.notes ?? null,
         store_location_id:     payload.storeLocationId ?? null,
+        whatsapp_consent:      payload.whatsappConsent ?? false,
         items: payload.items.map(i => ({
           product_id:          i.productId,
           variant_id:          i.variantId ?? null,

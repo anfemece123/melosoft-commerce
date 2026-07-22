@@ -20,6 +20,7 @@ import { productsService } from '@/features/products/productsService';
 import { isPlatformAdmin, canManageStore, canManageStoreMembers } from '@/utils/permissions';
 import type { ProductCountStats } from '@/features/products/products.types';
 import { domainsService } from '@/features/domains/domainsService';
+import type { StoreDomain } from '@/features/domains/domains.types';
 
 const CATALOG_TYPE_LABELS: Record<string, string> = {
   menu: 'Menú / Restaurante',
@@ -55,7 +56,7 @@ export function StoreDetailPage() {
   const dispatch = useAppDispatch();
   const [copied, setCopied] = useState(false);
   const [productStats, setProductStats] = useState<ProductCountStats | null>(null);
-  const [primaryDomain, setPrimaryDomain] = useState<string | null>(null);
+  const [domains, setDomains] = useState<StoreDomain[]>([]);
 
   const profile = useAppSelector(selectAuthProfile);
   const myMemberships = useAppSelector(selectMyMemberships);
@@ -90,21 +91,18 @@ export function StoreDetailPage() {
     if (!storeId) return;
     let cancelled = false;
     domainsService.list(storeId)
-      .then((domains) => {
-        if (cancelled) return;
-        setPrimaryDomain(domains.find((domain) => domain.isPrimary && domain.status === 'active')?.hostname ?? null);
+      .then((loaded) => {
+        if (!cancelled) setDomains(loaded);
       })
       .catch(() => {
-        if (!cancelled) setPrimaryDomain(null);
+        if (!cancelled) setDomains([]);
       });
     return () => { cancelled = true; };
   }, [storeId]);
 
   if (!store) return <LoadingScreen />;
 
-  const publicUrl = primaryDomain
-    ? `https://${primaryDomain}`
-    : domainsService.getPlatformStoreUrl(store.slug);
+  const publicUrl = domainsService.getStorePublicUrl(store.slug, domains);
 
   async function handleCopy() {
     try {

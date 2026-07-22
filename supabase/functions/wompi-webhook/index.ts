@@ -75,32 +75,6 @@ function mapWompiStatus(wompiStatus: string): string {
   }
 }
 
-// Snapshot of a modifier already validated and priced by create-wompi-
-// payment at checkout time — inserted verbatim, never re-validated here
-// (the product's option groups could have changed since checkout).
-interface ValidatedCustomization {
-  option_group_id: string;
-  option_item_id: string;
-  option_group_name: string;
-  option_item_label: string;
-  price_delta: number;
-}
-
-interface ValidatedItem {
-  product_id: string;
-  variant_id: string | null;
-  product_name: string;
-  product_slug: string;
-  product_image_url: string | null;
-  variant_label: string | null;
-  variant_sku: string | null;
-  quantity: number;
-  unit_price: number;
-  total_price: number;
-  customization_notes: string | null;
-  customizations?: ValidatedCustomization[];
-}
-
 interface WompiTransaction {
   id: string;
   reference: string;
@@ -208,296 +182,75 @@ serve(async (req: Request) => {
   const nowIso = new Date().toISOString();
 
   // ── 4. APPROVED: create order from snapshot ─────────────────
+  // The entire read-check-create-update sequence now happens inside a
+  // single Postgres function (migration 094, section 9) that locks the
+  // checkout_sessions row with SELECT ... FOR UPDATE before doing
+  // anything else. That lock — not this Edge Function — is what makes
+  // two concurrent APPROVED deliveries for the same session safe: the
+  // second call blocks until the first transaction commits, then finds
+  // order_id already set and returns the existing order instead of
+  // creating a second one. See that function's header comment for the
+  // full rationale and for why the previous multi-statement version
+  // here was a check-then-act race.
   if (newStatus === 'approved') {
-    // Idempotency: if the order already exists, just update session status.
-    if (session.order_id) {
-      await supabase
-        .from('checkout_sessions')
-        .update({
-          status:               'approved',
-          wompi_transaction_id: transaction.id,
-          updated_at:           nowIso,
-        })
-        .eq('id', session.id);
+    const { data: result, error: rpcErr } = await supabase.rpc('create_order_from_wompi_approved_session', {
+      p_checkout_session_id:  session.id,
+      p_wompi_transaction_id: transaction.id,
+      p_payment_method_type:  transaction.payment_method_type ?? null,
+      p_raw_event:            event as unknown as Record<string, unknown>,
+    });
 
-      console.log(`Wompi approved (order already exists): ref=${transaction.reference}, order_id=${session.order_id}`);
-      return json({ received: true, order_already_created: true });
+    if (rpcErr) {
+      console.error('create_order_from_wompi_approved_session failed:', rpcErr.message);
+      return json({ error: 'Failed to process approved payment' }, 500);
     }
 
-    // Already flagged — acknowledge without repeating the check below
-    // (the payment_transaction upsert further down is itself idempotent
-    // via ignoreDuplicates, so this is purely a fast path, not a
-    // correctness requirement).
-    if (session.status === 'paid_stock_unavailable') {
-      console.log(`Wompi approved (already flagged for manual review): ref=${transaction.reference}, session=${session.id}`);
-      return json({ received: true, requires_manual_review: true, already_flagged: true });
-    }
+    const outcome = (result as { outcome: string } | null)?.outcome;
 
-    // ── Reservation freshness check ────────────────────────────
-    // A checkout_reserved movement for this session can have been
-    // reversed by release_wompi_reservation_by_session — either because
-    // the payment was declined/errored/voided earlier (out-of-order
-    // webhook delivery: a stale APPROVED arriving after that), or
-    // because the checkout expired and a LATER, unrelated checkout for
-    // the same product ran the deferred-expiration sweep (091) and
-    // released it before this late APPROVED ever showed up. Either way,
-    // the stock this payment was supposed to hold may no longer be
-    // reserved — it could already be sold to someone else. Never create
-    // a normal order on top of that, and never silently re-reserve: a
-    // payment Wompi actually captured with nothing safely backing it is
-    // a business decision (refund, backorder, contact the customer),
-    // not something to paper over automatically.
-    const { data: releasedMovements, error: releasedCheckErr } = await supabase
-      .from('inventory_movements')
-      .select('id')
-      .eq('checkout_session_id', session.id)
-      .eq('movement_type', 'checkout_released')
-      .limit(1);
+    switch (outcome) {
+      case 'session_not_found':
+        // Shouldn't happen — session was already fetched above by the
+        // same reference — but handled defensively.
+        console.warn('Wompi webhook: session vanished before RPC, ref=', transaction.reference);
+        return json({ received: true, unknown_reference: true });
 
-    if (releasedCheckErr) {
-      console.error('Failed to check reservation freshness:', releasedCheckErr.message);
-      return json({ error: 'Internal error verifying reservation' }, 500);
-    }
+      case 'already_created':
+        console.log(`Wompi approved (order already exists): ref=${transaction.reference}, order_id=${(result as { order_id: string }).order_id}`);
+        return json({ received: true, order_already_created: true });
 
-    if (releasedMovements && releasedMovements.length > 0) {
-      const { data: provider } = await supabase
-        .from('payment_providers')
-        .select('id')
-        .eq('code', 'wompi')
-        .single();
+      case 'already_flagged':
+        console.log(`Wompi approved (already flagged for manual review): ref=${transaction.reference}, session=${session.id}`);
+        return json({ received: true, requires_manual_review: true, already_flagged: true });
 
-      // Recorded for audit/reconciliation even though there's no order
-      // to attach it to — order_id is nullable on payment_transactions
-      // specifically for cases like this. ignoreDuplicates covers a
-      // retried webhook hitting this same branch again.
-      const { error: txErr } = await supabase
-        .from('payment_transactions')
-        .upsert(
-          {
-            store_id:                session.store_id,
-            order_id:                null,
-            provider_id:             provider?.id ?? null,
-            provider_reference:      transaction.reference,
-            provider_transaction_id: transaction.id,
-            amount:                  Number(session.total_amount),
-            amount_in_cents:         session.amount_in_cents,
-            currency:                session.currency,
-            status:                  'approved',
-            payment_method:          transaction.payment_method_type ?? null,
-            checkout_url:            session.checkout_url ?? null,
-            raw_response:            event as unknown as Record<string, unknown>,
-            paid_at:                 nowIso,
-          },
-          { onConflict: 'provider_reference', ignoreDuplicates: true },
+      case 'requires_manual_review':
+        console.error(
+          `Wompi approved but reservation already released — requires manual review: ` +
+          `ref=${transaction.reference}, session=${session.id}, store=${session.store_id}`,
         );
-      if (txErr) {
-        console.error('Failed to record payment_transaction for released reservation:', txErr.message);
-      }
+        return json({ received: true, requires_manual_review: true });
 
-      await supabase
-        .from('checkout_sessions')
-        .update({
-          status:               'paid_stock_unavailable',
-          wompi_transaction_id: transaction.id,
-          updated_at:           nowIso,
-        })
-        .eq('id', session.id);
-
-      console.error(
-        `Wompi approved but reservation already released — requires manual review: ` +
-        `ref=${transaction.reference}, session=${session.id}, store=${session.store_id}`,
-      );
-      return json({ received: true, requires_manual_review: true });
-    }
-
-    // Generate order number
-    const orderShortId = crypto.randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase();
-    const orderDateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const orderNumber = `ORD-${orderDateStr}-${orderShortId}`;
-
-    // Create the order
-    const { data: newOrder, error: orderErr } = await supabase
-      .from('orders')
-      .insert({
-        store_id:              session.store_id,
-        store_location_id:     session.store_location_id ?? null,
-        order_number:          orderNumber,
-        customer_name:         session.customer_name,
-        customer_phone:        session.customer_phone,
-        customer_email:        session.customer_email ?? null,
-        fulfillment_method:    session.fulfillment_method,
-        shipping_address:      session.shipping_address ?? null,
-        city:                  session.city ?? null,
-        department:            session.department ?? null,
-        delivery_neighborhood: session.delivery_neighborhood ?? null,
-        delivery_reference:    session.delivery_reference ?? null,
-        notes:                 session.notes ?? null,
-        source:                'web',
-        payment_method:        'online',
-        subtotal:              Number(session.subtotal_amount ?? session.total_amount ?? 0),
-        shipping_amount:       Number(session.shipping_amount ?? 0),
-        discount_amount:       0,
-        total_amount:          Number(session.total_amount),
-        currency:              session.currency,
-        status:                'pending',
-        payment_status:        'paid',
-      })
-      .select('id')
-      .single();
-
-    if (orderErr || !newOrder) {
-      console.error('Failed to create order from checkout_session:', orderErr?.message);
-      return json({ error: 'Failed to create order' }, 500);
-    }
-
-    // Create order_items from the locked-in items_snapshot
-    const snapshotItems = (session.items_snapshot ?? []) as ValidatedItem[];
-    const orderItemRows = snapshotItems.map((item: ValidatedItem) => ({
-      order_id:                    newOrder.id,
-      product_id:                  item.product_id,
-      variant_id:                  item.variant_id ?? null,
-      product_name_snapshot:       item.product_name,
-      product_slug_snapshot:       item.product_slug,
-      product_image_url_snapshot:  item.product_image_url ?? null,
-      variant_label_snapshot:      item.variant_label ?? null,
-      variant_sku_snapshot:        item.variant_sku ?? null,
-      name:                        item.product_name,
-      quantity:                    item.quantity,
-      unit_price:                  item.unit_price,
-      total_price:                 item.total_price,
-      customer_note:               item.customization_notes ?? null,
-    }));
-
-    // .select('id') so each inserted row's id can be paired back up with
-    // its snapshotItems entry below — Postgres preserves VALUES-list order
-    // in a single INSERT ... RETURNING, so a plain index zip is safe here.
-    const { data: insertedItems, error: itemsErr } = await supabase
-      .from('order_items')
-      .insert(orderItemRows)
-      .select('id');
-    if (itemsErr) {
-      // Log but don't fail — the order exists, items can be recovered.
-      console.error('Failed to create order_items:', itemsErr.message);
-    }
-
-    // Snapshot each item's already-validated modifiers (validated and
-    // priced by create-wompi-payment at checkout time) — never re-validate
-    // against product_option_groups/items here, the product's modifiers
-    // could have changed since the customer checked out.
-    if (insertedItems && insertedItems.length === snapshotItems.length) {
-      const customizationRows = insertedItems.flatMap((row, idx) =>
-        (snapshotItems[idx].customizations ?? []).map((c) => ({
-          order_item_id:      row.id,
-          option_group_id:    c.option_group_id,
-          option_item_id:     c.option_item_id,
-          option_group_name:  c.option_group_name,
-          option_item_label:  c.option_item_label,
-          price_delta:        c.price_delta,
-        }))
-      );
-      if (customizationRows.length > 0) {
-        const { error: customizationsErr } = await supabase
-          .from('order_item_customizations')
-          .insert(customizationRows);
-        if (customizationsErr) {
-          console.error('Failed to create order_item_customizations:', customizationsErr.message);
-        }
-      }
-    } else if (insertedItems) {
-      console.error(
-        'order_items insert count mismatch — skipping order_item_customizations',
-        `expected ${snapshotItems.length}, got ${insertedItems.length}`,
-      );
-    }
-
-    // Link each item's 'checkout_reserved' movement (from create-wompi-
-    // payment, migration 091) to the order it just became — stock was
-    // already decremented at checkout time, this never decrements again.
-    // Matched by (product_id, variant_id) against the pool of this
-    // session's still-unlinked reservation movements; claimed one at a
-    // time (splice) so duplicate product/variant combos across different
-    // snapshot items — e.g. same variant with different modifiers — each
-    // claim a distinct movement instead of all matching the first one.
-    // An item with no matching movement simply never had stock tracked
-    // for it (track_inventory=false) — nothing to link, not an error.
-    if (insertedItems && insertedItems.length === snapshotItems.length) {
-      const { data: reservationMovements } = await supabase
-        .from('inventory_movements')
-        .select('id, product_id, variant_id')
-        .eq('checkout_session_id', session.id)
-        .eq('movement_type', 'checkout_reserved')
-        .is('order_id', null);
-
-      const pool = [...(reservationMovements ?? [])];
-
-      for (let idx = 0; idx < snapshotItems.length; idx++) {
-        const item = snapshotItems[idx];
-        const orderItemId = insertedItems[idx]?.id;
-        if (!orderItemId) continue;
-
-        const poolIdx = pool.findIndex(
-          (m) => m.product_id === item.product_id && m.variant_id === (item.variant_id ?? null)
+      case 'session_already_resolved': {
+        // A late/duplicate/out-of-order APPROVED arrived for a session
+        // already terminally marked declined/expired/error/voided by an
+        // earlier event — never silently create an order for it.
+        const previousStatus = (result as { previous_status?: string }).previous_status;
+        console.error(
+          `Wompi approved but session was already resolved as '${previousStatus}' — requires manual review: ` +
+          `ref=${transaction.reference}, session=${session.id}, store=${session.store_id}`,
         );
-        if (poolIdx === -1) continue;
-
-        const [matched] = pool.splice(poolIdx, 1);
-        const { error: linkErr } = await supabase
-          .from('inventory_movements')
-          .update({ order_id: newOrder.id, order_item_id: orderItemId })
-          .eq('id', matched.id);
-        if (linkErr) {
-          console.error('Failed to link checkout_reserved movement to order:', linkErr.message);
-        }
+        return json({ received: true, requires_manual_review: true, previous_status: previousStatus ?? null });
       }
+
+      case 'created': {
+        const { order_id: orderId, order_number: orderNumber } = result as { order_id: string; order_number: string };
+        console.log(`Wompi approved: ref=${transaction.reference}, order=${orderNumber}, order_id=${orderId}`);
+        return json({ received: true, order_number: orderNumber });
+      }
+
+      default:
+        console.error('create_order_from_wompi_approved_session returned an unexpected outcome:', outcome);
+        return json({ error: 'Unexpected internal state' }, 500);
     }
-
-    // Get Wompi provider id for payment_transactions
-    const { data: provider } = await supabase
-      .from('payment_providers')
-      .select('id')
-      .eq('code', 'wompi')
-      .single();
-
-    // Create payment_transaction (linked to the new order).
-    // upsert with ignoreDuplicates guards against retried webhooks.
-    const { error: txErr } = await supabase
-      .from('payment_transactions')
-      .upsert(
-        {
-          store_id:                session.store_id,
-          order_id:                newOrder.id,
-          provider_id:             provider?.id ?? null,
-          provider_reference:      transaction.reference,
-          provider_transaction_id: transaction.id,
-          amount:                  Number(session.total_amount),
-          amount_in_cents:         session.amount_in_cents,
-          currency:                session.currency,
-          status:                  'approved',
-          payment_method:          transaction.payment_method_type ?? null,
-          checkout_url:            session.checkout_url ?? null,
-          raw_response:            event as unknown as Record<string, unknown>,
-          paid_at:                 nowIso,
-        },
-        { onConflict: 'provider_reference', ignoreDuplicates: true },
-      );
-
-    if (txErr) {
-      console.error('Failed to create payment_transaction:', txErr.message);
-    }
-
-    // Mark checkout_session approved with the new order_id
-    await supabase
-      .from('checkout_sessions')
-      .update({
-        status:               'approved',
-        order_id:             newOrder.id,
-        wompi_transaction_id: transaction.id,
-        updated_at:           nowIso,
-      })
-      .eq('id', session.id);
-
-    console.log(`Wompi approved: ref=${transaction.reference}, order=${orderNumber}, order_id=${newOrder.id}`);
-    return json({ received: true, order_number: orderNumber });
   }
 
   // ── 5. Non-approved: update session status, release reserved stock ──

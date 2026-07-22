@@ -19,6 +19,7 @@ import {
 import { calculateShippingAmount } from '@/lib/commerce/shippingRules';
 import type { WebOrderResult } from '@/features/orders/orders.types';
 import type { PaymentChoice } from './CheckoutPaymentSelector';
+import { locationsService } from '@/features/locations/locationsService';
 
 export type DrawerStep = 'cart' | 'form' | 'submitting' | 'confirmed' | 'redirecting_to_wompi';
 
@@ -84,6 +85,7 @@ export function useCartCheckout({
       deliveryNeighborhood: '',
       deliveryReference: '',
       notes: '',
+      whatsappConsent: false,
     },
     validationSchema: checkoutSchema,
     enableReinitialize: false,
@@ -107,6 +109,16 @@ export function useCartCheckout({
         }
 
         setStep('submitting');
+        const orderingStatus = await locationsService.getLocationOrderStatus(operationalLocation.locationId);
+        if (!orderingStatus.isAcceptingOrders) {
+          setStep('form');
+          notify.warning(
+            orderingStatus.statusCode === 'paused'
+              ? 'Los pedidos están pausados temporalmente. Tu carrito seguirá guardado.'
+              : 'La tienda no está recibiendo pedidos en este momento. Tu carrito seguirá guardado.',
+          );
+          return;
+        }
         const shippingAddress = fulfillmentMethod === 'pickup'
           ? null
           : (values.shippingAddress.trim() || null);
@@ -162,6 +174,7 @@ export function useCartCheckout({
               deliveryReference,
               notes:                values.notes.trim() || null,
               storeLocationId:      operationalLocation.locationId,
+              whatsappConsent:      values.whatsappConsent,
               items: items.map(item => ({
                 productId:          item.productId,
                 variantId:          item.variantId ?? null,
@@ -199,6 +212,7 @@ export function useCartCheckout({
             notes:                values.notes.trim() || null,
             storeLocationId:      operationalLocation.locationId,
             paymentMethod:        'cash_on_delivery',
+            whatsappConsent:      values.whatsappConsent,
             items: items.map(item => ({
               productId:          item.productId,
               variantId:          item.variantId ?? null,

@@ -145,6 +145,7 @@ export const ordersService = {
       p_notes:                 payload.notes,
       p_store_location_id:     payload.storeLocationId ?? null,
       p_payment_method:        payload.paymentMethod ?? 'cash_on_delivery',
+      p_whatsapp_consent:      payload.whatsappConsent ?? false,
       p_items: payload.items.map((item) => ({
         product_id:          item.productId,
         variant_id:          item.variantId ?? null,

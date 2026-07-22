@@ -353,6 +353,22 @@ El hook `useAuthBootstrap` en `src/features/auth/useAuthBootstrap.ts`:
 - Deploy en Vercel
 - StoreFormPage: reemplazar Input libre por Select con geo_departments/geo_cities
 
+### Fase 9 — Dominios y subdominios definitivos ✅
+
+Arquitectura: panel en `https://commerce.melosoftapp.com`, storefront de cada empresa en `https://{slug}.melosoftapp.com` (comodín), dominios propios vía Vercel (migración 083, ya existente), `/s/:storeSlug` conservada como compatibilidad. `melosoftapp.com` (apex/`www`) pertenece a una app previa distinta — no se toca.
+
+- Migración 097: `is_reserved_store_slug()` (agrega `commerce` y ~25 palabras más al set de 083), `normalize_store_slug()` (normalizador determinista, espejo de `normalizeStorefrontSubdomain` en frontend), constraint `stores_slug_not_all_numeric`, RPC `check_store_slug_availability(slug)` (`platform_admin`-only, solo devuelve `available`/`normalized_slug`/`reason`, nunca datos de la tienda existente).
+- `src/lib/storefront/storefrontSubdomains.ts`: lista de reservados ampliada (misma que 097), `normalizeStorefrontSubdomain()`, `isAllNumericStorefrontSubdomain()`, constantes de longitud — única fuente de verdad en frontend, ya reutilizada por `storeCreation.schema.ts` y el host resolver existente (`StorefrontDomainProvider`).
+- `src/hooks/useSlugAvailability.ts`: hook debounced (400ms) con verificación client-side instantánea (formato/reservado/numérico) + RPC para el resto; descarta respuestas obsoletas con un contador de request; genera sugerencias (`-co`, `-oficial`, `-2`, `-3`) cuando el slug está ocupado.
+- `StoreFormPage.tsx`: campo "URL de la tienda" con sugerencia automática desde el nombre (se detiene solo cuando el superadmin edita a mano, vía `slugEditedManually`, no vía `formik.touched`), botón "Regenerar", vista previa con `domainsService.getPlatformStoreUrl()`, estados de disponibilidad, sugerencias clicables, submit bloqueado hasta `available: true`.
+- `domainsService.ts`: `getStorePublicUrl(storeSlug, domains?)` — dominio propio activo > `getPlatformStoreUrl()` — única función que decide la URL pública preferida; reemplaza el patrón `primaryDomain ? https://... : getPlatformStoreUrl()` duplicado en `StoreDetailPage.tsx`/`OffersPage.tsx`.
+- `useStorefrontDocumentMetadata.ts` + `PublicLayout.tsx`: canonical, `og:title/description/type/url/image` y meta description del storefront; canonical resuelve a la URL preferida real durante la transición `/s/:slug` ↔ subdominio (nunca contenido duplicado fabricado).
+- `CustomDomainRoute.tsx`: `noindex` en la pantalla "Sitio no encontrado".
+- `embeddedSignup.ts`: rechaza `FB.login` fuera de HTTPS con un error claro (antes fallaba dentro del SDK de Meta). `WhatsappSettingsPage.tsx`: rechaza iniciar Embedded Signup si el host actual es un storefront (subdominio/dominio propio).
+- Edge Functions `create-store-with-owner`, `resend-owner-invite`, `whatsapp-embedded-signup`, `whatsapp-template-sync`: origen CORS y fallback de redirect de invitación corregidos de `melosoftapp.com` (app anterior) a `commerce.melosoftapp.com`. `create-store-with-owner` además: lista de reservados sincronizada con 097, rechazo de slug solo-numérico, error 409 legible en violación de unicidad concurrente, rollback (`rollbackStoreCreation`) si cualquier paso posterior a crear la tienda falla — nunca deja una empresa a medias.
+- `public/robots.txt` nuevo. `.env.example`/`src/lib/env.ts`: `VITE_PUBLIC_SITE_URL`/`VITE_STOREFRONT_ROOT_DOMAIN`/`VITE_PLATFORM_HOSTNAMES` documentadas con semántica explícita y valores `melosoftapp.com`.
+- Riesgo residual documentado (no resuelto en esta fase): las rutas `/admin/*` no están segregadas por host — un `platform_admin` que inicie sesión manualmente desde un subdominio de tienda técnicamente accede al panel ahí también (localStorage/sesión de Supabase son por origen, no se comparten solos). Mitigado puntualmente para WhatsApp Embedded Signup; no mitigado en general.
+
 ---
 
-*Última actualización: 2026-06-24 (Fase 5.5 completada — sucursales y disponibilidad)*
+*Última actualización: 2026-07-21 (Fase 9 completada — dominios y subdominios definitivos)*

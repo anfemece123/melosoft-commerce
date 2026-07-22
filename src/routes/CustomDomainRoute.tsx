@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Globe2, Loader2 } from 'lucide-react';
 import {
@@ -5,8 +6,32 @@ import {
   useStorefrontDomain,
 } from '@/lib/storefront/storefrontDomainContext';
 
+// Never let a "site not found" response get indexed — it has no store
+// identity to canonicalize and isn't meaningful search content.
+function useNoIndex(active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
+    const existed = Boolean(meta);
+    const previousContent = meta?.getAttribute('content') ?? null;
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute('name', 'robots');
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute('content', 'noindex, nofollow');
+    return () => {
+      if (!meta) return;
+      if (existed && previousContent) meta.setAttribute('content', previousContent);
+      else meta.remove();
+    };
+  }, [active]);
+}
+
 export function CustomDomainRoute() {
   const { mode, hostname } = useStorefrontDomain();
+  const notFound = mode !== 'loading' && !isStorefrontHostnameMode(mode);
+  useNoIndex(notFound);
 
   if (mode === 'loading') {
     return (
@@ -16,7 +41,7 @@ export function CustomDomainRoute() {
     );
   }
 
-  if (!isStorefrontHostnameMode(mode)) {
+  if (notFound) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
         <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">

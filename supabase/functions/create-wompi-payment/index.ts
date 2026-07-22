@@ -108,6 +108,7 @@ interface RequestBody {
   store_location_id?: string | null;
   items?: CartItem[];
   redirect_url?: string;
+  whatsapp_consent?: boolean;
 }
 
 function calculateShippingAmount(
@@ -159,6 +160,7 @@ serve(async (req: Request) => {
     store_location_id = null,
     items = [],
     redirect_url,
+    whatsapp_consent = false,
   } = body;
 
   // ── Validate required fields ──────────────────────────────
@@ -328,7 +330,8 @@ serve(async (req: Request) => {
     return json({ error: 'Wompi events secret is not configured for this store' }, 422);
   }
 
-  // ── 4. Validate location ────────────────────────────────────
+  // ── 4. Validate location and ordering schedule ─────────────
+  let operationalLocationId = store_location_id;
   if (store_location_id) {
     const { data: locRow } = await supabase
       .from('store_locations')
@@ -341,6 +344,37 @@ serve(async (req: Request) => {
     if (!locRow) {
       return json({ error: 'Invalid or inactive store location' }, 422);
     }
+  } else {
+    const { data: primaryLocation } = await supabase
+      .from('store_locations')
+      .select('id')
+      .eq('store_id', storeId)
+      .eq('is_primary', true)
+      .eq('is_active', true)
+      .maybeSingle();
+    operationalLocationId = primaryLocation?.id ?? null;
+  }
+
+  if (!operationalLocationId) {
+    return json({ error: 'No active store location is available' }, 422);
+  }
+
+  const { data: orderStatus, error: orderStatusError } = await supabase.rpc(
+    'get_location_order_status',
+    { p_location_id: operationalLocationId },
+  );
+  if (orderStatusError) {
+    console.error('Failed to validate ordering schedule:', orderStatusError.message);
+    return json({ error: 'Could not validate ordering schedule' }, 500);
+  }
+  if (orderStatus?.is_accepting_orders !== true) {
+    const paused = orderStatus?.status_code === 'paused';
+    return json({
+      error: paused
+        ? 'Los pedidos están pausados en este momento.'
+        : 'La tienda no está recibiendo pedidos en este momento.',
+      code: paused ? 'ORDERING_PAUSED' : 'ORDERING_CLOSED',
+    }, 409);
   }
 
   // ── 5. Validate products + calculate total server-side ──────
@@ -533,7 +567,7 @@ serve(async (req: Request) => {
     .insert({
       store_id:              storeId,
       store_slug:            store_slug,
-      store_location_id:     store_location_id ?? null,
+      store_location_id:     operationalLocationId,
       provider:              'wompi',
       provider_reference:    reference,
       amount_in_cents:       amountInCents,
@@ -555,6 +589,10 @@ serve(async (req: Request) => {
       total_amount:          totalAmount,
       checkout_url:          checkoutUrl,
       expires_at:            twoHoursFromNow,
+      whatsapp_consent:        Boolean(whatsapp_consent),
+      whatsapp_consent_at:     whatsapp_consent ? new Date().toISOString() : null,
+      whatsapp_consent_source: whatsapp_consent ? 'checkout_web' : null,
+      whatsapp_consent_version: whatsapp_consent ? 'v1' : null,
     })
     .select('id')
     .single();

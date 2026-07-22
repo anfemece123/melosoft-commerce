@@ -1,0 +1,7 @@
+User-agent: *
+Disallow: /admin
+Disallow: /login
+Disallow: /set-password
+Disallow: /auth/callback
+Disallow: /access-denied
+Allow: /

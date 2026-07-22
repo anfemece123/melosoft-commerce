@@ -1179,6 +1179,10 @@ export interface Database {
           order_id: string | null;
           wompi_transaction_id: string | null;
           expires_at: string | null;
+          whatsapp_consent: boolean;
+          whatsapp_consent_at: string | null;
+          whatsapp_consent_source: string | null;
+          whatsapp_consent_version: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1210,6 +1214,10 @@ export interface Database {
           order_id?: string | null;
           wompi_transaction_id?: string | null;
           expires_at?: string | null;
+          whatsapp_consent?: boolean;
+          whatsapp_consent_at?: string | null;
+          whatsapp_consent_source?: string | null;
+          whatsapp_consent_version?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1315,6 +1323,10 @@ export interface Database {
           fulfillment_method: string;
           notes: string | null;
           metadata: Json;
+          whatsapp_consent: boolean;
+          whatsapp_consent_at: string | null;
+          whatsapp_consent_source: string | null;
+          whatsapp_consent_version: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1344,6 +1356,10 @@ export interface Database {
           fulfillment_method?: string;
           notes?: string | null;
           metadata?: Json;
+          whatsapp_consent?: boolean;
+          whatsapp_consent_at?: string | null;
+          whatsapp_consent_source?: string | null;
+          whatsapp_consent_version?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1373,6 +1389,10 @@ export interface Database {
           fulfillment_method?: string;
           notes?: string | null;
           metadata?: Json;
+          whatsapp_consent?: boolean;
+          whatsapp_consent_at?: string | null;
+          whatsapp_consent_source?: string | null;
+          whatsapp_consent_version?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1670,6 +1690,11 @@ export interface Database {
           sort_order: number;
           delivery_notes: string | null;
           pickup_notes: string | null;
+          timezone: string;
+          order_schedule_mode: string;
+          orders_paused: boolean;
+          orders_paused_until: string | null;
+          orders_pause_reason: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1696,6 +1721,11 @@ export interface Database {
           sort_order?: number;
           delivery_notes?: string | null;
           pickup_notes?: string | null;
+          timezone?: string;
+          order_schedule_mode?: string;
+          orders_paused?: boolean;
+          orders_paused_until?: string | null;
+          orders_pause_reason?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1722,6 +1752,11 @@ export interface Database {
           sort_order?: number;
           delivery_notes?: string | null;
           pickup_notes?: string | null;
+          timezone?: string;
+          order_schedule_mode?: string;
+          orders_paused?: boolean;
+          orders_paused_until?: string | null;
+          orders_pause_reason?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -2126,8 +2161,371 @@ export interface Database {
         };
         Relationships: [];
       };
-    };
+      location_schedule_intervals: {
+        Row: {
+          id: string;
+          store_id: string;
+          location_id: string;
+          schedule_kind: string;
+          day_of_week: number;
+          starts_at: string | null;
+          ends_at: string | null;
+          ends_next_day: boolean;
+          is_all_day: boolean;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          location_id: string;
+          schedule_kind: string;
+          day_of_week: number;
+          starts_at?: string | null;
+          ends_at?: string | null;
+          ends_next_day?: boolean;
+          is_all_day?: boolean;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          location_id?: string;
+          schedule_kind?: string;
+          day_of_week?: number;
+          starts_at?: string | null;
+          ends_at?: string | null;
+          ends_next_day?: boolean;
+          is_all_day?: boolean;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      location_schedule_exceptions: {
+        Row: {
+          id: string;
+          store_id: string;
+          location_id: string;
+          schedule_kind: string;
+          exception_date: string;
+          is_closed: boolean;
+          intervals: Json;
+          note: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          location_id: string;
+          schedule_kind: string;
+          exception_date: string;
+          is_closed?: boolean;
+          intervals?: Json;
+          note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          location_id?: string;
+          schedule_kind?: string;
+          exception_date?: string;
+          is_closed?: boolean;
+          intervals?: Json;
+          note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      store_whatsapp_settings: {
+        Row: {
+          id: string;
+          store_id: string;
+          enabled: boolean;
+          sender_mode: string;
+          customer_order_confirmation_enabled: boolean;
+          order_confirmed_enabled: boolean;
+          payment_approved_enabled: boolean;
+          payment_declined_enabled: boolean;
+          order_preparing_enabled: boolean;
+          order_ready_for_pickup_enabled: boolean;
+          order_shipped_enabled: boolean;
+          order_delivered_enabled: boolean;
+          order_cancelled_enabled: boolean;
+          locale: string;
+          timezone: string;
+          final_message: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          enabled?: boolean;
+          sender_mode?: string;
+          customer_order_confirmation_enabled?: boolean;
+          order_confirmed_enabled?: boolean;
+          payment_approved_enabled?: boolean;
+          payment_declined_enabled?: boolean;
+          order_preparing_enabled?: boolean;
+          order_ready_for_pickup_enabled?: boolean;
+          order_shipped_enabled?: boolean;
+          order_delivered_enabled?: boolean;
+          order_cancelled_enabled?: boolean;
+          locale?: string;
+          timezone?: string;
+          final_message?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          enabled?: boolean;
+          sender_mode?: string;
+          customer_order_confirmation_enabled?: boolean;
+          order_confirmed_enabled?: boolean;
+          payment_approved_enabled?: boolean;
+          payment_declined_enabled?: boolean;
+          order_preparing_enabled?: boolean;
+          order_ready_for_pickup_enabled?: boolean;
+          order_shipped_enabled?: boolean;
+          order_delivered_enabled?: boolean;
+          order_cancelled_enabled?: boolean;
+          locale?: string;
+          timezone?: string;
+          final_message?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      whatsapp_notifications: {
+        Row: {
+          id: string;
+          store_id: string;
+          order_id: string | null;
+          channel: string;
+          event_type: string;
+          recipient_phone: string;
+          template_name: string;
+          template_language: string;
+          template_params: Json | null;
+          status: string;
+          provider: string;
+          provider_message_id: string | null;
+          attempts: number;
+          max_attempts: number;
+          next_attempt_at: string;
+          locked_at: string | null;
+          locked_by: string | null;
+          is_permanent_failure: boolean;
+          last_error_category: string | null;
+          last_error_code: string | null;
+          last_error_message: string | null;
+          queued_at: string;
+          sent_at: string | null;
+          delivered_at: string | null;
+          read_at: string | null;
+          failed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          order_id?: string | null;
+          channel?: string;
+          event_type: string;
+          recipient_phone: string;
+          template_name: string;
+          template_language?: string;
+          template_params?: Json | null;
+          status?: string;
+          provider?: string;
+          provider_message_id?: string | null;
+          attempts?: number;
+          max_attempts?: number;
+          next_attempt_at?: string;
+          locked_at?: string | null;
+          locked_by?: string | null;
+          is_permanent_failure?: boolean;
+          last_error_category?: string | null;
+          last_error_code?: string | null;
+          last_error_message?: string | null;
+          queued_at?: string;
+          sent_at?: string | null;
+          delivered_at?: string | null;
+          read_at?: string | null;
+          failed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          order_id?: string | null;
+          channel?: string;
+          event_type?: string;
+          recipient_phone?: string;
+          template_name?: string;
+          template_language?: string;
+          template_params?: Json | null;
+          status?: string;
+          provider?: string;
+          provider_message_id?: string | null;
+          attempts?: number;
+          max_attempts?: number;
+          next_attempt_at?: string;
+          locked_at?: string | null;
+          locked_by?: string | null;
+          is_permanent_failure?: boolean;
+          last_error_category?: string | null;
+          last_error_code?: string | null;
+          last_error_message?: string | null;
+          queued_at?: string;
+          sent_at?: string | null;
+          delivered_at?: string | null;
+          read_at?: string | null;
+          failed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      store_whatsapp_connections: {
+        Row: {
+          id: string;
+          store_id: string;
+          meta_business_id: string | null;
+          waba_id: string | null;
+          phone_number_id: string | null;
+          display_phone_number: string | null;
+          verified_name: string | null;
+          connection_status: string;
+          onboarding_type: string | null;
+          coexistence_enabled: boolean;
+          template_name: string;
+          template_language: string;
+          template_status: string;
+          template_rejected_reason: string | null;
+          token_secret_reference: string | null;
+          connected_by: string | null;
+          connected_at: string | null;
+          last_verified_at: string | null;
+          disconnected_at: string | null;
+          last_error_code: string | null;
+          last_error_message: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          meta_business_id?: string | null;
+          waba_id?: string | null;
+          phone_number_id?: string | null;
+          display_phone_number?: string | null;
+          verified_name?: string | null;
+          connection_status?: string;
+          onboarding_type?: string | null;
+          coexistence_enabled?: boolean;
+          template_name?: string;
+          template_language?: string;
+          template_status?: string;
+          template_rejected_reason?: string | null;
+          token_secret_reference?: string | null;
+          connected_by?: string | null;
+          connected_at?: string | null;
+          last_verified_at?: string | null;
+          disconnected_at?: string | null;
+          last_error_code?: string | null;
+          last_error_message?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          meta_business_id?: string | null;
+          waba_id?: string | null;
+          phone_number_id?: string | null;
+          display_phone_number?: string | null;
+          verified_name?: string | null;
+          connection_status?: string;
+          onboarding_type?: string | null;
+          coexistence_enabled?: boolean;
+          template_name?: string;
+          template_language?: string;
+          template_status?: string;
+          template_rejected_reason?: string | null;
+          token_secret_reference?: string | null;
+          connected_by?: string | null;
+          connected_at?: string | null;
+          last_verified_at?: string | null;
+          disconnected_at?: string | null;
+          last_error_code?: string | null;
+          last_error_message?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      store_whatsapp_connection_events: {
+        Row: {
+          id: string;
+          store_id: string;
+          event_type: string;
+          actor_user_id: string | null;
+          detail: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          event_type: string;
+          actor_user_id?: string | null;
+          detail?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          event_type?: string;
+          actor_user_id?: string | null;
+          detail?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      };
     Views: {
+      platform_whatsapp_connections_overview: {
+        Row: {
+          store_id: string;
+          store_name: string;
+          connection_status: string;
+          display_phone_number_masked: string | null;
+          waba_id: string | null;
+          template_status: string;
+          onboarding_type: string | null;
+          coexistence_enabled: boolean;
+          last_verified_at: string | null;
+          last_error_code: string | null;
+          last_error_message: string | null;
+          connected_at: string | null;
+          disconnected_at: string | null;
+        };
+        Relationships: [];
+      };
       public_store_pages: {
         Row: {
           store_id: string;
@@ -2471,6 +2869,8 @@ export interface Database {
           pickup_notes: string | null;
           is_primary: boolean;
           sort_order: number;
+          timezone: string;
+          order_schedule_mode: string;
         };
         Relationships: [];
       };
@@ -2499,6 +2899,34 @@ export interface Database {
       };
     };
     Functions: {
+      get_location_schedule_status: {
+        Args: {
+          p_location_id: string;
+          p_schedule_kind: string;
+          p_at?: string;
+        };
+        Returns: Json;
+      };
+      get_location_order_status: {
+        Args: {
+          p_location_id: string;
+          p_at?: string;
+        };
+        Returns: Json;
+      };
+      save_location_schedule_configuration: {
+        Args: {
+          p_location_id: string;
+          p_timezone: string;
+          p_order_schedule_mode: string;
+          p_orders_paused: boolean;
+          p_orders_paused_until: string | null;
+          p_orders_pause_reason: string | null;
+          p_business_intervals: Json;
+          p_ordering_intervals: Json;
+        };
+        Returns: undefined;
+      };
       resolve_store_domain: {
         Args: {
           p_hostname: string;
@@ -2518,6 +2946,16 @@ export interface Database {
           store_id: string;
           store_slug: string;
           store_name: string;
+        }>;
+      };
+      check_store_slug_availability: {
+        Args: {
+          p_slug: string;
+        };
+        Returns: Array<{
+          available: boolean;
+          normalized_slug: string;
+          reason: string;
         }>;
       };
       get_or_create_campaign_offer_session: {
@@ -2543,6 +2981,21 @@ export interface Database {
           p_items?: Json;
           p_store_location_id?: string | null;
           p_payment_method?: string;
+          p_whatsapp_consent?: boolean;
+          p_whatsapp_consent_source?: string;
+        };
+        Returns: Json;
+      };
+      enqueue_test_whatsapp_notification: {
+        Args: {
+          p_store_id: string;
+          p_phone: string;
+        };
+        Returns: string;
+      };
+      disconnect_store_whatsapp_connection: {
+        Args: {
+          p_store_id: string;
         };
         Returns: Json;
       };

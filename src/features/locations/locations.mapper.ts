@@ -25,6 +25,11 @@ export function mapLocationRowToStoreLocation(row: StoreLocationRow): StoreLocat
     sortOrder: row.sort_order,
     deliveryNotes: row.delivery_notes,
     pickupNotes: row.pickup_notes,
+    timezone: row.timezone,
+    orderScheduleMode: row.order_schedule_mode as StoreLocation['orderScheduleMode'],
+    ordersPaused: row.orders_paused,
+    ordersPausedUntil: row.orders_paused_until,
+    ordersPauseReason: row.orders_pause_reason,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -49,5 +54,7 @@ export function mapPublicLocationRowToPublicStoreLocation(row: PublicStoreLocati
     pickupNotes: row.pickup_notes,
     isPrimary: row.is_primary,
     sortOrder: row.sort_order,
+    timezone: row.timezone,
+    orderScheduleMode: row.order_schedule_mode as PublicStoreLocation['orderScheduleMode'],
   };
 }

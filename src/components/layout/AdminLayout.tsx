@@ -11,6 +11,7 @@ import {
   ShoppingCart,
   CreditCard,
   MapPin,
+  MessageCircle,
   Menu,
   X,
   LogOut,
@@ -87,6 +88,7 @@ function AdminLayoutContent() {
   const platformAdminNav: NavItem[] = [
     { label: 'Dashboard', to: '/admin', icon: <LayoutDashboard className="w-5 h-5" />, end: true },
     { label: 'Tiendas', to: '/admin/stores', icon: <Store className="w-5 h-5" /> },
+    { label: 'Conexiones WhatsApp', to: '/admin/whatsapp-connections', icon: <MessageCircle className="w-5 h-5" /> },
   ];
 
   const ownerNav: NavItem[] = storeId ? [
@@ -104,6 +106,7 @@ function AdminLayoutContent() {
       badgeUrgent: hasOverduePending,
     },
     { label: 'Pagos', to: `/admin/stores/${storeId}/payments`, icon: <CreditCard className="w-5 h-5" /> },
+    { label: 'WhatsApp', to: `/admin/stores/${storeId}/whatsapp`, icon: <MessageCircle className="w-5 h-5" /> },
   ] : [];
 
   const navItems = isAdmin ? platformAdminNav : ownerNav;

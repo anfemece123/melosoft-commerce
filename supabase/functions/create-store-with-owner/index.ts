@@ -1,4 +1,5 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { getCorsHeaders, resolveAppOrigin } from '../_shared/allowedOrigins.ts';
 
 // ── Request / Response shapes ────────────────────────────────
 
@@ -72,9 +73,18 @@ interface CreateStoreWithOwnerResponse {
 }
 
 const STORE_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
+// Keep in sync with public.is_reserved_store_slug() in
+// supabase/migrations/097_store_slug_availability.sql (the enforced
+// authority) and RESERVED_STOREFRONT_SUBDOMAINS in
+// src/lib/storefront/storefrontSubdomains.ts (the frontend mirror).
 const RESERVED_STORE_SLUGS = new Set([
-  'admin', 'api', 'app', 'assets', 'auth', 'blog', 'cdn', 'dashboard',
-  'docs', 'help', 'mail', 'static', 'status', 'store', 'stores', 'support', 'www',
+  'admin', 'administrator', 'api', 'app', 'assets', 'auth',
+  'beta', 'blog', 'callback', 'callbacks', 'cdn', 'commerce',
+  'dashboard', 'demo', 'dev', 'development', 'docs', 'email',
+  'files', 'ftp', 'help', 'localhost', 'login', 'logout', 'mail',
+  'media', 'panel', 'preview', 'register', 'signup', 'soporte',
+  'staging', 'static', 'status', 'store', 'stores', 'supabase',
+  'support', 'test', 'testing', 'webhook', 'webhooks', 'www',
 ]);
 
 // ── Commerce defaults ─────────────────────────────────────────
@@ -188,34 +198,6 @@ function verticalToLegacyBusinessType(vertical: string): string {
   }
 }
 
-// ── CORS ──────────────────────────────────────────────────────
-
-const ALLOWED_ORIGINS = new Set([
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'https://melosoftapp.com',
-  'https://www.melosoftapp.com',
-]);
-
-function getAllowedOrigins(): Set<string> {
-  const origins = new Set(ALLOWED_ORIGINS);
-  for (const hostname of (Deno.env.get('PLATFORM_HOSTNAMES') ?? '').split(',')) {
-    const normalized = hostname.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
-    if (normalized) origins.add(`https://${normalized}`);
-  }
-  return origins;
-}
-
-function getCorsHeaders(req: Request): Record<string, string> {
-  const origin = req.headers.get('Origin') ?? '';
-  const allowedOrigin = getAllowedOrigins().has(origin) ? origin : '';
-  return {
-    'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  };
-}
-
 // ── Helpers ──────────────────────────────────────────────────
 
 function jsonError(message: string, status: number, cors: Record<string, string>): Response {
@@ -223,6 +205,26 @@ function jsonError(message: string, status: number, cors: Record<string, string>
     status,
     headers: { 'Content-Type': 'application/json', ...cors },
   });
+}
+
+// If any step after the store row is created fails, undo the whole
+// partial attempt instead of leaving a half-built company behind.
+// Every store-owned table (theme, policies, locations, hours,
+// store_members, store_limits, ...) has `store_id ... on delete
+// cascade`, so deleting the store row alone reverses all of them. If the
+// owner user was invited fresh in THIS request (not a pre-existing
+// user), it is removed too — auth.users deletion cascades to profiles.
+// Pre-existing owners (ownerIsNew === false) are never touched.
+async function rollbackStoreCreation(
+  adminClient: ReturnType<typeof createClient>,
+  storeId: string,
+  ownerUserId: string,
+  ownerIsNew: boolean,
+): Promise<void> {
+  await adminClient.from('stores').delete().eq('id', storeId);
+  if (ownerIsNew) {
+    await adminClient.auth.admin.deleteUser(ownerUserId).catch(() => undefined);
+  }
 }
 
 function jsonOk(data: CreateStoreWithOwnerResponse, cors: Record<string, string>): Response {
@@ -328,6 +330,9 @@ Deno.serve(async (req) => {
   if (RESERVED_STORE_SLUGS.has(payload.slug)) {
     return jsonError('Esa dirección está reservada por la plataforma. Elige otra.', 409, cors);
   }
+  if (/^[0-9]+$/.test(payload.slug)) {
+    return jsonError('La dirección de la empresa no puede ser solo números.', 400, cors);
+  }
 
   // Check before inviting/creating the owner to avoid orphan users when the
   // public storefront address is already taken.
@@ -361,10 +366,7 @@ Deno.serve(async (req) => {
     // Create new user via Admin API with an invitation.
     // redirectTo sends the owner to /auth/callback?next=/set-password so they
     // land on SetPasswordPage after clicking the email link.
-    const requestOrigin = req.headers.get('Origin') ?? '';
-    const appOrigin = getAllowedOrigins().has(requestOrigin)
-      ? requestOrigin
-      : 'https://melosoftapp.com';
+    const appOrigin = resolveAppOrigin(req);
     const redirectTo = `${appOrigin}/auth/callback?next=/set-password`;
 
     const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
@@ -433,6 +435,17 @@ Deno.serve(async (req) => {
     .single();
 
   if (storeError || !store) {
+    // 23505 = unique_violation. The pre-check above already rejects an
+    // obviously-taken slug, but two concurrent requests for the same
+    // slug can both pass it — the database's unique index
+    // (stores_slug_global_unique, migration 083) is what actually
+    // decides the race, so translate its raw error into the same
+    // friendly message instead of a generic 500.
+    if (storeError?.code === '23505') {
+      if (ownerIsNew) await adminClient.auth.admin.deleteUser(ownerUserId).catch(() => undefined);
+      return jsonError(`La dirección "${payload.slug}" ya está en uso.`, 409, cors);
+    }
+    if (ownerIsNew) await adminClient.auth.admin.deleteUser(ownerUserId).catch(() => undefined);
     return jsonError(`Failed to create store: ${storeError?.message ?? 'no data returned'}`, 500, cors);
   }
 
@@ -455,6 +468,7 @@ Deno.serve(async (req) => {
     });
 
   if (themeError) {
+    await rollbackStoreCreation(adminClient, storeId, ownerUserId, ownerIsNew);
     return jsonError(`Failed to create theme settings: ${themeError.message}`, 500, cors);
   }
 
@@ -471,12 +485,14 @@ Deno.serve(async (req) => {
     });
 
   if (policiesError) {
+    await rollbackStoreCreation(adminClient, storeId, ownerUserId, ownerIsNew);
     return jsonError(`Failed to create policies: ${policiesError.message}`, 500, cors);
   }
 
   // ── Create location (sede principal always created) ─────
+  let primaryLocationId: string;
   {
-    const { error: locationError } = await adminClient
+    const { data: location, error: locationError } = await adminClient
       .from('store_locations')
       .insert({
         store_id: storeId,
@@ -493,11 +509,19 @@ Deno.serve(async (req) => {
         department: payload.location.department ?? null,
         country: payload.location.country || payload.country,
         postal_code: payload.location.postalCode ?? null,
-      });
+        timezone: 'America/Bogota',
+        order_schedule_mode: payload.businessVertical === 'food_restaurant'
+          ? 'same_as_business'
+          : 'always_open',
+      })
+      .select('id')
+      .single();
 
-    if (locationError) {
-      return jsonError(`Failed to create location: ${locationError.message}`, 500, cors);
+    if (locationError || !location) {
+      await rollbackStoreCreation(adminClient, storeId, ownerUserId, ownerIsNew);
+      return jsonError(`Failed to create location: ${locationError?.message ?? 'no data returned'}`, 500, cors);
     }
+    primaryLocationId = location.id as string;
   }
 
   // ── Create business hours ────────────────────────────────
@@ -517,7 +541,65 @@ Deno.serve(async (req) => {
       .insert(hoursRows);
 
     if (hoursError) {
+      await rollbackStoreCreation(adminClient, storeId, ownerUserId, ownerIsNew);
       return jsonError(`Failed to create business hours: ${hoursError.message}`, 500, cors);
+    }
+
+    // Keep the legacy rows for backwards compatibility and also populate the
+    // new per-location model. A break is represented as two intervals.
+    const scheduleRows = payload.businessHours.flatMap((h) => {
+      if (!h.isOpen || !h.opensAt || !h.closesAt) return [];
+      const hasValidBreak = Boolean(
+        h.breakStartsAt
+        && h.breakEndsAt
+        && h.opensAt < h.breakStartsAt
+        && h.breakStartsAt < h.breakEndsAt
+        && h.breakEndsAt < h.closesAt
+      );
+
+      if (hasValidBreak) {
+        return [
+          {
+            store_id: storeId,
+            location_id: primaryLocationId,
+            schedule_kind: 'business',
+            day_of_week: h.dayOfWeek,
+            starts_at: h.opensAt,
+            ends_at: h.breakStartsAt,
+            sort_order: 0,
+          },
+          {
+            store_id: storeId,
+            location_id: primaryLocationId,
+            schedule_kind: 'business',
+            day_of_week: h.dayOfWeek,
+            starts_at: h.breakEndsAt,
+            ends_at: h.closesAt,
+            sort_order: 1,
+          },
+        ];
+      }
+
+      return [{
+        store_id: storeId,
+        location_id: primaryLocationId,
+        schedule_kind: 'business',
+        day_of_week: h.dayOfWeek,
+        starts_at: h.opensAt,
+        ends_at: h.closesAt,
+        sort_order: 0,
+      }];
+    });
+
+    if (scheduleRows.length > 0) {
+      const { error: scheduleError } = await adminClient
+        .from('location_schedule_intervals')
+        .insert(scheduleRows);
+
+      if (scheduleError) {
+        await rollbackStoreCreation(adminClient, storeId, ownerUserId, ownerIsNew);
+        return jsonError(`Failed to create location schedule: ${scheduleError.message}`, 500, cors);
+      }
     }
   }
 
@@ -534,6 +616,7 @@ Deno.serve(async (req) => {
     });
 
   if (commerceError) {
+    await rollbackStoreCreation(adminClient, storeId, ownerUserId, ownerIsNew);
     return jsonError(`Failed to create commerce settings: ${commerceError.message}`, 500, cors);
   }
 

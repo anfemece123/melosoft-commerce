@@ -19,13 +19,14 @@ import { withAlpha } from '@/components/public/storefront/storefrontTheme';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { useResolvedStoreSlug } from '@/lib/storefront/storefrontDomainContext';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
+import { OrderingStatusNotice } from '@/components/public/cart/OrderingStatusNotice';
 
 export function StoreCheckoutPage() {
   const { storeSlug: routeStoreSlug } = useParams<{ storeSlug: string }>();
   const storeSlug = useResolvedStoreSlug(routeStoreSlug);
   const navigate = useNavigate();
   const { branding } = usePublicStoreBranding();
-  const { locations } = useSelectedLocation();
+  const { locations, orderStatus, scheduleLoading } = useSelectedLocation();
   const { requestLocationChange, confirmLocationChange, cancelLocationChange, pendingChange, checking } =
     useLocationChangeWithCheck();
   const [ready, setReady] = useState(false);
@@ -306,12 +307,17 @@ export function StoreCheckoutPage() {
                   </div>
                 </div>
 
+                <div className="px-5 pb-4">
+                  <OrderingStatusNotice theme={theme} />
+                </div>
                 <CheckoutActions
                   theme={theme}
                   isSubmitting={checkout.step === 'submitting'}
                   hasSelectedLocation={Boolean(checkout.operationalLocation)}
                   paymentChoice={checkout.paymentChoice}
                   onSubmit={() => { void checkout.formik.submitForm(); }}
+                  isAcceptingOrders={orderStatus?.isAcceptingOrders === true}
+                  orderingStatusLoading={scheduleLoading}
                 />
               </div>
             </aside>

@@ -58,6 +58,7 @@ export const checkoutSchema = Yup.object({
   deliveryNeighborhood: Yup.string().trim().max(100).optional(),
   deliveryReference: Yup.string().trim().max(200).optional(),
   notes: Yup.string().trim().max(500).optional(),
+  whatsappConsent: Yup.boolean().optional(),
 });
 
 export interface CheckoutFormValues {
@@ -74,4 +75,5 @@ export interface CheckoutFormValues {
   deliveryNeighborhood: string;
   deliveryReference: string;
   notes: string;
+  whatsappConsent: boolean;
 }

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
-import { MapPin, Plus, Pencil, Trash2, Star, Eye, EyeOff, Check } from 'lucide-react';
+import { MapPin, Plus, Pencil, Trash2, Star, Eye, EyeOff, Check, Clock3 } from 'lucide-react';
 import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
 import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -16,6 +16,7 @@ import { geoService } from '@/features/geo/geoService';
 import type { GeoDepartment, GeoCity } from '@/features/geo/geo.types';
 import type { StoreLocation } from '@/features/locations/locations.types';
 import { notify } from '@/lib/notifications';
+import { LocationScheduleEditor } from '@/components/admin/LocationScheduleEditor';
 
 const locationSchema = Yup.object({
   name: Yup.string().required('Nombre requerido').max(80),
@@ -56,6 +57,7 @@ export function LocationsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [scheduleLocationId, setScheduleLocationId] = useState<string | null>(null);
 
   // Geo state
   const [departments, setDepartments] = useState<GeoDepartment[]>([]);
@@ -126,6 +128,8 @@ export function LocationsPage() {
             sortOrder: locations.length,
             deliveryNotes: values.deliveryNotes ?? null,
             pickupNotes: values.pickupNotes ?? null,
+            timezone: locations.find((location) => location.isPrimary)?.timezone ?? 'America/Bogota',
+            orderScheduleMode: locations.find((location) => location.isPrimary)?.orderScheduleMode ?? 'always_open',
           };
           await locationsService.createLocation(storeId, newLoc);
           notify.success('Sucursal creada correctamente.');
@@ -375,7 +379,8 @@ export function LocationsPage() {
       ) : (
         <div className="space-y-3">
           {locations.map((loc) => (
-            <Card key={loc.id} className="p-4">
+            <div key={loc.id} className="space-y-3">
+            <Card className="p-4">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="flex items-start gap-3 min-w-0">
                   <div className="mt-0.5 shrink-0">
@@ -408,6 +413,15 @@ export function LocationsPage() {
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                  <Button
+                    size="sm"
+                    variant={scheduleLocationId === loc.id ? 'secondary' : 'ghost'}
+                    onClick={() => setScheduleLocationId((current) => current === loc.id ? null : loc.id)}
+                    title="Configurar horarios"
+                  >
+                    <Clock3 className="mr-1.5 h-4 w-4" />
+                    Horarios
+                  </Button>
                   {!loc.isPrimary && (
                     <Button
                       size="sm"
@@ -444,6 +458,14 @@ export function LocationsPage() {
                 </div>
               </div>
             </Card>
+            {scheduleLocationId === loc.id && (
+              <LocationScheduleEditor
+                location={loc}
+                onClose={() => setScheduleLocationId(null)}
+                onSaved={load}
+              />
+            )}
+            </div>
           ))}
         </div>
       )}

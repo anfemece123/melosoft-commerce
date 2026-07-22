@@ -18,6 +18,7 @@ import { useCartCheckout } from './useCartCheckout';
 import { useCartLocationAvailability } from './useCartLocationAvailability';
 import { getPickupLocations } from '@/lib/orders/fulfillment';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
+import { OrderingStatusNotice } from './OrderingStatusNotice';
 
 interface CartDrawerProps {
   open: boolean;
@@ -108,7 +109,7 @@ export function CartDrawer({
     };
   }, [open]);
 
-  const { locations } = useSelectedLocation();
+  const { locations, orderStatus, scheduleLoading } = useSelectedLocation();
   const { requestLocationChange, confirmLocationChange, cancelLocationChange, pendingChange, checking: checkingLocation } =
     useLocationChangeWithCheck();
   const { unavailableIds: cartUnavailableIds } = useCartLocationAvailability(items, locations, selectedLocation, open);
@@ -167,7 +168,9 @@ export function CartDrawer({
                 unavailableItems={unavailableItems}
                 onRemoveUnavailable={handleRemoveUnavailable}
                 paymentSelector={
-                  hasAnyPaymentMethod ? (
+                  <div className="space-y-3">
+                    <OrderingStatusNotice theme={theme} />
+                  {hasAnyPaymentMethod ? (
                     <CheckoutPaymentSelector
                       theme={theme}
                       showPaymentChoice={showPaymentChoice}
@@ -175,9 +178,11 @@ export function CartDrawer({
                       paymentChoice={paymentChoice}
                       onChange={setPaymentChoice}
                     />
-                  ) : null
+                  ) : null}
+                  </div>
                 }
                 hasAnyPaymentMethod={hasAnyPaymentMethod}
+                canContinue={!scheduleLoading && orderStatus?.isAcceptingOrders === true}
                 onViewCart={() => {
                   onClose();
                   void navigate(buildStorefrontPath(storeSlug, '/cart'));
@@ -203,6 +208,7 @@ export function CartDrawer({
             />
 
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+              <OrderingStatusNotice theme={theme} />
               {showLocationSelector ? (
                 <CheckoutLocationSelector
                   theme={theme}
@@ -241,6 +247,8 @@ export function CartDrawer({
               hasSelectedLocation={Boolean(operationalLocation)}
               paymentChoice={paymentChoice}
               onSubmit={() => { void formik.submitForm(); }}
+              isAcceptingOrders={orderStatus?.isAcceptingOrders === true}
+              orderingStatusLoading={scheduleLoading}
             />
           </>
         )}

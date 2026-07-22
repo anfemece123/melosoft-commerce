@@ -2,7 +2,10 @@ import * as Yup from 'yup';
 import { THEME_PRESET_LIST } from '@/utils/themePresets';
 import {
   RESERVED_STOREFRONT_SUBDOMAINS,
+  STOREFRONT_SUBDOMAIN_MAX_LENGTH,
+  STOREFRONT_SUBDOMAIN_MIN_LENGTH,
   STOREFRONT_SUBDOMAIN_PATTERN,
+  isAllNumericStorefrontSubdomain,
 } from '@/lib/storefront/storefrontSubdomains';
 
 const businessHourSchema = Yup.object({
@@ -48,9 +51,14 @@ export const storeCreationSchema = Yup.object({
       'Ese nombre está reservado por la plataforma',
       (value) => !value || !RESERVED_STOREFRONT_SUBDOMAINS.has(value),
     )
-    .min(2, 'Mínimo 2 caracteres')
-    .max(60, 'Máximo 60 caracteres')
-    .required('Slug requerido'),
+    .test(
+      'not-all-numeric',
+      'No puede ser solo números',
+      (value) => !value || !isAllNumericStorefrontSubdomain(value),
+    )
+    .min(STOREFRONT_SUBDOMAIN_MIN_LENGTH, `Mínimo ${STOREFRONT_SUBDOMAIN_MIN_LENGTH} caracteres`)
+    .max(STOREFRONT_SUBDOMAIN_MAX_LENGTH, `Máximo ${STOREFRONT_SUBDOMAIN_MAX_LENGTH} caracteres`)
+    .required('URL de la tienda requerida'),
   slogan: Yup.string().trim().max(160).nullable(),
   businessVertical: Yup.string()
     .oneOf(

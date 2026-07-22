@@ -530,6 +530,21 @@ export function CheckoutCustomerForm({
           style={{ backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }}
         />
       </div>
+
+      <label className="flex items-start gap-2.5 text-xs" style={{ color: theme.mutedText }}>
+        <input
+          type="checkbox"
+          name="whatsappConsent"
+          checked={formik.values.whatsappConsent}
+          onChange={formik.handleChange}
+          className="mt-0.5 h-4 w-4 rounded"
+          style={{ accentColor: theme.primary }}
+        />
+        <span>
+          Quiero recibir por WhatsApp actualizaciones sobre este pedido (confirmación, estado y entrega).
+          No es publicidad y puedes dejar de recibirlas cuando quieras.
+        </span>
+      </label>
     </>
   );
 }

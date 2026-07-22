@@ -88,6 +88,7 @@ export interface WompiCheckoutPayload {
   deliveryReference?: string | null;
   notes?: string | null;
   storeLocationId?: string | null;
+  whatsappConsent?: boolean;
   items: Array<{
     productId: string;
     variantId?: string | null;

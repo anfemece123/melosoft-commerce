@@ -110,4 +110,14 @@ export const domainsService = {
     const baseUrl = env.publicSiteUrl ?? (typeof window !== 'undefined' ? window.location.origin : '');
     return `${baseUrl.replace(/\/$/, '')}/s/${storeSlug}`;
   },
+
+  // Single place that decides the preferred public URL for a store: an
+  // active, verified custom domain wins over the included subdomain/`/s/`
+  // fallback. Callers should stop building `https://${hostname}` inline —
+  // pass the domains list already loaded for the store instead.
+  getStorePublicUrl(storeSlug: string, domains?: StoreDomain[] | null): string {
+    const activePrimary = domains?.find((domain) => domain.isPrimary && domain.status === 'active');
+    if (activePrimary) return `https://${activePrimary.hostname}`;
+    return this.getPlatformStoreUrl(storeSlug);
+  },
 };

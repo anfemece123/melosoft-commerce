@@ -20,6 +20,7 @@ import { hasShippingRuleConfigured } from '@/lib/commerce/shippingRules';
 import { getFulfillmentMethodLabel } from '@/lib/orders/fulfillmentLabels';
 import { useResolvedStoreSlug } from '@/lib/storefront/storefrontDomainContext';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
+import { OrderingStatusNotice } from '@/components/public/cart/OrderingStatusNotice';
 
 export function StoreCartPage() {
   const { storeSlug: routeStoreSlug } = useParams<{ storeSlug: string }>();
@@ -27,7 +28,7 @@ export function StoreCartPage() {
   const navigate = useNavigate();
   const { branding } = usePublicStoreBranding();
   const { items, totalItems, totalPrice, updateQuantity, removeItem, addItem } = useCart();
-  const { selectedLocation } = useSelectedLocation();
+  const { selectedLocation, orderStatus, scheduleLoading } = useSelectedLocation();
   const [unavailableIds, setUnavailableIds] = useState<Set<string>>(new Set());
 
   if (!storeSlug || !branding) return null;
@@ -248,10 +249,12 @@ export function StoreCartPage() {
                 </div>
               )}
 
+              <OrderingStatusNotice theme={theme} />
+
               <button
                 type="button"
                 onClick={() => void navigate(buildStorefrontPath(storeSlug, '/checkout'))}
-                disabled={items.length === 0 || unavailableItems.length > 0 || !(showCod || showOnline)}
+                disabled={items.length === 0 || unavailableItems.length > 0 || !(showCod || showOnline) || scheduleLoading || orderStatus?.isAcceptingOrders !== true}
                 className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 style={{ backgroundColor: theme.primary }}
               >

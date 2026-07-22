@@ -23,6 +23,7 @@ import { computeOfferUIStatus } from '@/lib/offers/offerStatus.utils';
 import type { Offer } from '@/features/offers/offers.types';
 import type { Store } from '@/features/stores/stores.types';
 import type { BadgeVariant } from '@/types/common.types';
+import type { StoreDomain } from '@/features/domains/domains.types';
 import { domainsService } from '@/features/domains/domainsService';
 
 type FilterTab = 'all' | 'active' | 'scheduled' | 'draft' | 'paused' | 'expired' | 'archived';
@@ -56,7 +57,7 @@ export function OffersPage() {
   const [tab, setTab] = useState<FilterTab>('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<Offer | null>(null);
-  const [primaryDomain, setPrimaryDomain] = useState<string | null>(null);
+  const [domains, setDomains] = useState<StoreDomain[]>([]);
 
   const isMenu = currentCommerceSettings?.catalogType === 'menu';
   const entityLabel = isMenu ? 'campañas del menú' : 'campañas de producto';
@@ -91,13 +92,11 @@ export function OffersPage() {
     if (!storeId) return;
     let cancelled = false;
     domainsService.list(storeId)
-      .then((domains) => {
-        if (!cancelled) {
-          setPrimaryDomain(domains.find((domain) => domain.isPrimary && domain.status === 'active')?.hostname ?? null);
-        }
+      .then((loaded) => {
+        if (!cancelled) setDomains(loaded);
       })
       .catch(() => {
-        if (!cancelled) setPrimaryDomain(null);
+        if (!cancelled) setDomains([]);
       });
     return () => { cancelled = true; };
   }, [storeId]);
@@ -177,10 +176,7 @@ export function OffersPage() {
       notify.error('No se pudo obtener el link. Recarga la página.');
       return;
     }
-    const storeUrl = primaryDomain
-      ? `https://${primaryDomain}`
-      : domainsService.getPlatformStoreUrl(storeData.slug);
-    const url = `${storeUrl}/o/${offer.slug}`;
+    const url = `${domainsService.getStorePublicUrl(storeData.slug, domains)}/o/${offer.slug}`;
     navigator.clipboard.writeText(url).then(
       () => notify.success('Link copiado al portapapeles'),
       () => {

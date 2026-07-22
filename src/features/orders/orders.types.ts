@@ -116,6 +116,7 @@ export interface CreateWebOrderPayload {
   notes: string | null;
   storeLocationId?: string | null;
   paymentMethod?: 'cash_on_delivery' | 'online';
+  whatsappConsent?: boolean;
   items: WebOrderCartItem[];
 }
 

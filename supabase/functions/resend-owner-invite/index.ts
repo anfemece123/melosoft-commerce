@@ -1,23 +1,5 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-
-// ── CORS ──────────────────────────────────────────────────────
-
-const ALLOWED_ORIGINS = new Set([
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'https://melosoftapp.com',
-  'https://www.melosoftapp.com',
-]);
-
-function getCorsHeaders(req: Request): Record<string, string> {
-  const origin = req.headers.get('Origin') ?? '';
-  const allowedOrigin = ALLOWED_ORIGINS.has(origin) ? origin : '';
-  return {
-    'Access-Control-Allow-Origin': allowedOrigin,
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  };
-}
+import { getCorsHeaders, resolveAppOrigin } from '../_shared/allowedOrigins.ts';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -105,10 +87,7 @@ Deno.serve(async (req) => {
   }
 
   // Build redirect URL based on caller's origin
-  const requestOrigin = req.headers.get('Origin') ?? '';
-  const appOrigin = ALLOWED_ORIGINS.has(requestOrigin)
-    ? requestOrigin
-    : 'https://melosoftapp.com';
+  const appOrigin = resolveAppOrigin(req);
   const redirectTo = `${appOrigin}/auth/callback?next=/set-password`;
 
   // Resend invitation — Supabase will send a new invite email

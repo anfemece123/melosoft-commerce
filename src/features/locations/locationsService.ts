@@ -1,6 +1,16 @@
 import { supabase } from '@/lib/supabase';
-import type { StoreLocationRowInsert, StoreLocationRowUpdate } from '@/types/database.types';
-import type { StoreLocation, PublicStoreLocation } from './locations.types';
+import type { Json, StoreLocationRowInsert, StoreLocationRowUpdate } from '@/types/database.types';
+import type {
+  LocationOrderStatus,
+  LocationScheduleException,
+  LocationScheduleInterval,
+  LocationScheduleStatus,
+  OrderScheduleMode,
+  PublicStoreLocation,
+  ScheduleIntervalInput,
+  ScheduleKind,
+  StoreLocation,
+} from './locations.types';
 import { mapLocationRowToStoreLocation, mapPublicLocationRowToPublicStoreLocation } from './locations.mapper';
 
 export interface CreateLocationPayload {
@@ -24,6 +34,8 @@ export interface CreateLocationPayload {
   sortOrder?: number;
   deliveryNotes?: string | null;
   pickupNotes?: string | null;
+  timezone?: string;
+  orderScheduleMode?: OrderScheduleMode;
 }
 
 export interface UpdateLocationPayload {
@@ -47,6 +59,11 @@ export interface UpdateLocationPayload {
   sortOrder?: number;
   deliveryNotes?: string | null;
   pickupNotes?: string | null;
+  timezone?: string;
+  orderScheduleMode?: OrderScheduleMode;
+  ordersPaused?: boolean;
+  ordersPausedUntil?: string | null;
+  ordersPauseReason?: string | null;
 }
 
 function toUpdateRow(p: UpdateLocationPayload): StoreLocationRowUpdate {
@@ -71,6 +88,11 @@ function toUpdateRow(p: UpdateLocationPayload): StoreLocationRowUpdate {
   if (p.sortOrder !== undefined) row.sort_order = p.sortOrder;
   if (p.deliveryNotes !== undefined) row.delivery_notes = p.deliveryNotes;
   if (p.pickupNotes !== undefined) row.pickup_notes = p.pickupNotes;
+  if (p.timezone !== undefined) row.timezone = p.timezone;
+  if (p.orderScheduleMode !== undefined) row.order_schedule_mode = p.orderScheduleMode;
+  if (p.ordersPaused !== undefined) row.orders_paused = p.ordersPaused;
+  if (p.ordersPausedUntil !== undefined) row.orders_paused_until = p.ordersPausedUntil;
+  if (p.ordersPauseReason !== undefined) row.orders_pause_reason = p.ordersPauseReason;
   return row;
 }
 
@@ -109,6 +131,8 @@ export const locationsService = {
       sort_order: payload.sortOrder ?? 0,
       delivery_notes: payload.deliveryNotes ?? null,
       pickup_notes: payload.pickupNotes ?? null,
+      timezone: payload.timezone ?? 'America/Bogota',
+      order_schedule_mode: payload.orderScheduleMode ?? 'always_open',
     };
 
     const { data, error } = await supabase
@@ -161,5 +185,164 @@ export const locationsService = {
 
     if (error) throw new Error(error.message);
     return (data ?? []).map(mapPublicLocationRowToPublicStoreLocation);
+  },
+
+  async getLocationSchedule(
+    locationId: string,
+    scheduleKind?: ScheduleKind,
+  ): Promise<LocationScheduleInterval[]> {
+    let query = supabase
+      .from('location_schedule_intervals')
+      .select('*')
+      .eq('location_id', locationId)
+      .order('day_of_week', { ascending: true })
+      .order('sort_order', { ascending: true });
+
+    if (scheduleKind) query = query.eq('schedule_kind', scheduleKind);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((row) => ({
+      id: row.id,
+      storeId: row.store_id,
+      locationId: row.location_id,
+      scheduleKind: row.schedule_kind as ScheduleKind,
+      dayOfWeek: row.day_of_week,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      endsNextDay: row.ends_next_day,
+      isAllDay: row.is_all_day,
+      sortOrder: row.sort_order,
+    }));
+  },
+
+  async saveScheduleConfiguration(input: {
+    locationId: string;
+    timezone: string;
+    orderScheduleMode: OrderScheduleMode;
+    ordersPaused: boolean;
+    ordersPausedUntil: string | null;
+    ordersPauseReason: string | null;
+    businessSchedule: Record<number, ScheduleIntervalInput[]>;
+    orderingSchedule: Record<number, ScheduleIntervalInput[]>;
+  }): Promise<void> {
+    const flatten = (schedule: Record<number, ScheduleIntervalInput[]>) =>
+      Object.entries(schedule).flatMap(([day, intervals]) =>
+        intervals.map((interval, index) => ({
+          day_of_week: Number(day),
+          starts_at: interval.isAllDay ? null : interval.startsAt,
+          ends_at: interval.isAllDay ? null : interval.endsAt,
+          ends_next_day: interval.isAllDay ? false : interval.endsNextDay,
+          is_all_day: interval.isAllDay,
+          sort_order: index,
+        })),
+      );
+
+    const { error } = await supabase.rpc('save_location_schedule_configuration', {
+      p_location_id: input.locationId,
+      p_timezone: input.timezone,
+      p_order_schedule_mode: input.orderScheduleMode,
+      p_orders_paused: input.ordersPaused,
+      p_orders_paused_until: input.ordersPausedUntil,
+      p_orders_pause_reason: input.ordersPauseReason,
+      p_business_intervals: flatten(input.businessSchedule) as unknown as Json,
+      p_ordering_intervals: flatten(input.orderingSchedule) as unknown as Json,
+    });
+    if (error) throw new Error(error.message);
+  },
+
+  async getLocationExceptions(locationId: string): Promise<LocationScheduleException[]> {
+    const { data, error } = await supabase
+      .from('location_schedule_exceptions')
+      .select('*')
+      .eq('location_id', locationId)
+      .order('exception_date', { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((row) => {
+      const rawIntervals = row.intervals as unknown as Array<{
+        starts_at?: string | null;
+        ends_at?: string | null;
+        ends_next_day?: boolean;
+        is_all_day?: boolean;
+      }>;
+      return {
+        id: row.id,
+        storeId: row.store_id,
+        locationId: row.location_id,
+        scheduleKind: row.schedule_kind as ScheduleKind,
+        exceptionDate: row.exception_date,
+        isClosed: row.is_closed,
+        intervals: rawIntervals.map((interval) => ({
+          startsAt: interval.starts_at?.slice(0, 5) ?? null,
+          endsAt: interval.ends_at?.slice(0, 5) ?? null,
+          endsNextDay: interval.ends_next_day === true,
+          isAllDay: interval.is_all_day === true,
+        })),
+        note: row.note,
+      };
+    });
+  },
+
+  async saveLocationException(input: Omit<LocationScheduleException, 'id'>): Promise<void> {
+    const { error } = await supabase
+      .from('location_schedule_exceptions')
+      .upsert({
+        store_id: input.storeId,
+        location_id: input.locationId,
+        schedule_kind: input.scheduleKind,
+        exception_date: input.exceptionDate,
+        is_closed: input.isClosed,
+        intervals: input.intervals.map((interval) => ({
+          starts_at: interval.isAllDay ? null : interval.startsAt,
+          ends_at: interval.isAllDay ? null : interval.endsAt,
+          ends_next_day: interval.isAllDay ? false : interval.endsNextDay,
+          is_all_day: interval.isAllDay,
+        })) as unknown as Json,
+        note: input.note,
+      }, { onConflict: 'location_id,schedule_kind,exception_date' });
+    if (error) throw new Error(error.message);
+  },
+
+  async deleteLocationException(exceptionId: string): Promise<void> {
+    const { error } = await supabase
+      .from('location_schedule_exceptions')
+      .delete()
+      .eq('id', exceptionId);
+    if (error) throw new Error(error.message);
+  },
+
+  async getLocationOrderStatus(locationId: string): Promise<LocationOrderStatus> {
+    const { data, error } = await supabase.rpc('get_location_order_status', {
+      p_location_id: locationId,
+    });
+    if (error) throw new Error(error.message);
+    const status = (data ?? {}) as Record<string, unknown>;
+    return {
+      isAcceptingOrders: status.is_accepting_orders === true,
+      statusCode: (status.status_code as LocationOrderStatus['statusCode']) ?? 'closed',
+      timezone: typeof status.timezone === 'string' ? status.timezone : null,
+      localDate: typeof status.local_date === 'string' ? status.local_date : null,
+      localTime: typeof status.local_time === 'string' ? status.local_time : null,
+      pausedUntil: typeof status.paused_until === 'string' ? status.paused_until : null,
+      pauseReason: typeof status.pause_reason === 'string' ? status.pause_reason : null,
+    };
+  },
+
+  async getLocationScheduleStatus(
+    locationId: string,
+    scheduleKind: ScheduleKind,
+  ): Promise<LocationScheduleStatus> {
+    const { data, error } = await supabase.rpc('get_location_schedule_status', {
+      p_location_id: locationId,
+      p_schedule_kind: scheduleKind,
+    });
+    if (error) throw new Error(error.message);
+    const status = (data ?? {}) as Record<string, unknown>;
+    return {
+      isOpen: status.is_open === true,
+      statusCode: (status.status_code as LocationScheduleStatus['statusCode']) ?? 'closed',
+      timezone: typeof status.timezone === 'string' ? status.timezone : null,
+      localDate: typeof status.local_date === 'string' ? status.local_date : null,
+      localTime: typeof status.local_time === 'string' ? status.local_time : null,
+    };
   },
 };
