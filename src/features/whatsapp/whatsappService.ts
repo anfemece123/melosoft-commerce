@@ -33,6 +33,42 @@ interface EmbeddedSignupCompletionResponse {
   onboardingType: string;
 }
 
+interface FunctionErrorWithContext extends Error {
+  context?: Response;
+}
+
+function hasResponseContext(error: unknown): error is FunctionErrorWithContext {
+  if (!(error instanceof Error) || typeof error !== 'object' || error === null) return false;
+  return 'context' in error && (error as FunctionErrorWithContext).context instanceof Response;
+}
+
+// supabase-js's FunctionsHttpError always has the generic message "Edge
+// Function returned a non-2xx status code" — it never surfaces what our
+// own Edge Function actually put in the JSON body (e.g. the
+// PHONE_NUMBER_ALREADY_CONNECTED code whatsapp-embedded-signup returns).
+// The real body only lives on error.context, a Response that must be
+// read manually. Without this, every specific error branch in
+// WhatsappSettingsPage.handleConnect() that matches on the thrown
+// message was dead code — it could never see anything but the generic
+// SDK message.
+//
+// Returns the machine-readable `error` code (e.g.
+// "PHONE_NUMBER_ALREADY_CONNECTED"), not the backend's own Spanish
+// `message` — this keeps the same code-based matching convention every
+// other error in this flow already uses (WHATSAPP_EMBEDDED_SIGNUP_*,
+// EMBEDDED_SIGNUP_*), so the caller decides the exact user-facing text.
+async function extractFunctionErrorCode(error: unknown): Promise<string> {
+  if (hasResponseContext(error) && error.context) {
+    try {
+      const payload = await error.context.clone().json() as { error?: string };
+      if (payload.error) return payload.error;
+    } catch {
+      // Fall through to the SDK's generic message below.
+    }
+  }
+  return error instanceof Error ? error.message : 'Unknown error';
+}
+
 interface TemplateSyncResponse {
   ok: true;
   orderConfirmationTemplate: { name: string; status: string; rejectedReason: string | null };
@@ -132,7 +168,7 @@ export const whatsappService = {
         },
       },
     );
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(await extractFunctionErrorCode(error));
     if (!data) throw new Error('No response from Edge Function');
     return data;
   },

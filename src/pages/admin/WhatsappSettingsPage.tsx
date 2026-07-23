@@ -68,6 +68,35 @@ const TEMPLATE_STATUS_LABELS: Record<string, { label: string; className: string 
   disabled:    { label: 'Deshabilitada', className: 'bg-red-50 text-red-700' },
 };
 
+// Every error code launchWhatsAppEmbeddedSignup/completeEmbeddedSignup
+// can throw, mapped to a user-facing message — so a caught error always
+// ends in something readable instead of the button just going back to
+// idle with no explanation. Backend codes (META_*, PHONE_NOT_IN_WABA,
+// CONNECTION_SAVE_FAILED, PHONE_NUMBER_ALREADY_CONNECTED) mirror the
+// `message` text whatsapp-embedded-signup/index.ts computes for the
+// same code — kept in sync by hand since the frontend only receives the
+// machine code now (see extractFunctionErrorCode in whatsappService.ts).
+const EMBEDDED_SIGNUP_ERROR_MESSAGES: Record<string, string> = {
+  WHATSAPP_EMBEDDED_SIGNUP_NOT_CONFIGURED: 'La conexión con Meta todavía no está configurada en esta plataforma.',
+  WHATSAPP_EMBEDDED_SIGNUP_REQUIRES_HTTPS:
+    'Conecta WhatsApp desde https://commerce.melosoftapp.com — Meta no permite iniciar la conexión desde HTTP o localhost.',
+  EMBEDDED_SIGNUP_CANCELLED: 'Conexión cancelada.',
+  EMBEDDED_SIGNUP_TIMEOUT: 'La conexión tardó demasiado y se canceló. Intenta de nuevo.',
+  EMBEDDED_SIGNUP_POPUP_CLOSED: 'La ventana de Meta se cerró antes de terminar. Intenta de nuevo sin cerrarla manualmente.',
+  EMBEDDED_SIGNUP_SDK_UNAVAILABLE: 'No se pudo cargar el SDK de Meta. Revisa tu conexión o desactiva bloqueadores de anuncios/scripts e intenta de nuevo.',
+  EMBEDDED_SIGNUP_ERROR: 'Meta reportó un error durante la conexión. Intenta de nuevo.',
+  EMBEDDED_SIGNUP_MISSING_SESSION_DATA:
+    'Meta no envió los datos de la cuenta de WhatsApp Business (WABA o número). Intenta de nuevo y confirma que seleccionaste una cuenta y un número.',
+  PHONE_NUMBER_ALREADY_CONNECTED: 'Ese número de WhatsApp ya está conectado a otra tienda de Melosoft.',
+  META_TOKEN_EXCHANGE_FAILED: 'No se pudo completar la conexión con Meta. Intenta de nuevo.',
+  META_WABA_VERIFICATION_FAILED: 'No se pudo verificar la cuenta de WhatsApp Business con Meta.',
+  PHONE_NOT_IN_WABA: 'El número indicado no pertenece a esa cuenta de WhatsApp Business.',
+  META_PHONE_DETAIL_FAILED: 'No se pudo obtener el número verificado desde Meta.',
+  META_APP_SUBSCRIPTION_FAILED:
+    'La conexión con Meta se validó, pero no se pudo suscribir la app a tu cuenta de WhatsApp Business. Intenta reconectar.',
+  CONNECTION_SAVE_FAILED: 'No se pudo guardar la conexión.',
+};
+
 const EVENT_TYPE_LABELS: Record<string, string> = {
   order_received: 'Pedido recibido',
   order_confirmed: 'Pedido confirmado',
@@ -200,16 +229,11 @@ export function WhatsappSettingsPage() {
       await reloadAll(storeId);
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
-      if (message === 'WHATSAPP_EMBEDDED_SIGNUP_NOT_CONFIGURED') {
-        notify.error('La conexión con Meta todavía no está configurada en esta plataforma.');
-      } else if (message === 'WHATSAPP_EMBEDDED_SIGNUP_REQUIRES_HTTPS') {
-        notify.error('Conecta WhatsApp desde https://commerce.melosoftapp.com — Meta no permite iniciar la conexión desde HTTP o localhost.');
-      } else if (message === 'EMBEDDED_SIGNUP_CANCELLED') {
-        notify.warning('Conexión cancelada.');
-      } else if (message.includes('PHONE_NUMBER_ALREADY_CONNECTED')) {
-        notify.error('Ese número de WhatsApp ya está conectado a otra tienda de Melosoft.');
-      } else if (message === 'EMBEDDED_SIGNUP_TIMEOUT') {
-        notify.error('La conexión tardó demasiado y se canceló. Intenta de nuevo.');
+      const friendlyMessage = EMBEDDED_SIGNUP_ERROR_MESSAGES[message];
+      if (message === 'EMBEDDED_SIGNUP_CANCELLED') {
+        notify.warning(friendlyMessage);
+      } else if (friendlyMessage) {
+        notify.error(friendlyMessage);
       } else {
         notify.error('No se pudo completar la conexión con WhatsApp.');
       }
