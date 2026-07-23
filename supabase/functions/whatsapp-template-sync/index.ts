@@ -28,6 +28,10 @@ import {
   buildWhatsappTemplateCreatePayload,
   type WhatsappTemplateDefinition,
 } from '../_shared/whatsappTemplatePayload.ts';
+import {
+  buildMetaTemplatePermissionContext,
+  type MetaTemplatePermissionContext,
+} from '../_shared/metaTemplatePermissionContext.ts';
 
 function json(body: unknown, status: number, cors: Record<string, string>) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...cors } });
@@ -111,6 +115,26 @@ async function metaPost(
     clearTimeout(timeout);
     return { ok: false, status: 0, body: {} };
   }
+}
+
+async function getTemplatePermissionContext(
+  graphApiVersion: string,
+  wabaId: string,
+  accessToken: string,
+): Promise<MetaTemplatePermissionContext> {
+  const [permissionsResult, wabaResult] = await Promise.all([
+    metaGet(
+      `https://graph.facebook.com/${graphApiVersion}/me/permissions`,
+      accessToken,
+    ),
+    metaGet(
+      `https://graph.facebook.com/${graphApiVersion}/${encodeURIComponent(wabaId)}` +
+      '?fields=account_review_status,business_verification_status,ownership_type,country',
+      accessToken,
+    ),
+  ]);
+
+  return buildMetaTemplatePermissionContext(permissionsResult, wabaResult);
 }
 
 // Meta's template status strings are UPPERCASE; our DB enum is lowercase.
@@ -284,6 +308,15 @@ Deno.serve(async (req: Request) => {
   const diagnostics = [orderTemplateResult.diagnostic, testTemplateResult.diagnostic]
     .filter((item): item is MetaTemplateSyncDiagnostic => item !== null);
   if (diagnostics.length > 0) {
+    const permissionDenied = diagnostics.some((diagnostic) =>
+      diagnostic.metaSubcode === 2494160 ||
+      `${diagnostic.metaUserTitle ?? ''} ${diagnostic.metaUserMessage ?? ''}`
+        .toLocaleLowerCase('es')
+        .includes('permiso')
+    );
+    const permissionContext = permissionDenied
+      ? await getTemplatePermissionContext(graphApiVersion, wabaId, accessToken)
+      : null;
     const upstreamMessage = diagnostics[0].metaDetails ||
       diagnostics[0].metaUserMessage ||
       diagnostics[0].metaMessage;
@@ -293,6 +326,7 @@ Deno.serve(async (req: Request) => {
         ? `Meta no pudo crear o consultar las plantillas: ${upstreamMessage}`
         : 'Meta no pudo crear o consultar las plantillas de WhatsApp.',
       diagnostics,
+      ...(permissionContext ? { permissionContext } : {}),
     }, 502, cors);
   }
 
