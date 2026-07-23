@@ -95,6 +95,8 @@ const EMBEDDED_SIGNUP_ERROR_MESSAGES: Record<string, string> = {
   META_APP_SUBSCRIPTION_FAILED:
     'La conexión con Meta se validó, pero no se pudo suscribir la app a tu cuenta de WhatsApp Business. Intenta reconectar.',
   CONNECTION_SAVE_FAILED: 'No se pudo guardar la conexión.',
+  NO_PHONE_NUMBER_FOUND: 'La cuenta de WhatsApp Business no tiene ningún número registrado.',
+  MULTIPLE_PHONE_NUMBERS_FOUND: 'Esta cuenta de WhatsApp Business tiene más de un número. Selecciona uno específico e intenta de nuevo.',
 };
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
@@ -214,7 +216,13 @@ export function WhatsappSettingsPage() {
     setConnecting(true);
     try {
       const { code, session } = await launchWhatsAppEmbeddedSignup({ coexistence });
-      if (!session.wabaId || !session.phoneNumberId) {
+      // wabaId is the one field Embedded Signup always includes. phoneNumberId
+      // is NOT required here anymore: Meta's FINISH_ONLY_WABA event (sent
+      // when the WABA already has a verified number registered before
+      // running Embedded Signup — the exact production case this was
+      // fixed for) carries no phone_number_id at all. The Edge Function
+      // resolves it from the WABA's own phone number list in that case.
+      if (!session.wabaId) {
         throw new Error('EMBEDDED_SIGNUP_MISSING_SESSION_DATA');
       }
       await whatsappService.completeEmbeddedSignup({

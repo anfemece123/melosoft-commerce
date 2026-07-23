@@ -20,7 +20,11 @@ interface EmbeddedSignupCompletionPayload {
   storeId: string;
   code: string;
   wabaId: string;
-  phoneNumberId: string;
+  // Optional: Meta's FINISH_ONLY_WABA event (sent when the WABA already
+  // has a verified number registered before running Embedded Signup)
+  // carries no phone_number_id — the Edge Function resolves it from the
+  // WABA's own phone number list when this is absent.
+  phoneNumberId?: string | null;
   businessId?: string | null;
   coexistence: boolean;
 }

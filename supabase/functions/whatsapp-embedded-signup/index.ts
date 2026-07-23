@@ -46,7 +46,11 @@ interface OnboardingRequest {
   storeId: string;
   code: string;
   wabaId: string;
-  phoneNumberId: string;
+  // Optional: Meta's FINISH_ONLY_WABA postMessage event (sent when the
+  // WABA already has a verified number registered before running
+  // Embedded Signup) carries no phone_number_id — resolved from the
+  // WABA's own phone number list below when absent (step 6).
+  phoneNumberId?: string | null;
   businessId?: string;
   coexistence?: boolean;
 }
@@ -109,9 +113,12 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Invalid JSON body' }, 400, cors);
   }
 
-  const { storeId, code, wabaId, phoneNumberId, businessId, coexistence } = payload;
-  if (!storeId || !code || !wabaId || !phoneNumberId) {
-    return json({ error: 'Missing required fields: storeId, code, wabaId, phoneNumberId' }, 400, cors);
+  const { storeId, code, wabaId, businessId, coexistence } = payload;
+  // phoneNumberId is intentionally NOT required here — see the interface
+  // comment above and step 6 below.
+  const requestedPhoneNumberId = payload.phoneNumberId || null;
+  if (!storeId || !code || !wabaId) {
+    return json({ error: 'Missing required fields: storeId, code, wabaId' }, 400, cors);
   }
 
   // ── 3. storeId is NEVER trusted alone — verify real ownership ──
@@ -144,16 +151,25 @@ Deno.serve(async (req: Request) => {
   // ── 4. Cross-tenant duplicate check, early — cheap pre-check before
   //      spending a Meta API round trip; the real guarantee is still the
   //      UNIQUE index + the guard inside store_whatsapp_connection_save.
-  const { data: existingForPhone } = await adminClient
-    .from('store_whatsapp_connections')
-    .select('store_id')
-    .eq('phone_number_id', phoneNumberId)
-    .neq('store_id', storeId)
-    .maybeSingle();
+  //      Only possible here if the frontend already knows phoneNumberId —
+  //      when it doesn't (FINISH_ONLY_WABA), the same check runs again
+  //      right after it's resolved from the WABA in step 6.
+  async function rejectIfPhoneAlreadyConnected(candidatePhoneNumberId: string): Promise<Response | null> {
+    const { data: existingForPhone } = await adminClient
+      .from('store_whatsapp_connections')
+      .select('store_id')
+      .eq('phone_number_id', candidatePhoneNumberId)
+      .neq('store_id', storeId)
+      .maybeSingle();
 
-  if (existingForPhone) {
+    if (!existingForPhone) return null;
     await eventLog('duplicate_phone_rejected', 'phone_number_id already connected to another store');
     return json({ error: 'PHONE_NUMBER_ALREADY_CONNECTED', message: 'Este número de WhatsApp ya está conectado a otra tienda de Melosoft.' }, 409, cors);
+  }
+
+  if (requestedPhoneNumberId) {
+    const rejection = await rejectIfPhoneAlreadyConnected(requestedPhoneNumberId);
+    if (rejection) return rejection;
   }
 
   // ── 5. Exchange the temporary code for an access token (server-side
@@ -172,8 +188,14 @@ Deno.serve(async (req: Request) => {
   }
   const accessToken = tokenResult.body.access_token as string;
 
-  // ── 6. Verify the phone number really belongs to the claimed WABA —
-  //      never trust the frontend's phoneNumberId/wabaId blindly ──
+  // ── 6. Resolve/verify the phone number for this WABA — never trust
+  //      the frontend's phoneNumberId/wabaId blindly. When the frontend
+  //      DID send a phoneNumberId (the common FINISH case), verify it
+  //      really belongs to this WABA. When it didn't (FINISH_ONLY_WABA —
+  //      the WABA already had a verified number before Embedded Signup
+  //      ran), resolve it directly from the WABA's own phone number
+  //      list: exactly one number is the expected, unambiguous case;
+  //      zero or more than one cannot be auto-resolved safely.
   const phoneListResult = await metaFetch(
     `https://graph.facebook.com/${graphApiVersion}/${encodeURIComponent(wabaId)}/phone_numbers?access_token=${encodeURIComponent(accessToken)}`,
   );
@@ -184,11 +206,32 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'META_WABA_VERIFICATION_FAILED', message: 'No se pudo verificar la cuenta de WhatsApp Business con Meta.' }, 502, cors);
   }
   const wabaPhones = (phoneListResult.body.data as Array<{ id: string }> | undefined) ?? [];
-  const belongsToWaba = wabaPhones.some((p) => p.id === phoneNumberId);
-  if (!belongsToWaba) {
-    console.error('[whatsapp-embedded-signup] phone_number_id does not belong to the claimed waba_id');
-    await eventLog('connect_failed', 'phone_number_id_not_in_waba');
-    return json({ error: 'PHONE_NOT_IN_WABA', message: 'El número indicado no pertenece a esa cuenta de WhatsApp Business.' }, 422, cors);
+
+  let phoneNumberId: string;
+  if (requestedPhoneNumberId) {
+    const belongsToWaba = wabaPhones.some((p) => p.id === requestedPhoneNumberId);
+    if (!belongsToWaba) {
+      console.error('[whatsapp-embedded-signup] phone_number_id does not belong to the claimed waba_id');
+      await eventLog('connect_failed', 'phone_number_id_not_in_waba');
+      return json({ error: 'PHONE_NOT_IN_WABA', message: 'El número indicado no pertenece a esa cuenta de WhatsApp Business.' }, 422, cors);
+    }
+    phoneNumberId = requestedPhoneNumberId;
+  } else if (wabaPhones.length === 1) {
+    phoneNumberId = wabaPhones[0].id;
+    await eventLog('phone_auto_resolved', `phone_number_id=${phoneNumberId}`);
+    const rejection = await rejectIfPhoneAlreadyConnected(phoneNumberId);
+    if (rejection) return rejection;
+  } else if (wabaPhones.length === 0) {
+    console.error('[whatsapp-embedded-signup] WABA has no phone numbers to resolve');
+    await eventLog('connect_failed', 'no_phone_number_found_in_waba');
+    return json({ error: 'NO_PHONE_NUMBER_FOUND', message: 'La cuenta de WhatsApp Business no tiene ningún número registrado.' }, 422, cors);
+  } else {
+    console.error('[whatsapp-embedded-signup] WABA has multiple phone numbers, cannot auto-resolve');
+    await eventLog('connect_failed', `ambiguous_phone_selection count=${wabaPhones.length}`);
+    return json({
+      error: 'MULTIPLE_PHONE_NUMBERS_FOUND',
+      message: 'Esta cuenta de WhatsApp Business tiene más de un número. Selecciona uno específico e intenta de nuevo.',
+    }, 422, cors);
   }
 
   // ── 7. Fetch display name/number for this specific phone ──

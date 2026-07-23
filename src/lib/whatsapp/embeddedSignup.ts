@@ -19,21 +19,33 @@ import { env } from '@/lib/env';
 // documented, stable Embedded Signup pattern — the same one used by
 // every WhatsApp Business Solution Provider.
 //
-// PRODUCTION INCIDENT (fixed here): every promise in this file used to
-// have either no timeout at all, or relied solely on the Facebook JS
-// SDK invoking its FB.login() callback. That callback is NOT guaranteed
-// to fire if the user closes the popup window directly, or if Meta's
-// side simply stops advancing after the user clicks through — a
-// long-documented gap in the FB JS SDK, not something this app's code
-// can prevent Meta from doing. When that happened, `await` on that
-// promise never resolved OR rejected, so launchWhatsAppEmbeddedSignup()
-// never returned, WhatsappSettingsPage's `finally { setConnecting(false) }`
-// never ran, and the "Conectar WhatsApp Business" button spun forever.
-// Every promise below now has an explicit, bounded timeout, and the
-// login step additionally detects "the popup window lost focus and
-// never came back with a result" as its own distinct, faster failure
-// mode — so this can never hang indefinitely again, regardless of what
-// Meta's popup does.
+// PRODUCTION INCIDENT — two independent bugs, both fixed here:
+//
+// 1. (Root cause of the reported hang) The postMessage handler only
+//    recognized the exact event names 'FINISH' and
+//    'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING'. Meta also sends
+//    'FINISH_ONLY_WABA' when the WABA already has a verified number
+//    registered before running Embedded Signup — exactly the reported
+//    case (an existing verified +57 321 3706466 on WABA
+//    880579344939347). That event matched none of the branches, so it
+//    was silently dropped and this promise waited forever for an event
+//    under a name it didn't recognize. Fixed by matching any event
+//    starting with 'FINISH' instead of an exact list — see
+//    listenForEmbeddedSignupSession below.
+//
+// 2. (Defense in depth, not the reported cause but a real gap) Every
+//    promise in this file used to have either no timeout at all, or
+//    relied solely on the Facebook JS SDK invoking its FB.login()
+//    callback — which is not guaranteed to fire if the user closes the
+//    popup window directly. Every promise below now has an explicit,
+//    bounded timeout, and the login step additionally detects "the
+//    popup window lost focus and never came back with a result" as its
+//    own distinct, faster failure mode.
+//
+// Together: a FINISH_ONLY_WABA (or any other FINISH_* variant) now
+// resolves correctly instead of being dropped, AND even a genuinely
+// unrecognized/absent event is bounded by a timeout — so this can never
+// hang indefinitely, and the actual cause is fixed, not just masked.
 
 declare global {
   interface Window {
@@ -188,16 +200,29 @@ function listenForEmbeddedSignupSession(
 
       logSignupEvent('postmessage_received', { event: parsed.event });
 
-      if (parsed.event === 'FINISH' || parsed.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING') {
+      // PRODUCTION INCIDENT (fixed here): this used to only recognize
+      // the exact strings 'FINISH' and 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING'.
+      // Meta also sends 'FINISH_ONLY_WABA' when the WABA already has a
+      // verified number registered before running Embedded Signup —
+      // exactly the reported production case (WABA 880579344939347 with
+      // +57 321 3706466 already verified). That event fell through every
+      // branch below and was silently dropped, so this promise sat
+      // waiting for an event that was never going to arrive under a name
+      // it recognized — the real cause of "the popup finishes but
+      // Melosoft never advances", not a missing timeout. Matching on the
+      // 'FINISH' prefix instead of an exact enumerated list means any
+      // future FINISH_* variant Meta introduces is handled the same way,
+      // instead of requiring another narrow patch each time.
+      if (parsed.event === 'CANCEL') {
+        finish(new Error('EMBEDDED_SIGNUP_CANCELLED'));
+      } else if (parsed.event === 'ERROR') {
+        finish(new Error('EMBEDDED_SIGNUP_ERROR'));
+      } else if (typeof parsed.event === 'string' && parsed.event.startsWith('FINISH')) {
         finish({
           wabaId: (parsed.data?.waba_id as string | undefined) ?? null,
           phoneNumberId: (parsed.data?.phone_number_id as string | undefined) ?? null,
           businessId: (parsed.data?.business_id as string | undefined) ?? null,
         });
-      } else if (parsed.event === 'CANCEL') {
-        finish(new Error('EMBEDDED_SIGNUP_CANCELLED'));
-      } else if (parsed.event === 'ERROR') {
-        finish(new Error('EMBEDDED_SIGNUP_ERROR'));
       }
     };
 
