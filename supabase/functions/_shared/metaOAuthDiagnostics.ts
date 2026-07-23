@@ -4,6 +4,8 @@ export interface MetaOAuthError {
   code?: number;
   error_subcode?: number;
   fbtrace_id?: string;
+  error_user_title?: string;
+  error_user_msg?: string;
   error_data?: {
     details?: string;
     messaging_product?: string;

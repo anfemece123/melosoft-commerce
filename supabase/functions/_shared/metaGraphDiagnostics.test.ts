@@ -13,6 +13,8 @@ describe('buildMetaTemplateSyncDiagnostic', () => {
         code: 100,
         error_subcode: 2388045,
         fbtrace_id: 'trace-123',
+        error_user_title: 'Template could not be created',
+        error_user_msg: 'Review the template parameters.',
         error_data: { details: 'The template language is not supported.' },
       },
     )).toEqual({
@@ -24,6 +26,8 @@ describe('buildMetaTemplateSyncDiagnostic', () => {
       metaType: 'OAuthException',
       metaMessage: 'Invalid parameter',
       metaDetails: 'The template language is not supported.',
+      metaUserTitle: 'Template could not be created',
+      metaUserMessage: 'Review the template parameters.',
       traceId: 'trace-123',
     });
   });
@@ -38,5 +42,7 @@ describe('buildMetaTemplateSyncDiagnostic', () => {
 
     expect(diagnostic.metaMessage).toBe('access_token=[redacted]');
     expect(diagnostic.metaDetails).toBeNull();
+    expect(diagnostic.metaUserTitle).toBeNull();
+    expect(diagnostic.metaUserMessage).toBeNull();
   });
 });

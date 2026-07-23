@@ -24,6 +24,10 @@ import {
   type MetaTemplateSyncDiagnostic,
 } from '../_shared/metaGraphDiagnostics.ts';
 import type { MetaOAuthError } from '../_shared/metaOAuthDiagnostics.ts';
+import {
+  buildWhatsappTemplateCreatePayload,
+  type WhatsappTemplateDefinition,
+} from '../_shared/whatsappTemplatePayload.ts';
 
 function json(body: unknown, status: number, cors: Record<string, string>) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...cors } });
@@ -34,8 +38,8 @@ const DEFAULT_GRAPH_API_VERSION = 'v25.0'; // fallback only — see docs/whatsap
 // Body text mirrors docs/whatsapp/templates.md exactly — keep both in sync.
 const ORDER_CONFIRMATION_TEMPLATE = {
   name: 'melosoft_order_confirmation_v1',
-  category: 'UTILITY',
-  language: 'es_MX',
+  category: 'utility',
+  language: 'es_CO',
   bodyText:
     'Hola {{1}} 👋\n\nTu pedido en *{{2}}* fue recibido correctamente.\n\nPedido: *{{3}}*\nResumen: {{4}}\nTotal: *{{5}}*\nPago: {{6}}\nEntrega: {{7}}\nEstado: {{8}}\n\n{{9}}\n\nConserva este mensaje para consultar la información de tu compra.',
   bodyExample: [
@@ -43,15 +47,15 @@ const ORDER_CONFIRMATION_TEMPLATE = {
     '2x Pan francés, 1x Torta chocolate (mediana), +1 más', '$ 85.000',
     'Pago contraentrega', 'Domicilio a Bogotá — Calle 10 # 20-30', 'Recibido', '¡Gracias por tu compra!',
   ],
-};
+} satisfies WhatsappTemplateDefinition;
 
 const TEST_TEMPLATE = {
   name: 'melosoft_whatsapp_test_v1',
-  category: 'UTILITY',
-  language: 'es_MX',
+  category: 'utility',
+  language: 'es_CO',
   bodyText: 'Este es un mensaje de prueba de {{1}} enviado desde Melosoft Commerce. Si lo recibiste, la configuración de WhatsApp está funcionando correctamente.',
   bodyExample: ['Melosoft Commerce'],
-};
+} satisfies WhatsappTemplateDefinition;
 
 interface MetaErrorShape {
   error?: MetaOAuthError;
@@ -65,11 +69,17 @@ interface TemplateSyncResult {
   diagnostic: MetaTemplateSyncDiagnostic | null;
 }
 
-async function metaGet(url: string): Promise<{ ok: boolean; status: number; body: Record<string, unknown> }> {
+async function metaGet(
+  url: string,
+  accessToken: string,
+): Promise<{ ok: boolean; status: number; body: Record<string, unknown> }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
-    const res = await fetch(url, { signal: controller.signal });
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: controller.signal,
+    });
     clearTimeout(timeout);
     return { ok: res.ok, status: res.status, body: await res.json().catch(() => ({})) };
   } catch {
@@ -78,13 +88,20 @@ async function metaGet(url: string): Promise<{ ok: boolean; status: number; body
   }
 }
 
-async function metaPost(url: string, body: unknown): Promise<{ ok: boolean; status: number; body: Record<string, unknown> }> {
+async function metaPost(
+  url: string,
+  accessToken: string,
+  body: unknown,
+): Promise<{ ok: boolean; status: number; body: Record<string, unknown> }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(body),
       signal: controller.signal,
     });
@@ -112,11 +129,12 @@ async function syncOneTemplate(
   graphApiVersion: string,
   wabaId: string,
   accessToken: string,
-  template: typeof ORDER_CONFIRMATION_TEMPLATE,
+  template: WhatsappTemplateDefinition,
 ): Promise<TemplateSyncResult> {
   const lookup = await metaGet(
     `https://graph.facebook.com/${graphApiVersion}/${encodeURIComponent(wabaId)}/message_templates` +
-    `?name=${encodeURIComponent(template.name)}&access_token=${encodeURIComponent(accessToken)}`,
+    `?name=${encodeURIComponent(template.name)}`,
+    accessToken,
   );
 
   if (!lookup.ok) {
@@ -141,19 +159,9 @@ async function syncOneTemplate(
 
   // The lookup succeeded and returned no match, so it is safe to create.
   const createResult = await metaPost(
-    `https://graph.facebook.com/${graphApiVersion}/${encodeURIComponent(wabaId)}/message_templates?access_token=${encodeURIComponent(accessToken)}`,
-    {
-      name: template.name,
-      category: template.category,
-      language: template.language,
-      components: [
-        {
-          type: 'BODY',
-          text: template.bodyText,
-          example: { body_text: [template.bodyExample] },
-        },
-      ],
-    },
+    `https://graph.facebook.com/${graphApiVersion}/${encodeURIComponent(wabaId)}/message_templates`,
+    accessToken,
+    buildWhatsappTemplateCreatePayload(template),
   );
 
   if (!createResult.ok) {
@@ -276,7 +284,9 @@ Deno.serve(async (req: Request) => {
   const diagnostics = [orderTemplateResult.diagnostic, testTemplateResult.diagnostic]
     .filter((item): item is MetaTemplateSyncDiagnostic => item !== null);
   if (diagnostics.length > 0) {
-    const upstreamMessage = diagnostics[0].metaDetails || diagnostics[0].metaMessage;
+    const upstreamMessage = diagnostics[0].metaDetails ||
+      diagnostics[0].metaUserMessage ||
+      diagnostics[0].metaMessage;
     return json({
       error: 'META_TEMPLATE_SYNC_FAILED',
       message: upstreamMessage

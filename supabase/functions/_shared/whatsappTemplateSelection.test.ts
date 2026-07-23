@@ -6,12 +6,12 @@ describe('resolveWhatsappTemplateSelection', () => {
     expect(resolveWhatsappTemplateSelection(
       'test_message',
       'melosoft_whatsapp_test_v1',
-      'es_MX',
+      'es_CO',
       'melosoft_order_confirmation_v1',
-      'es_MX',
+      'es_CO',
     )).toEqual({
       name: 'melosoft_whatsapp_test_v1',
-      language: 'es_MX',
+      language: 'es_CO',
     });
   });
 
@@ -21,10 +21,10 @@ describe('resolveWhatsappTemplateSelection', () => {
       'queued_template',
       'en_US',
       'melosoft_order_confirmation_v1',
-      'es_MX',
+      'es_CO',
     )).toEqual({
       name: 'melosoft_order_confirmation_v1',
-      language: 'es_MX',
+      language: 'es_CO',
     });
   });
 
@@ -32,12 +32,12 @@ describe('resolveWhatsappTemplateSelection', () => {
     expect(resolveWhatsappTemplateSelection(
       'order_received',
       'queued_template',
-      'es_MX',
+      'es_CO',
       null,
       null,
     )).toEqual({
       name: 'queued_template',
-      language: 'es_MX',
+      language: 'es_CO',
     });
   });
 });

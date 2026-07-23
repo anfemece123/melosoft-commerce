@@ -14,6 +14,8 @@ export interface MetaTemplateSyncDiagnostic {
   metaType: string | null;
   metaMessage: string | null;
   metaDetails: string | null;
+  metaUserTitle: string | null;
+  metaUserMessage: string | null;
   traceId: string | null;
 }
 
@@ -32,6 +34,8 @@ export function buildMetaTemplateSyncDiagnostic(
     metaType: typeof error?.type === 'string' ? error.type.slice(0, 100) : null,
     metaMessage: sanitizeMetaOAuthErrorMessage(error?.message),
     metaDetails: sanitizeMetaOAuthErrorMessage(error?.error_data?.details),
+    metaUserTitle: sanitizeMetaOAuthErrorMessage(error?.error_user_title),
+    metaUserMessage: sanitizeMetaOAuthErrorMessage(error?.error_user_msg),
     traceId: typeof error?.fbtrace_id === 'string' ? error.fbtrace_id.slice(0, 200) : null,
   };
 }
