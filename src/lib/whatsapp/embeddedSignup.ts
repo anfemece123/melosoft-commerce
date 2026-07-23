@@ -339,6 +339,20 @@ function runFacebookLogin(
       else resolve(result);
     }
 
+    // Match Meta's launch payload exactly. `setup: {}` is part of both
+    // the base Embedded Signup implementation and the coexistence
+    // variant; omitting it can still produce an OAuth code while failing
+    // to initialize the session logger that emits WA_EMBEDDED_SIGNUP.
+    // For the normal Cloud API flow, omit featureType instead of sending
+    // an undocumented empty-string value.
+    const extras: Record<string, unknown> = {
+      setup: {},
+      sessionInfoVersion: '3',
+    };
+    if (options.coexistence) {
+      extras.featureType = 'whatsapp_business_app_onboarding';
+    }
+
     window.FB?.login(
       (response) => {
         log('login_callback_fired', {
@@ -355,15 +369,11 @@ function runFacebookLogin(
         config_id: env.metaWhatsappConfigId,
         response_type: 'code',
         override_default_response_type: true,
-        extras: {
-          // Requests the WhatsApp Business App coexistence flow when the
-          // store already has a number on the mobile app — see migration
-          // 096's onboarding_type. sessionInfoVersion opts into the
-          // richer WA_EMBEDDED_SIGNUP postMessage payload this file
-          // listens for above.
-          featureType: options.coexistence ? 'whatsapp_business_app_onboarding' : '',
-          sessionInfoVersion: '3',
-        },
+        // featureType requests the WhatsApp Business App coexistence flow
+        // when the store already has a number on the mobile app — see
+        // migration 096's onboarding_type. sessionInfoVersion opts into
+        // the richer WA_EMBEDDED_SIGNUP postMessage payload above.
+        extras,
       },
     );
   });

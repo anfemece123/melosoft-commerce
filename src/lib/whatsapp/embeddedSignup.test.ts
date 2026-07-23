@@ -102,6 +102,51 @@ describe('launchWhatsAppEmbeddedSignup', () => {
     expect(result.session.phoneNumberId).toBeNull();
   });
 
+  it('launches coexistence with Meta-required setup and session logging options', async () => {
+    const { launchWhatsAppEmbeddedSignup } = await importEmbeddedSignup();
+    const login = window.FB!.login as ReturnType<typeof vi.fn>;
+    login.mockImplementation((callback) => {
+      callback({ status: 'connected', authResponse: { code: 'auth-code-coexistence' } });
+    });
+
+    const resultPromise = launchWhatsAppEmbeddedSignup({ coexistence: true });
+    await vi.advanceTimersByTimeAsync(0);
+    postFinishMessage({ event: 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING', phoneNumberId: null });
+    await resultPromise;
+
+    expect(login).toHaveBeenCalledWith(expect.any(Function), {
+      config_id: 'test-config-id',
+      response_type: 'code',
+      override_default_response_type: true,
+      extras: {
+        setup: {},
+        featureType: 'whatsapp_business_app_onboarding',
+        sessionInfoVersion: '3',
+      },
+    });
+  });
+
+  it('omits the coexistence featureType instead of sending an empty string in the normal flow', async () => {
+    const { launchWhatsAppEmbeddedSignup } = await importEmbeddedSignup();
+    const login = window.FB!.login as ReturnType<typeof vi.fn>;
+    login.mockImplementation((callback) => {
+      callback({ status: 'connected', authResponse: { code: 'auth-code-cloud' } });
+    });
+
+    const resultPromise = launchWhatsAppEmbeddedSignup({ coexistence: false });
+    await vi.advanceTimersByTimeAsync(0);
+    postFinishMessage();
+    await resultPromise;
+
+    expect(login).toHaveBeenCalledWith(expect.any(Function), expect.objectContaining({
+      extras: {
+        setup: {},
+        sessionInfoVersion: '3',
+      },
+    }));
+    expect((login.mock.calls[0][1] as { extras: Record<string, unknown> }).extras).not.toHaveProperty('featureType');
+  });
+
   it('rejects with EMBEDDED_SIGNUP_CANCELLED when FB.login callback fires with no code', async () => {
     const { launchWhatsAppEmbeddedSignup } = await importEmbeddedSignup();
     (window.FB!.login as ReturnType<typeof vi.fn>).mockImplementation((callback) => {
