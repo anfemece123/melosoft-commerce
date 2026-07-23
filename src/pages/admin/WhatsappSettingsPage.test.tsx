@@ -72,13 +72,21 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
     );
   });
 
-  it('shows the specific "Meta authorized but no session info" message with a correlation id', async () => {
-    const { EmbeddedSignupError } = await import('@/lib/whatsapp/embeddedSignup');
-    launchWhatsAppEmbeddedSignupMock.mockRejectedValueOnce(
-      new EmbeddedSignupError('EMBEDDED_SIGNUP_NO_SESSION_INFO', 'corr-xyz789'),
-    );
+  it('POSTs the OAuth code to the Edge Function when Meta omits all browser session info', async () => {
+    launchWhatsAppEmbeddedSignupMock.mockResolvedValueOnce({
+      code: 'auth-code-without-session',
+      session: { wabaId: null, phoneNumberId: null, businessId: null },
+    });
 
     const { WhatsappSettingsPage } = await import('./WhatsappSettingsPage');
+    const { whatsappService } = await import('@/features/whatsapp/whatsappService');
+    (whatsappService.completeEmbeddedSignup as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      connectionStatus: 'connected',
+      displayPhoneNumber: '+57 321 3706466',
+      verifiedName: 'MelosoftApp',
+      onboardingType: 'coexistence',
+    });
     const { notify } = await import('@/lib/notifications');
 
     render(
@@ -92,10 +100,16 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
     const connectButton = await screen.findByRole<HTMLButtonElement>('button', { name: /conectar whatsapp business/i });
     fireEvent.click(connectButton);
 
+    await waitFor(() => expect(whatsappService.completeEmbeddedSignup).toHaveBeenCalledWith({
+      storeId: 'store-1',
+      code: 'auth-code-without-session',
+      wabaId: null,
+      phoneNumberId: null,
+      businessId: null,
+      coexistence: false,
+    }));
     await waitFor(() => expect(connectButton.disabled).toBe(false));
-    expect(notify.error).toHaveBeenCalledWith(
-      'Meta autorizó la cuenta, pero no devolvió la información de WhatsApp necesaria. (Referencia: corr-xyz789)',
-    );
+    expect(notify.success).toHaveBeenCalledWith('WhatsApp Business conectado correctamente');
   });
 
   it('always leaves the loading state when the Edge Function call rejects after a successful Meta login', async () => {
@@ -127,13 +141,13 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
     expect(notify.error).toHaveBeenCalledWith('La cuenta de WhatsApp Business no tiene ningún número registrado.');
   });
 
-  // Point 12: when session has code + wabaId (even without phoneNumberId
+  // When session has code + wabaId (even without phoneNumberId
   // — the FINISH_ONLY_WABA case), the POST to whatsapp-embedded-signup
   // must actually happen. completeEmbeddedSignup is the only thing in
   // this codebase that calls supabase.functions.invoke('whatsapp-embedded-signup', ...) —
   // asserting it was called with the right payload is the unit-level
   // equivalent of confirming the Network request fires.
-  it('POSTs to whatsapp-embedded-signup whenever wabaId is present, even without phoneNumberId', async () => {
+  it('POSTs to whatsapp-embedded-signup with wabaId even without phoneNumberId', async () => {
     launchWhatsAppEmbeddedSignupMock.mockResolvedValueOnce({
       code: 'auth-code-only-waba',
       session: { wabaId: '880579344939347', phoneNumberId: null, businessId: 'biz-1' },

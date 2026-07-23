@@ -90,6 +90,10 @@ const EMBEDDED_SIGNUP_ERROR_MESSAGES: Record<string, string> = {
     'Meta no envió los datos de la cuenta de WhatsApp Business (WABA o número). Intenta de nuevo y confirma que seleccionaste una cuenta y un número.',
   PHONE_NUMBER_ALREADY_CONNECTED: 'Ese número de WhatsApp ya está conectado a otra tienda de Melosoft.',
   META_TOKEN_EXCHANGE_FAILED: 'No se pudo completar la conexión con Meta. Intenta de nuevo.',
+  META_WABA_RESOLUTION_FAILED:
+    'Meta autorizó la cuenta, pero no indicó qué cuenta de WhatsApp seleccionaste. Revisa la configuración de Embedded Signup.',
+  MULTIPLE_WABAS_FOUND:
+    'Meta autorizó más de una cuenta de WhatsApp y no fue posible determinar cuál seleccionaste.',
   META_WABA_VERIFICATION_FAILED: 'No se pudo verificar la cuenta de WhatsApp Business con Meta.',
   PHONE_NOT_IN_WABA: 'El número indicado no pertenece a esa cuenta de WhatsApp Business.',
   META_PHONE_DETAIL_FAILED: 'No se pudo obtener el número verificado desde Meta.',
@@ -217,15 +221,10 @@ export function WhatsappSettingsPage() {
     setConnecting(true);
     try {
       const { code, session } = await launchWhatsAppEmbeddedSignup({ coexistence });
-      // wabaId is the one field Embedded Signup always includes. phoneNumberId
-      // is NOT required here anymore: Meta's FINISH_ONLY_WABA event (sent
-      // when the WABA already has a verified number registered before
-      // running Embedded Signup — the exact production case this was
-      // fixed for) carries no phone_number_id at all. The Edge Function
-      // resolves it from the WABA's own phone number list in that case.
-      if (!session.wabaId) {
-        throw new Error('EMBEDDED_SIGNUP_MISSING_SESSION_DATA');
-      }
+      // Meta sometimes returns the valid OAuth code without emitting the
+      // browser-side WA_EMBEDDED_SIGNUP event. Send the code regardless;
+      // the Edge Function resolves the WABA from the exchanged token's
+      // granular scopes when session.wabaId is absent.
       await whatsappService.completeEmbeddedSignup({
         storeId,
         code,

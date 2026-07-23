@@ -45,9 +45,9 @@ import { env } from '@/lib/env';
 // happens, the logs say exactly what happened instead of just going
 // silent; (c) FINISH/FINISH_ONLY_WABA/CANCEL/ERROR are all recognized
 // (FINISH_ONLY_WABA — and any other FINISH_* variant — via a prefix
-// match, not an exact enumerated list); (d) a distinct
-// EMBEDDED_SIGNUP_NO_SESSION_INFO error, carrying a correlation ID, for
-// the case where code succeeds but truly no session data ever arrives.
+// match, not an exact enumerated list); (d) when Meta omits session info,
+// preserve the valid OAuth code and let the backend resolve the WABA
+// securely from the exchanged token instead of failing in the browser.
 
 // ── Diagnostics ────────────────────────────────────────────────
 
@@ -132,7 +132,7 @@ const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // WA_EMBEDDED_SIGNUP postMessage, own
 // exact reported incident: FB.login succeeded, login_succeeded logged,
 // then silence — this bounds that silence to a few seconds instead of
 // up to SESSION_TIMEOUT_MS.
-const POST_LOGIN_SESSION_GRACE_MS = 12_000;
+const POST_LOGIN_SESSION_GRACE_MS = 3_000;
 // Heuristic grace period: once the main window regains focus (the
 // popup normally steals it while open), how long to wait for FB.login()'s
 // own callback before concluding the popup was closed without it firing.
@@ -380,13 +380,12 @@ function runFacebookLogin(
 }
 
 // Races `sessionPromise` against a short, dedicated grace window that
-// starts NOW (login already succeeded) — not against SESSION_TIMEOUT_MS,
-// which would keep waiting minutes for something that either arrives in
-// a couple of seconds or was never coming. Cancels the underlying
-// listener if the short grace window wins, so it doesn't linger.
+// starts NOW (login already succeeded). If Meta does not send its
+// optional browser-side session event, return an empty session instead
+// of discarding the valid OAuth code. The Edge Function can securely
+// resolve the authorized WABA from that code's token granular scopes.
 function waitForSessionAfterLogin(
   session: { promise: Promise<EmbeddedSignupSession>; cancel: () => void },
-  correlationId: string,
 ): Promise<EmbeddedSignupSession> {
   return new Promise<EmbeddedSignupSession>((resolve, reject) => {
     let settled = false;
@@ -395,7 +394,7 @@ function waitForSessionAfterLogin(
       if (settled) return;
       settled = true;
       session.cancel();
-      reject(new EmbeddedSignupError('EMBEDDED_SIGNUP_NO_SESSION_INFO', correlationId));
+      resolve({ wabaId: null, phoneNumberId: null, businessId: null });
     }, POST_LOGIN_SESSION_GRACE_MS);
 
     session.promise
@@ -461,18 +460,24 @@ export async function launchWhatsAppEmbeddedSignup(options: { coexistence: boole
 
   let sessionData: EmbeddedSignupSession;
   try {
-    sessionData = await waitForSessionAfterLogin(session, correlationId);
+    sessionData = await waitForSessionAfterLogin(session);
   } catch (error) {
     if (error instanceof EmbeddedSignupError) throw error;
     const errorCode = error instanceof Error ? error.message : 'EMBEDDED_SIGNUP_ERROR';
     throw new EmbeddedSignupError(errorCode, correlationId);
   }
 
-  log('session_data_received', {
-    hasWabaId: Boolean(sessionData.wabaId),
-    hasPhoneNumberId: Boolean(sessionData.phoneNumberId),
-    elapsedMs: Date.now() - startedAt,
-  });
+  if (sessionData.wabaId) {
+    log('session_data_received', {
+      hasWabaId: true,
+      hasPhoneNumberId: Boolean(sessionData.phoneNumberId),
+      elapsedMs: Date.now() - startedAt,
+    });
+  } else {
+    log('session_data_missing_using_server_fallback', {
+      elapsedMs: Date.now() - startedAt,
+    });
+  }
 
   return { code, session: sessionData };
 }

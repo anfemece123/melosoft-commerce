@@ -317,71 +317,53 @@ describe('launchWhatsAppEmbeddedSignup', () => {
 
   // ── The exact production incident ──────────────────────────────
   // sdk_loaded → login_callback_fired {hasCode: true} → login_succeeded
-  // → then nothing: no postmessage_received, no session_data_received,
-  // no error, no loading end. code succeeded but NO postMessage ever
-  // arrived. This must be bounded to POST_LOGIN_SESSION_GRACE_MS (a few
-  // seconds), NOT the 5-minute session timeout or the 3-minute login
-  // timeout — both of those already fired successfully by this point.
-  it('rejects with EMBEDDED_SIGNUP_NO_SESSION_INFO (with a correlation id) when code succeeds but no postMessage ever arrives', async () => {
-    const { launchWhatsAppEmbeddedSignup, EmbeddedSignupError } = await importEmbeddedSignup();
+  // → then nothing: no postmessage_received and no session data. The
+  // OAuth code is still valid, so preserve it and return an empty session
+  // for the Edge Function's token-introspection fallback.
+  it('returns the OAuth code with an empty session when no postMessage ever arrives', async () => {
+    const { launchWhatsAppEmbeddedSignup } = await importEmbeddedSignup();
     (window.FB!.login as ReturnType<typeof vi.fn>).mockImplementation((callback) => {
       callback({ status: 'connected', authResponse: { code: 'auth-code-no-session' } });
     });
 
     const resultPromise = launchWhatsAppEmbeddedSignup({ coexistence: false });
-    // Attach the catch handler SYNCHRONOUSLY, before any timer advance —
-    // the fake-timer-driven rejection fires from inside
-    // advanceTimersByTimeAsync itself, so attaching a handler only after
-    // that call returns leaves a real window where Node considers the
-    // rejection unhandled (a spurious PromiseRejectionHandledWarning,
-    // nothing to do with the production code under test).
-    const caughtErrorPromise = resultPromise.then(
-      () => { throw new Error('expected launchWhatsAppEmbeddedSignup to reject'); },
-      (error: unknown) => error,
-    );
-
     await vi.advanceTimersByTimeAsync(0);
-    // No postMessage dispatched at all — only the short post-login grace
-    // window elapses (12s), nowhere near the 5-minute session timeout or
-    // the 3-minute login timeout, both already moot since login succeeded.
-    await vi.advanceTimersByTimeAsync(12_000);
+    await vi.advanceTimersByTimeAsync(3_000);
 
-    const caughtError = await caughtErrorPromise;
-    expect(caughtError).toBeInstanceOf(EmbeddedSignupError);
-    const typedError = caughtError as InstanceType<typeof EmbeddedSignupError>;
-    expect(typedError.code).toBe('EMBEDDED_SIGNUP_NO_SESSION_INFO');
-    expect(typedError.correlationId.length).toBeGreaterThan(0);
+    await expect(resultPromise).resolves.toEqual({
+      code: 'auth-code-no-session',
+      session: { wabaId: null, phoneNumberId: null, businessId: null },
+    });
   });
 
-  it('does NOT reject with EMBEDDED_SIGNUP_NO_SESSION_INFO before the short grace window elapses', async () => {
+  it('does not enter the server fallback before the short grace window elapses', async () => {
     const { launchWhatsAppEmbeddedSignup } = await importEmbeddedSignup();
     (window.FB!.login as ReturnType<typeof vi.fn>).mockImplementation((callback) => {
       callback({ status: 'connected', authResponse: { code: 'auth-code-still-waiting' } });
     });
 
     const resultPromise = launchWhatsAppEmbeddedSignup({ coexistence: false });
-    const rejected = vi.fn();
-    resultPromise.catch(rejected);
+    const settled = vi.fn();
+    resultPromise.then(settled);
 
-    await vi.advanceTimersByTimeAsync(11_000); // just under the 12s grace window
-    expect(rejected).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2_999);
+    expect(settled).not.toHaveBeenCalled();
 
-    // Let the still-pending promise actually settle so it isn't left
-    // dangling into the next test.
-    await vi.advanceTimersByTimeAsync(2_000);
+    await vi.advanceTimersByTimeAsync(1);
+    await resultPromise;
+    expect(settled).toHaveBeenCalledOnce();
   });
 
-  it('cleans up the message listener once the short post-login grace window rejects', async () => {
+  it('cleans up the message listener once the server fallback starts', async () => {
     const { launchWhatsAppEmbeddedSignup } = await importEmbeddedSignup();
     (window.FB!.login as ReturnType<typeof vi.fn>).mockImplementation((callback) => {
       callback({ status: 'connected', authResponse: { code: 'auth-code-no-session' } });
     });
 
     const resultPromise = launchWhatsAppEmbeddedSignup({ coexistence: false });
-    const assertion = expect(resultPromise).rejects.toThrow('EMBEDDED_SIGNUP_NO_SESSION_INFO');
     await vi.advanceTimersByTimeAsync(0);
-    await vi.advanceTimersByTimeAsync(12_000);
-    await assertion;
+    await vi.advanceTimersByTimeAsync(3_000);
+    await resultPromise;
 
     const messageAdds = addEventListenerSpy.mock.calls.filter((c) => c[0] === 'message').length;
     const messageRemoves = removeEventListenerSpy.mock.calls.filter((c) => c[0] === 'message').length;

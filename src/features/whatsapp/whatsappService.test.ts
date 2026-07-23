@@ -74,12 +74,22 @@ describe('whatsappService.completeEmbeddedSignup — Edge Function error extract
     const result = await whatsappService.completeEmbeddedSignup({
       storeId: 'store-1',
       code: 'code-1',
-      wabaId: 'waba-1',
+      wabaId: null,
       phoneNumberId: null,
       businessId: null,
       coexistence: false,
     });
 
     expect(result).toEqual(response);
+    expect(invokeMock).toHaveBeenLastCalledWith('whatsapp-embedded-signup', {
+      body: {
+        storeId: 'store-1',
+        code: 'code-1',
+        wabaId: null,
+        phoneNumberId: null,
+        businessId: null,
+        coexistence: false,
+      },
+    });
   });
 });

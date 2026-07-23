@@ -3,8 +3,10 @@
 // Completes Meta WhatsApp Embedded Signup for one store (Modelo B —
 // migration 096). The frontend runs the Facebook JS SDK's FB.login()
 // with the Embedded Signup config_id, captures `code` from the login
-// callback and `waba_id`/`phone_number_id`/`business_id` from the SDK's
-// session-logging postMessage events, then POSTs all of that here.
+// callback and, when Meta emits it, `waba_id`/`phone_number_id`/
+// `business_id` from the SDK's session-logging postMessage events, then
+// POSTs all of that here. If the browser event is missing, this function
+// resolves the authorized WABA from the exchanged token's granular scopes.
 //
 // This function, not the frontend, is the only place that ever talks to
 // Meta with META_WHATSAPP_APP_SECRET, and the only place that ever calls
@@ -35,6 +37,10 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders as corsHeaders } from '../_shared/allowedOrigins.ts';
+import {
+  type MetaDebugTokenData,
+  resolveSingleWhatsappWaba,
+} from '../_shared/whatsappTokenTargets.ts';
 
 function json(body: unknown, status: number, cors: Record<string, string>) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...cors } });
@@ -45,7 +51,7 @@ const DEFAULT_GRAPH_API_VERSION = 'v25.0'; // fallback only — re-verify at dep
 interface OnboardingRequest {
   storeId: string;
   code: string;
-  wabaId: string;
+  wabaId?: string | null;
   // Optional: Meta's FINISH_ONLY_WABA postMessage event (sent when the
   // WABA already has a verified number registered before running
   // Embedded Signup) carries no phone_number_id — resolved from the
@@ -113,12 +119,15 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Invalid JSON body' }, 400, cors);
   }
 
-  const { storeId, code, wabaId, businessId, coexistence } = payload;
+  const { storeId, code, businessId, coexistence } = payload;
+  const requestedWabaId = typeof payload.wabaId === 'string' && payload.wabaId.trim()
+    ? payload.wabaId.trim()
+    : null;
   // phoneNumberId is intentionally NOT required here — see the interface
   // comment above and step 6 below.
   const requestedPhoneNumberId = payload.phoneNumberId || null;
-  if (!storeId || !code || !wabaId) {
-    return json({ error: 'Missing required fields: storeId, code, wabaId' }, 400, cors);
+  if (!storeId || !code) {
+    return json({ error: 'Missing required fields: storeId, code' }, 400, cors);
   }
 
   // ── 3. storeId is NEVER trusted alone — verify real ownership ──
@@ -153,7 +162,7 @@ Deno.serve(async (req: Request) => {
   //      UNIQUE index + the guard inside store_whatsapp_connection_save.
   //      Only possible here if the frontend already knows phoneNumberId —
   //      when it doesn't (FINISH_ONLY_WABA), the same check runs again
-  //      right after it's resolved from the WABA in step 6.
+  //      right after it's resolved from the WABA in step 7.
   async function rejectIfPhoneAlreadyConnected(candidatePhoneNumberId: string): Promise<Response | null> {
     const { data: existingForPhone } = await adminClient
       .from('store_whatsapp_connections')
@@ -188,7 +197,55 @@ Deno.serve(async (req: Request) => {
   }
   const accessToken = tokenResult.body.access_token as string;
 
-  // ── 6. Resolve/verify the phone number for this WABA — never trust
+  // ── 6. Resolve the WABA if Meta completed OAuth but omitted the
+  //      browser-side WA_EMBEDDED_SIGNUP event. /debug_token returns
+  //      granular permission targets for this app-issued token. We only
+  //      auto-resolve an unambiguous single WhatsApp Business target;
+  //      otherwise we fail closed instead of connecting the wrong WABA.
+  let wabaId = requestedWabaId;
+  if (!wabaId) {
+    const appAccessToken = `${metaAppId}|${metaAppSecret}`;
+    const debugTokenResult = await metaFetch(
+      `https://graph.facebook.com/${graphApiVersion}/debug_token` +
+      `?input_token=${encodeURIComponent(accessToken)}` +
+      `&access_token=${encodeURIComponent(appAccessToken)}`,
+    );
+    const debugData = debugTokenResult.body.data as MetaDebugTokenData | undefined;
+
+    if (!debugTokenResult.ok) {
+      const err = (debugTokenResult.body as MetaErrorShape).error;
+      console.error('[whatsapp-embedded-signup] token introspection failed:', err?.message ?? `HTTP ${debugTokenResult.status}`);
+      await eventLog('connect_failed', `token_introspection_failed code=${err?.code ?? debugTokenResult.status}`);
+      return json({
+        error: 'META_WABA_RESOLUTION_FAILED',
+        message: 'Meta autorizó la cuenta, pero no fue posible identificar la cuenta de WhatsApp seleccionada.',
+      }, 502, cors);
+    }
+
+    const resolution = resolveSingleWhatsappWaba(debugData, metaAppId);
+    if (!resolution.ok) {
+      console.error(
+        '[whatsapp-embedded-signup] WABA token targets could not be resolved:',
+        resolution.reason,
+        resolution.candidateCount,
+      );
+      await eventLog(
+        'connect_failed',
+        `waba_resolution_${resolution.reason} count=${resolution.candidateCount}`,
+      );
+      return json({
+        error: resolution.reason === 'multiple_targets' ? 'MULTIPLE_WABAS_FOUND' : 'META_WABA_RESOLUTION_FAILED',
+        message: resolution.reason !== 'multiple_targets'
+          ? 'Meta no indicó qué cuenta de WhatsApp fue autorizada. Revisa la configuración de Embedded Signup.'
+          : 'Meta autorizó más de una cuenta de WhatsApp y no fue posible determinar cuál seleccionaste.',
+      }, 422, cors);
+    }
+
+    wabaId = resolution.wabaId;
+    await eventLog('waba_auto_resolved', 'source=token_granular_scopes');
+  }
+
+  // ── 7. Resolve/verify the phone number for this WABA — never trust
   //      the frontend's phoneNumberId/wabaId blindly. When the frontend
   //      DID send a phoneNumberId (the common FINISH case), verify it
   //      really belongs to this WABA. When it didn't (FINISH_ONLY_WABA —
@@ -234,7 +291,7 @@ Deno.serve(async (req: Request) => {
     }, 422, cors);
   }
 
-  // ── 7. Fetch display name/number for this specific phone ──
+  // ── 8. Fetch display name/number for this specific phone ──
   const phoneDetailResult = await metaFetch(
     `https://graph.facebook.com/${graphApiVersion}/${encodeURIComponent(phoneNumberId)}` +
     `?fields=display_phone_number,verified_name,code_verification_status,platform_type` +
@@ -249,7 +306,7 @@ Deno.serve(async (req: Request) => {
   const displayPhoneNumber = (phoneDetailResult.body.display_phone_number as string | undefined) ?? null;
   const verifiedName = (phoneDetailResult.body.verified_name as string | undefined) ?? null;
 
-  // ── 8. Subscribe Melosoft's app to this WABA's webhooks — required
+  // ── 9. Subscribe Melosoft's app to this WABA's webhooks — required
   //      once per WABA so whatsapp-webhook receives status/message
   //      events for this store's number ──
   const subscribeController = new AbortController();
@@ -277,7 +334,7 @@ Deno.serve(async (req: Request) => {
     }, 502, cors);
   }
 
-  // ── 9. Persist — the only call in this whole function that writes a
+  // ── 10. Persist — the only call in this whole function that writes a
   //      real token, via the SECURITY DEFINER function that also
   //      re-checks the phone_number_id uniqueness under the DB's own
   //      UNIQUE index as the final guarantee ──

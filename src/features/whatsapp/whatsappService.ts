@@ -19,7 +19,10 @@ import {
 interface EmbeddedSignupCompletionPayload {
   storeId: string;
   code: string;
-  wabaId: string;
+  // Optional because Meta occasionally completes OAuth without emitting
+  // the browser-side WA_EMBEDDED_SIGNUP event. The Edge Function resolves
+  // the authorized WABA from the exchanged token when this is absent.
+  wabaId?: string | null;
   // Optional: Meta's FINISH_ONLY_WABA event (sent when the WABA already
   // has a verified number registered before running Embedded Signup)
   // carries no phone_number_id — the Edge Function resolves it from the
@@ -154,10 +157,10 @@ export const whatsappService = {
 
   // Completes Embedded Signup after the frontend has already run
   // FB.login() (see src/lib/whatsapp/embeddedSignup.ts) and captured the
-  // temporary `code` plus the session-logging waba_id/phone_number_id.
-  // All Meta verification and the actual token exchange happen in the
-  // whatsapp-embedded-signup Edge Function — this call never sees or
-  // handles a real access token.
+  // temporary `code` and, when Meta emits it, the session-logging
+  // waba_id/phone_number_id. All Meta verification, token exchange, and
+  // fallback WABA resolution happen in whatsapp-embedded-signup — this
+  // call never sees or handles a real access token.
   async completeEmbeddedSignup(payload: EmbeddedSignupCompletionPayload): Promise<EmbeddedSignupCompletionResponse> {
     const { data, error } = await supabase.functions.invoke<EmbeddedSignupCompletionResponse>(
       'whatsapp-embedded-signup',
