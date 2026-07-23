@@ -12,7 +12,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
 import { notify } from '@/lib/notifications';
 import { whatsappService } from '@/features/whatsapp/whatsappService';
-import { launchWhatsAppEmbeddedSignup } from '@/lib/whatsapp/embeddedSignup';
+import { EmbeddedSignupError, launchWhatsAppEmbeddedSignup } from '@/lib/whatsapp/embeddedSignup';
 import { isStorefrontHostnameMode, useStorefrontDomain } from '@/lib/storefront/storefrontDomainContext';
 import { whatsappSettingsSchema, type WhatsappSettingsFormValues } from '@/schemas/whatsappSettings.schema';
 import type {
@@ -85,6 +85,7 @@ const EMBEDDED_SIGNUP_ERROR_MESSAGES: Record<string, string> = {
   EMBEDDED_SIGNUP_POPUP_CLOSED: 'La ventana de Meta se cerró antes de terminar. Intenta de nuevo sin cerrarla manualmente.',
   EMBEDDED_SIGNUP_SDK_UNAVAILABLE: 'No se pudo cargar el SDK de Meta. Revisa tu conexión o desactiva bloqueadores de anuncios/scripts e intenta de nuevo.',
   EMBEDDED_SIGNUP_ERROR: 'Meta reportó un error durante la conexión. Intenta de nuevo.',
+  EMBEDDED_SIGNUP_NO_SESSION_INFO: 'Meta autorizó la cuenta, pero no devolvió la información de WhatsApp necesaria.',
   EMBEDDED_SIGNUP_MISSING_SESSION_DATA:
     'Meta no envió los datos de la cuenta de WhatsApp Business (WABA o número). Intenta de nuevo y confirma que seleccionaste una cuenta y un número.',
   PHONE_NUMBER_ALREADY_CONNECTED: 'Ese número de WhatsApp ya está conectado a otra tienda de Melosoft.',
@@ -236,14 +237,22 @@ export function WhatsappSettingsPage() {
       notify.success('WhatsApp Business conectado correctamente');
       await reloadAll(storeId);
     } catch (err) {
-      const message = err instanceof Error ? err.message : '';
-      const friendlyMessage = EMBEDDED_SIGNUP_ERROR_MESSAGES[message];
-      if (message === 'EMBEDDED_SIGNUP_CANCELLED') {
+      // EmbeddedSignupError (thrown by launchWhatsAppEmbeddedSignup) carries
+      // a stable .code plus a per-attempt .correlationId — appended to the
+      // message so a displayed error can be traced back to the exact
+      // console log sequence for that attempt. Errors from
+      // whatsappService.completeEmbeddedSignup (the Edge Function) are
+      // plain Errors keyed by the same message map, with no correlation id.
+      const code = err instanceof EmbeddedSignupError ? err.code : err instanceof Error ? err.message : '';
+      const correlationId = err instanceof EmbeddedSignupError ? err.correlationId : null;
+      const friendlyMessage = EMBEDDED_SIGNUP_ERROR_MESSAGES[code];
+      const withReference = (text: string) => (correlationId ? `${text} (Referencia: ${correlationId})` : text);
+      if (code === 'EMBEDDED_SIGNUP_CANCELLED') {
         notify.warning(friendlyMessage);
       } else if (friendlyMessage) {
-        notify.error(friendlyMessage);
+        notify.error(withReference(friendlyMessage));
       } else {
-        notify.error('No se pudo completar la conexión con WhatsApp.');
+        notify.error(withReference('No se pudo completar la conexión con WhatsApp.'));
       }
     } finally {
       setConnecting(false);

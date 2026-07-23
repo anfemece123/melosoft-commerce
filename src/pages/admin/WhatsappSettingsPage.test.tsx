@@ -4,9 +4,13 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 
 const launchWhatsAppEmbeddedSignupMock = vi.fn();
 
-vi.mock('@/lib/whatsapp/embeddedSignup', () => ({
-  launchWhatsAppEmbeddedSignup: launchWhatsAppEmbeddedSignupMock,
-}));
+vi.mock('@/lib/whatsapp/embeddedSignup', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/whatsapp/embeddedSignup')>();
+  return {
+    ...actual, // keeps the real EmbeddedSignupError class
+    launchWhatsAppEmbeddedSignup: launchWhatsAppEmbeddedSignupMock,
+  };
+});
 
 vi.mock('@/lib/storefront/storefrontDomainContext', () => ({
   useStorefrontDomain: () => ({ mode: 'platform' }),
@@ -38,9 +42,11 @@ vi.mock('@/lib/notifications', () => ({
 // rejection paths (CANCEL, ERROR, popup closed, timeout, disallowed
 // origin) actually fires instead of hanging.
 describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
-  it('always leaves the loading state when launchWhatsAppEmbeddedSignup rejects', async () => {
-    
-    launchWhatsAppEmbeddedSignupMock.mockRejectedValueOnce(new Error('EMBEDDED_SIGNUP_POPUP_CLOSED'));
+  it('always leaves the loading state when launchWhatsAppEmbeddedSignup rejects, and shows the correlation id', async () => {
+    const { EmbeddedSignupError } = await import('@/lib/whatsapp/embeddedSignup');
+    launchWhatsAppEmbeddedSignupMock.mockRejectedValueOnce(
+      new EmbeddedSignupError('EMBEDDED_SIGNUP_POPUP_CLOSED', 'corr-abc123'),
+    );
 
     const { WhatsappSettingsPage } = await import('./WhatsappSettingsPage');
     const { notify } = await import('@/lib/notifications');
@@ -62,7 +68,33 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
     // stuck disabled/spinning — once the promise settles.
     await waitFor(() => expect(connectButton.disabled).toBe(false));
     expect(notify.error).toHaveBeenCalledWith(
-      'La ventana de Meta se cerró antes de terminar. Intenta de nuevo sin cerrarla manualmente.',
+      'La ventana de Meta se cerró antes de terminar. Intenta de nuevo sin cerrarla manualmente. (Referencia: corr-abc123)',
+    );
+  });
+
+  it('shows the specific "Meta authorized but no session info" message with a correlation id', async () => {
+    const { EmbeddedSignupError } = await import('@/lib/whatsapp/embeddedSignup');
+    launchWhatsAppEmbeddedSignupMock.mockRejectedValueOnce(
+      new EmbeddedSignupError('EMBEDDED_SIGNUP_NO_SESSION_INFO', 'corr-xyz789'),
+    );
+
+    const { WhatsappSettingsPage } = await import('./WhatsappSettingsPage');
+    const { notify } = await import('@/lib/notifications');
+
+    render(
+      <MemoryRouter initialEntries={['/admin/stores/store-1/whatsapp']}>
+        <Routes>
+          <Route path="/admin/stores/:storeId/whatsapp" element={<WhatsappSettingsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const connectButton = await screen.findByRole<HTMLButtonElement>('button', { name: /conectar whatsapp business/i });
+    fireEvent.click(connectButton);
+
+    await waitFor(() => expect(connectButton.disabled).toBe(false));
+    expect(notify.error).toHaveBeenCalledWith(
+      'Meta autorizó la cuenta, pero no devolvió la información de WhatsApp necesaria. (Referencia: corr-xyz789)',
     );
   });
 
@@ -93,5 +125,51 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
 
     await waitFor(() => expect(connectButton.disabled).toBe(false));
     expect(notify.error).toHaveBeenCalledWith('La cuenta de WhatsApp Business no tiene ningún número registrado.');
+  });
+
+  // Point 12: when session has code + wabaId (even without phoneNumberId
+  // — the FINISH_ONLY_WABA case), the POST to whatsapp-embedded-signup
+  // must actually happen. completeEmbeddedSignup is the only thing in
+  // this codebase that calls supabase.functions.invoke('whatsapp-embedded-signup', ...) —
+  // asserting it was called with the right payload is the unit-level
+  // equivalent of confirming the Network request fires.
+  it('POSTs to whatsapp-embedded-signup whenever wabaId is present, even without phoneNumberId', async () => {
+    launchWhatsAppEmbeddedSignupMock.mockResolvedValueOnce({
+      code: 'auth-code-only-waba',
+      session: { wabaId: '880579344939347', phoneNumberId: null, businessId: 'biz-1' },
+    });
+
+    const { WhatsappSettingsPage } = await import('./WhatsappSettingsPage');
+    const { whatsappService } = await import('@/features/whatsapp/whatsappService');
+    (whatsappService.completeEmbeddedSignup as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      connectionStatus: 'connected',
+      displayPhoneNumber: '+57 321 3706466',
+      verifiedName: 'MelosoftApp',
+      onboardingType: 'new_number',
+    });
+    const { notify } = await import('@/lib/notifications');
+
+    render(
+      <MemoryRouter initialEntries={['/admin/stores/store-1/whatsapp']}>
+        <Routes>
+          <Route path="/admin/stores/:storeId/whatsapp" element={<WhatsappSettingsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const connectButton = await screen.findByRole<HTMLButtonElement>('button', { name: /conectar whatsapp business/i });
+    fireEvent.click(connectButton);
+
+    await waitFor(() => expect(whatsappService.completeEmbeddedSignup).toHaveBeenCalledWith({
+      storeId: 'store-1',
+      code: 'auth-code-only-waba',
+      wabaId: '880579344939347',
+      phoneNumberId: null,
+      businessId: 'biz-1',
+      coexistence: false,
+    }));
+    await waitFor(() => expect(connectButton.disabled).toBe(false));
+    expect(notify.success).toHaveBeenCalledWith('WhatsApp Business conectado correctamente');
   });
 });
