@@ -35,7 +35,7 @@ const DEFAULT_GRAPH_API_VERSION = 'v25.0'; // fallback only — see docs/whatsap
 const ORDER_CONFIRMATION_TEMPLATE = {
   name: 'melosoft_order_confirmation_v1',
   category: 'UTILITY',
-  language: 'es_CO',
+  language: 'es_MX',
   bodyText:
     'Hola {{1}} 👋\n\nTu pedido en *{{2}}* fue recibido correctamente.\n\nPedido: *{{3}}*\nResumen: {{4}}\nTotal: *{{5}}*\nPago: {{6}}\nEntrega: {{7}}\nEstado: {{8}}\n\n{{9}}\n\nConserva este mensaje para consultar la información de tu compra.',
   bodyExample: [
@@ -48,7 +48,7 @@ const ORDER_CONFIRMATION_TEMPLATE = {
 const TEST_TEMPLATE = {
   name: 'melosoft_whatsapp_test_v1',
   category: 'UTILITY',
-  language: 'es_CO',
+  language: 'es_MX',
   bodyText: 'Este es un mensaje de prueba de {{1}} enviado desde Melosoft Commerce. Si lo recibiste, la configuración de WhatsApp está funcionando correctamente.',
   bodyExample: ['Melosoft Commerce'],
 };
@@ -276,7 +276,7 @@ Deno.serve(async (req: Request) => {
   const diagnostics = [orderTemplateResult.diagnostic, testTemplateResult.diagnostic]
     .filter((item): item is MetaTemplateSyncDiagnostic => item !== null);
   if (diagnostics.length > 0) {
-    const upstreamMessage = diagnostics[0].metaMessage;
+    const upstreamMessage = diagnostics[0].metaDetails || diagnostics[0].metaMessage;
     return json({
       error: 'META_TEMPLATE_SYNC_FAILED',
       message: upstreamMessage

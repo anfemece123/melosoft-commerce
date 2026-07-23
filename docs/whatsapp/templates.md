@@ -21,7 +21,7 @@ abajo — deben coincidir siempre con lo que este archivo describe.
 |---|---|
 | Nombre exacto | `melosoft_order_confirmation_v1` |
 | Categoría | **Utility** (transaccional — no Marketing) |
-| Idioma | `es_CO` (español, Colombia). Si Meta no permite `es_CO` para la cuenta, usar `es` genérico y ajustar `META_GRAPH_API_VERSION`/`template_language` en `store_whatsapp_settings.locale` acorde. |
+| Idioma | `es_MX` (español de Latinoamérica, código admitido por las plantillas de WhatsApp). `es_CO` no es un código de idioma válido para plantillas. |
 | Header | Ninguno |
 | Footer | Ninguno |
 | Botones | Ninguno (ver nota abajo) |
@@ -116,7 +116,7 @@ parezca (pero no sea) una confirmación real.
 |---|---|
 | Nombre exacto | `melosoft_whatsapp_test_v1` |
 | Categoría | **Utility** |
-| Idioma | `es_CO` |
+| Idioma | `es_MX` |
 | Header | Ninguno |
 | Footer | Ninguno |
 | Botones | Ninguno |

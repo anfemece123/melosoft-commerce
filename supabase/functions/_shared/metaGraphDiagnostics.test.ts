@@ -13,6 +13,7 @@ describe('buildMetaTemplateSyncDiagnostic', () => {
         code: 100,
         error_subcode: 2388045,
         fbtrace_id: 'trace-123',
+        error_data: { details: 'The template language is not supported.' },
       },
     )).toEqual({
       stage: 'template_create',
@@ -22,6 +23,7 @@ describe('buildMetaTemplateSyncDiagnostic', () => {
       metaSubcode: 2388045,
       metaType: 'OAuthException',
       metaMessage: 'Invalid parameter',
+      metaDetails: 'The template language is not supported.',
       traceId: 'trace-123',
     });
   });
@@ -35,5 +37,6 @@ describe('buildMetaTemplateSyncDiagnostic', () => {
     );
 
     expect(diagnostic.metaMessage).toBe('access_token=[redacted]');
+    expect(diagnostic.metaDetails).toBeNull();
   });
 });

@@ -209,7 +209,7 @@ describe('WhatsappSettingsPage — configuración de envíos', () => {
       orderShippedEnabled: false,
       orderDeliveredEnabled: false,
       orderCancelledEnabled: false,
-      locale: 'es_CO',
+      locale: 'es_MX',
       timezone: 'America/Bogota',
       finalMessage: null,
       createdAt: '2026-07-23T00:00:00.000Z',
@@ -253,7 +253,7 @@ describe('WhatsappSettingsPage — configuración de envíos', () => {
       orderShippedEnabled: false,
       orderDeliveredEnabled: false,
       orderCancelledEnabled: false,
-      locale: 'es_CO',
+      locale: 'es_MX',
       timezone: 'America/Bogota',
       finalMessage: null,
     }));

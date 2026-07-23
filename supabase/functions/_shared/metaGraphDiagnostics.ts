@@ -13,6 +13,7 @@ export interface MetaTemplateSyncDiagnostic {
   metaSubcode: number | null;
   metaType: string | null;
   metaMessage: string | null;
+  metaDetails: string | null;
   traceId: string | null;
 }
 
@@ -30,6 +31,7 @@ export function buildMetaTemplateSyncDiagnostic(
     metaSubcode: typeof error?.error_subcode === 'number' ? error.error_subcode : null,
     metaType: typeof error?.type === 'string' ? error.type.slice(0, 100) : null,
     metaMessage: sanitizeMetaOAuthErrorMessage(error?.message),
+    metaDetails: sanitizeMetaOAuthErrorMessage(error?.error_data?.details),
     traceId: typeof error?.fbtrace_id === 'string' ? error.fbtrace_id.slice(0, 200) : null,
   };
 }

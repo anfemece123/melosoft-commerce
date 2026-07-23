@@ -190,7 +190,7 @@ export function WhatsappSettingsPage() {
           orderShippedEnabled: settings?.orderShippedEnabled ?? false,
           orderDeliveredEnabled: settings?.orderDeliveredEnabled ?? false,
           orderCancelledEnabled: settings?.orderCancelledEnabled ?? false,
-          locale: settings?.locale ?? 'es_CO',
+          locale: settings?.locale ?? 'es_MX',
           timezone: settings?.timezone ?? 'America/Bogota',
           finalMessage: values.finalMessage?.trim() || null,
         });
