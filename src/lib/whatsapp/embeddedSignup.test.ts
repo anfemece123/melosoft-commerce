@@ -86,6 +86,32 @@ describe('launchWhatsAppEmbeddedSignup', () => {
     expect(result.session).toEqual({ wabaId: '880579344939347', phoneNumberId: '123456', businessId: 'biz-1' });
   });
 
+  it('captures the exact Meta SDK redirect_uri from the FB.login popup URL', async () => {
+    const {
+      extractMetaSdkRedirectUriFromPopupUrl,
+      launchWhatsAppEmbeddedSignup,
+    } = await importEmbeddedSignup();
+    const sdkRedirectUri =
+      'https://staticxx.facebook.com/x/connect/xd_arbiter/?version=46#cb=abc&origin=https%3A%2F%2Fcommerce.melosoftapp.com';
+    const popupUrl =
+      `https://www.facebook.com/v25.0/dialog/oauth?redirect_uri=${encodeURIComponent(sdkRedirectUri)}`;
+    expect(extractMetaSdkRedirectUriFromPopupUrl(popupUrl)).toBe(sdkRedirectUri);
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    (window.FB!.login as ReturnType<typeof vi.fn>).mockImplementation((callback) => {
+      window.open(popupUrl, '_blank');
+      callback({ status: 'connected', authResponse: { code: 'auth-code-with-redirect' } });
+    });
+
+    const resultPromise = launchWhatsAppEmbeddedSignup({ coexistence: false });
+    await vi.advanceTimersByTimeAsync(0);
+    postFinishMessage();
+    const result = await resultPromise;
+
+    expect(open).toHaveBeenCalledOnce();
+    expect(window.open).toBe(open);
+    expect(result.redirectUri).toBe(sdkRedirectUri);
+  });
+
   it('resolves with session data when Meta sends FINISH_ONLY_WABA (no phone_number_id) — the production incident', async () => {
     const { launchWhatsAppEmbeddedSignup } = await importEmbeddedSignup();
     (window.FB!.login as ReturnType<typeof vi.fn>).mockImplementation((callback) => {
@@ -332,6 +358,7 @@ describe('launchWhatsAppEmbeddedSignup', () => {
 
     await expect(resultPromise).resolves.toEqual({
       code: 'auth-code-no-session',
+      redirectUri: null,
       session: { wabaId: null, phoneNumberId: null, businessId: null },
     });
   });

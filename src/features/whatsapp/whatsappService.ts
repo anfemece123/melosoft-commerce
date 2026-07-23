@@ -19,6 +19,9 @@ import {
 interface EmbeddedSignupCompletionPayload {
   storeId: string;
   code: string;
+  // Exact Meta SDK xd_arbiter URI used to issue this code. Meta requires
+  // the same value during the server-side exchange.
+  redirectUri?: string | null;
   // Optional because Meta occasionally completes OAuth without emitting
   // the browser-side WA_EMBEDDED_SIGNUP event. The Edge Function resolves
   // the authorized WABA from the exchanged token when this is absent.
@@ -168,6 +171,7 @@ export const whatsappService = {
         body: {
           storeId: payload.storeId,
           code: payload.code,
+          redirectUri: payload.redirectUri,
           wabaId: payload.wabaId,
           phoneNumberId: payload.phoneNumberId,
           businessId: payload.businessId ?? null,
