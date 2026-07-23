@@ -45,6 +45,7 @@ import {
   buildMetaTokenExchangeDiagnostic,
   type MetaOAuthError,
 } from '../_shared/metaOAuthDiagnostics.ts';
+import { buildMetaEmbeddedSignupTokenUrl } from '../_shared/metaOAuthExchange.ts';
 
 function json(body: unknown, status: number, cors: Record<string, string>) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...cors } });
@@ -187,10 +188,12 @@ Deno.serve(async (req: Request) => {
 
   // ── 5. Exchange the temporary code for an access token (server-side
   //      only — this is the one call that needs META_WHATSAPP_APP_SECRET) ──
-  const tokenUrl = `https://graph.facebook.com/${graphApiVersion}/oauth/access_token` +
-    `?client_id=${encodeURIComponent(metaAppId)}` +
-    `&client_secret=${encodeURIComponent(metaAppSecret)}` +
-    `&code=${encodeURIComponent(code)}`;
+  const tokenUrl = buildMetaEmbeddedSignupTokenUrl({
+    graphApiVersion,
+    appId: metaAppId,
+    appSecret: metaAppSecret,
+    code,
+  });
 
   const tokenResult = await metaFetch(tokenUrl);
   if (!tokenResult.ok || typeof tokenResult.body.access_token !== 'string') {
