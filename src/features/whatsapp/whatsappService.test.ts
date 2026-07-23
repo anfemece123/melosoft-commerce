@@ -93,3 +93,17 @@ describe('whatsappService.completeEmbeddedSignup — Edge Function error extract
     });
   });
 });
+
+describe('whatsappService.syncTemplate — Edge Function error extraction', () => {
+  it('surfaces the safe Meta diagnostic message from a non-2xx response', async () => {
+    const { whatsappService } = await import('./whatsappService');
+    const context = new Response(JSON.stringify({
+      error: 'META_TEMPLATE_SYNC_FAILED',
+      message: 'Meta no pudo crear o consultar las plantillas: Invalid parameter',
+    }), { status: 502 });
+    invokeMock.mockResolvedValueOnce({ data: null, error: new FakeFunctionsHttpError(context) });
+
+    await expect(whatsappService.syncTemplate('store-1'))
+      .rejects.toThrow('Meta no pudo crear o consultar las plantillas: Invalid parameter');
+  });
+});

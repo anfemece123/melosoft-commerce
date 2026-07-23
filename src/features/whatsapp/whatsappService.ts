@@ -79,6 +79,19 @@ async function extractFunctionErrorCode(error: unknown): Promise<string> {
   return error instanceof Error ? error.message : 'Unknown error';
 }
 
+async function extractFunctionErrorMessage(error: unknown): Promise<string> {
+  if (hasResponseContext(error) && error.context) {
+    try {
+      const payload = await error.context.clone().json() as { error?: string; message?: string };
+      if (payload.message) return payload.message;
+      if (payload.error) return payload.error;
+    } catch {
+      // Fall through to the SDK's generic message below.
+    }
+  }
+  return error instanceof Error ? error.message : 'Unknown error';
+}
+
 interface TemplateSyncResponse {
   ok: true;
   orderConfirmationTemplate: { name: string; status: string; rejectedReason: string | null };
@@ -188,7 +201,7 @@ export const whatsappService = {
     const { data, error } = await supabase.functions.invoke<TemplateSyncResponse>('whatsapp-template-sync', {
       body: { storeId },
     });
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(await extractFunctionErrorMessage(error));
     if (!data) throw new Error('No response from Edge Function');
     return data;
   },

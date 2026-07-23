@@ -19,6 +19,11 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders as corsHeaders } from '../_shared/allowedOrigins.ts';
+import {
+  buildMetaTemplateSyncDiagnostic,
+  type MetaTemplateSyncDiagnostic,
+} from '../_shared/metaGraphDiagnostics.ts';
+import type { MetaOAuthError } from '../_shared/metaOAuthDiagnostics.ts';
 
 function json(body: unknown, status: number, cors: Record<string, string>) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...cors } });
@@ -49,7 +54,15 @@ const TEST_TEMPLATE = {
 };
 
 interface MetaErrorShape {
-  error?: { message?: string; code?: number };
+  error?: MetaOAuthError;
+}
+
+type TemplateStatus = ReturnType<typeof mapTemplateStatus>;
+
+interface TemplateSyncResult {
+  status: TemplateStatus;
+  rejectedReason: string | null;
+  diagnostic: MetaTemplateSyncDiagnostic | null;
 }
 
 async function metaGet(url: string): Promise<{ ok: boolean; status: number; body: Record<string, unknown> }> {
@@ -100,24 +113,33 @@ async function syncOneTemplate(
   wabaId: string,
   accessToken: string,
   template: typeof ORDER_CONFIRMATION_TEMPLATE,
-): Promise<{ status: ReturnType<typeof mapTemplateStatus>; rejectedReason: string | null }> {
+): Promise<TemplateSyncResult> {
   const lookup = await metaGet(
     `https://graph.facebook.com/${graphApiVersion}/${encodeURIComponent(wabaId)}/message_templates` +
     `?name=${encodeURIComponent(template.name)}&access_token=${encodeURIComponent(accessToken)}`,
   );
 
-  if (lookup.ok) {
-    const existing = (lookup.body.data as Array<{ status?: string; rejected_reason?: string }> | undefined)?.[0];
-    if (existing) {
-      return {
-        status: mapTemplateStatus(existing.status),
-        rejectedReason: existing.rejected_reason ? String(existing.rejected_reason).slice(0, 300) : null,
-      };
-    }
+  if (!lookup.ok) {
+    const diagnostic = buildMetaTemplateSyncDiagnostic(
+      'template_lookup',
+      template.name,
+      lookup.status,
+      (lookup.body as MetaErrorShape).error,
+    );
+    console.error('[whatsapp-template-sync] template lookup failed:', diagnostic);
+    return { status: 'not_created', rejectedReason: null, diagnostic };
   }
 
-  // Not found (or lookup failed in a way that just means "nothing yet")
-  // — attempt to create it.
+  const existing = (lookup.body.data as Array<{ status?: string; rejected_reason?: string }> | undefined)?.[0];
+  if (existing) {
+    return {
+      status: mapTemplateStatus(existing.status),
+      rejectedReason: existing.rejected_reason ? String(existing.rejected_reason).slice(0, 300) : null,
+      diagnostic: null,
+    };
+  }
+
+  // The lookup succeeded and returned no match, so it is safe to create.
   const createResult = await metaPost(
     `https://graph.facebook.com/${graphApiVersion}/${encodeURIComponent(wabaId)}/message_templates?access_token=${encodeURIComponent(accessToken)}`,
     {
@@ -135,13 +157,22 @@ async function syncOneTemplate(
   );
 
   if (!createResult.ok) {
-    const err = (createResult.body as MetaErrorShape).error;
-    console.error(`[whatsapp-template-sync] template creation failed for ${template.name}:`, err?.message ?? createResult.status);
-    return { status: 'not_created', rejectedReason: null };
+    const diagnostic = buildMetaTemplateSyncDiagnostic(
+      'template_create',
+      template.name,
+      createResult.status,
+      (createResult.body as MetaErrorShape).error,
+    );
+    console.error('[whatsapp-template-sync] template creation failed:', diagnostic);
+    return { status: 'not_created', rejectedReason: null, diagnostic };
   }
 
   // A freshly created template starts in review.
-  return { status: mapTemplateStatus((createResult.body.status as string | undefined) ?? 'PENDING'), rejectedReason: null };
+  return {
+    status: mapTemplateStatus((createResult.body.status as string | undefined) ?? 'PENDING'),
+    rejectedReason: null,
+    diagnostic: null,
+  };
 }
 
 Deno.serve(async (req: Request) => {
@@ -235,10 +266,25 @@ Deno.serve(async (req: Request) => {
 
   await adminClient.from('store_whatsapp_connection_events').insert({
     store_id: storeId,
-    event_type: 'template_created',
+    event_type: orderTemplateResult.diagnostic || testTemplateResult.diagnostic
+      ? 'template_status_changed'
+      : 'template_created',
     actor_user_id: callerUser.id,
     detail: `order_template=${orderTemplateResult.status} test_template=${testTemplateResult.status}`,
   });
+
+  const diagnostics = [orderTemplateResult.diagnostic, testTemplateResult.diagnostic]
+    .filter((item): item is MetaTemplateSyncDiagnostic => item !== null);
+  if (diagnostics.length > 0) {
+    const upstreamMessage = diagnostics[0].metaMessage;
+    return json({
+      error: 'META_TEMPLATE_SYNC_FAILED',
+      message: upstreamMessage
+        ? `Meta no pudo crear o consultar las plantillas: ${upstreamMessage}`
+        : 'Meta no pudo crear o consultar las plantillas de WhatsApp.',
+      diagnostics,
+    }, 502, cors);
+  }
 
   return json({
     ok: true,
