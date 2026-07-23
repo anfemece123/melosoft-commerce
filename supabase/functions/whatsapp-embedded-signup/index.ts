@@ -41,6 +41,10 @@ import {
   type MetaDebugTokenData,
   resolveSingleWhatsappWaba,
 } from '../_shared/whatsappTokenTargets.ts';
+import {
+  buildMetaTokenExchangeDiagnostic,
+  type MetaOAuthError,
+} from '../_shared/metaOAuthDiagnostics.ts';
 
 function json(body: unknown, status: number, cors: Record<string, string>) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...cors } });
@@ -62,7 +66,7 @@ interface OnboardingRequest {
 }
 
 interface MetaErrorShape {
-  error?: { message?: string; code?: number; error_subcode?: number; fbtrace_id?: string };
+  error?: MetaOAuthError;
 }
 
 async function metaFetch(url: string): Promise<{ ok: boolean; status: number; body: Record<string, unknown> }> {
@@ -191,9 +195,19 @@ Deno.serve(async (req: Request) => {
   const tokenResult = await metaFetch(tokenUrl);
   if (!tokenResult.ok || typeof tokenResult.body.access_token !== 'string') {
     const err = (tokenResult.body as MetaErrorShape).error;
-    console.error('[whatsapp-embedded-signup] token exchange failed:', err?.message ?? `HTTP ${tokenResult.status}`);
-    await eventLog('connect_failed', `token_exchange_failed code=${err?.code ?? tokenResult.status}`);
-    return json({ error: 'META_TOKEN_EXCHANGE_FAILED', message: 'No se pudo completar la conexión con Meta. Intenta de nuevo.' }, 502, cors);
+    const diagnostic = buildMetaTokenExchangeDiagnostic(tokenResult.status, err);
+    console.error('[whatsapp-embedded-signup] token exchange failed:', diagnostic);
+    await eventLog(
+      'connect_failed',
+      `token_exchange_failed code=${diagnostic.metaCode ?? diagnostic.upstreamStatus}` +
+        ` subcode=${diagnostic.metaSubcode ?? 'none'}` +
+        ` trace_id=${diagnostic.traceId ?? 'none'}`,
+    );
+    return json({
+      error: 'META_TOKEN_EXCHANGE_FAILED',
+      message: 'No se pudo completar la conexión con Meta. Intenta de nuevo.',
+      diagnostic,
+    }, 502, cors);
   }
   const accessToken = tokenResult.body.access_token as string;
 
