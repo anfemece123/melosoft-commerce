@@ -3,6 +3,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
+  // Missing until now — without it, the browser rejects the preflight
+  // response for the POST call (supabase.functions.invoke always sends
+  // one, since it attaches Authorization/apikey/x-client-info/
+  // Content-Type headers, all of which trigger a CORS preflight) even
+  // though the OPTIONS response itself came back 200.
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 const JSON_HEADERS = { ...CORS_HEADERS, 'Content-Type': 'application/json' };
