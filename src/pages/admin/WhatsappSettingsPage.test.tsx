@@ -75,6 +75,7 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
   it('POSTs the OAuth code to the Edge Function when Meta omits all browser session info', async () => {
     launchWhatsAppEmbeddedSignupMock.mockResolvedValueOnce({
       code: 'auth-code-without-session',
+      redirectUri: 'https://www.facebook.com/connect/xd_arbiter/',
       session: { wabaId: null, phoneNumberId: null, businessId: null },
     });
 
@@ -103,6 +104,7 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
     await waitFor(() => expect(whatsappService.completeEmbeddedSignup).toHaveBeenCalledWith({
       storeId: 'store-1',
       code: 'auth-code-without-session',
+      redirectUri: 'https://www.facebook.com/connect/xd_arbiter/',
       wabaId: null,
       phoneNumberId: null,
       businessId: null,
@@ -116,6 +118,7 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
     
     launchWhatsAppEmbeddedSignupMock.mockResolvedValueOnce({
       code: 'auth-code',
+      redirectUri: 'https://www.facebook.com/connect/xd_arbiter/',
       session: { wabaId: '880579344939347', phoneNumberId: null, businessId: null },
     });
 
@@ -150,6 +153,7 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
   it('POSTs to whatsapp-embedded-signup with wabaId even without phoneNumberId', async () => {
     launchWhatsAppEmbeddedSignupMock.mockResolvedValueOnce({
       code: 'auth-code-only-waba',
+      redirectUri: 'https://www.facebook.com/connect/xd_arbiter/',
       session: { wabaId: '880579344939347', phoneNumberId: null, businessId: 'biz-1' },
     });
 
@@ -178,6 +182,7 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
     await waitFor(() => expect(whatsappService.completeEmbeddedSignup).toHaveBeenCalledWith({
       storeId: 'store-1',
       code: 'auth-code-only-waba',
+      redirectUri: 'https://www.facebook.com/connect/xd_arbiter/',
       wabaId: '880579344939347',
       phoneNumberId: null,
       businessId: 'biz-1',
@@ -185,5 +190,72 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
     }));
     await waitFor(() => expect(connectButton.disabled).toBe(false));
     expect(notify.success).toHaveBeenCalledWith('WhatsApp Business conectado correctamente');
+  });
+});
+
+describe('WhatsappSettingsPage — configuración de envíos', () => {
+  it('allows the owner to explicitly activate automatic notifications', async () => {
+    const currentSettings = {
+      id: 'settings-1',
+      storeId: 'store-1',
+      enabled: false,
+      senderMode: 'dedicated' as const,
+      customerOrderConfirmationEnabled: true,
+      orderConfirmedEnabled: false,
+      paymentApprovedEnabled: false,
+      paymentDeclinedEnabled: false,
+      orderPreparingEnabled: false,
+      orderReadyForPickupEnabled: false,
+      orderShippedEnabled: false,
+      orderDeliveredEnabled: false,
+      orderCancelledEnabled: false,
+      locale: 'es_CO',
+      timezone: 'America/Bogota',
+      finalMessage: null,
+      createdAt: '2026-07-23T00:00:00.000Z',
+      updatedAt: '2026-07-23T00:00:00.000Z',
+    };
+    const { whatsappService } = await import('@/features/whatsapp/whatsappService');
+    (whatsappService.getSettings as ReturnType<typeof vi.fn>).mockResolvedValueOnce(currentSettings);
+    (whatsappService.upsertSettings as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ...currentSettings,
+      enabled: true,
+    });
+
+    const { WhatsappSettingsPage } = await import('./WhatsappSettingsPage');
+
+    render(
+      <MemoryRouter initialEntries={['/admin/stores/store-1/whatsapp']}>
+        <Routes>
+          <Route path="/admin/stores/:storeId/whatsapp" element={<WhatsappSettingsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const enabledCheckbox = await screen.findByRole<HTMLInputElement>('checkbox', {
+      name: /activar notificaciones automáticas/i,
+    });
+    expect(enabledCheckbox.checked).toBe(false);
+
+    fireEvent.click(enabledCheckbox);
+    fireEvent.click(screen.getByRole('button', { name: /guardar configuración/i }));
+
+    await waitFor(() => expect(whatsappService.upsertSettings).toHaveBeenCalledWith({
+      storeId: 'store-1',
+      enabled: true,
+      senderMode: 'dedicated',
+      customerOrderConfirmationEnabled: true,
+      orderConfirmedEnabled: false,
+      paymentApprovedEnabled: false,
+      paymentDeclinedEnabled: false,
+      orderPreparingEnabled: false,
+      orderReadyForPickupEnabled: false,
+      orderShippedEnabled: false,
+      orderDeliveredEnabled: false,
+      orderCancelledEnabled: false,
+      locale: 'es_CO',
+      timezone: 'America/Bogota',
+      finalMessage: null,
+    }));
   });
 });

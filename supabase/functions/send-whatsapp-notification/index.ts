@@ -42,6 +42,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { resolveWhatsappTemplateSelection } from '../_shared/whatsappTemplateSelection.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -491,13 +492,21 @@ serve(async (req: Request) => {
       bodyParams = result;
     }
 
+    const template = resolveWhatsappTemplateSelection(
+      notification.event_type,
+      notification.template_name,
+      notification.template_language,
+      context.template_name,
+      context.template_language,
+    );
+
     const sendResult = await sendTemplateMessage({
       accessToken: context.access_token,
       phoneNumberId: context.phone_number_id,
       graphApiVersion,
       to: notification.recipient_phone,
-      templateName: context.template_name || notification.template_name,
-      templateLanguage: context.template_language || notification.template_language,
+      templateName: template.name,
+      templateLanguage: template.language,
       bodyParams,
     });
 

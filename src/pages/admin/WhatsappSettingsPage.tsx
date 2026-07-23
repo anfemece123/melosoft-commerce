@@ -476,6 +476,22 @@ export function WhatsappSettingsPage() {
             </div>
 
             <form onSubmit={formik.handleSubmit} className="space-y-5">
+              <label className="flex items-start gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="enabled"
+                  checked={formik.values.enabled ?? false}
+                  onChange={formik.handleChange}
+                  className="mt-0.5 h-4 w-4 rounded"
+                />
+                <div>
+                  <p className="text-sm font-semibold text-indigo-900">Activar notificaciones automáticas</p>
+                  <p className="text-xs text-indigo-700 mt-0.5">
+                    Habilita los envíos seleccionados cuando el número esté conectado y la plantilla esté aprobada.
+                  </p>
+                </div>
+              </label>
+
               <label className="flex items-start gap-3 rounded-xl border border-gray-200 px-4 py-3 cursor-pointer">
                 <input
                   type="checkbox"
