@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { PanelLoadingState } from '@/components/ui/LoadingScreen';
 import { collectionsService } from '@/features/collections/collectionsService';
 import type { PublicStoreCollection } from '@/types/common.types';
 import { notify } from '@/lib/notifications';
@@ -158,7 +159,7 @@ export function ProductCollectionsPage() {
       )}
 
       {loading ? (
-        <div className="py-8 text-center text-sm text-gray-400">Cargando colecciones…</div>
+        <PanelLoadingState label="Cargando colecciones…" />
       ) : collections.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-200 py-12 text-center text-sm text-gray-400">
           No hay colecciones. Crea la primera para destacar productos en grupos especiales.

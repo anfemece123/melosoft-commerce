@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { PanelLoadingState } from '@/components/ui/LoadingScreen';
 import { locationsService, type CreateLocationPayload } from '@/features/locations/locationsService';
 import { geoService } from '@/features/geo/geoService';
 import type { GeoDepartment, GeoCity } from '@/features/geo/geo.types';
@@ -367,7 +368,7 @@ export function LocationsPage() {
       )}
 
       {loading ? (
-        <div className="text-center py-12 text-gray-400 text-sm">Cargando sucursales…</div>
+        <PanelLoadingState label="Cargando sucursales…" />
       ) : locations.length === 0 ? (
         <Card className="p-10 text-center">
           <MapPin className="w-10 h-10 text-gray-300 mx-auto mb-3" />

@@ -9,6 +9,7 @@ import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
 import { Card, CardBody } from '@/components/ui/Card';
+import { PanelLoadingState } from '@/components/ui/LoadingScreen';
 import { notify } from '@/lib/notifications';
 import { paymentsService } from '@/features/payments/paymentsService';
 import { formatCurrency } from '@/utils/formatCurrency';
@@ -304,11 +305,7 @@ export function PaymentsPage() {
   const hasChanges = formik.dirty;
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <div className="w-6 h-6 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <PanelLoadingState label="Cargando configuración de pagos…" />;
   }
 
   return (

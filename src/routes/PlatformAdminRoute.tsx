@@ -9,7 +9,7 @@ export function PlatformAdminRoute() {
   const profile = useAppSelector((state) => state.auth.profile);
   const myMemberships = useAppSelector((state) => state.stores.myMemberships);
 
-  if (isBootstrapping) return <LoadingScreen />;
+  if (isBootstrapping) return <LoadingScreen label="Validando tu acceso…" />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (isPlatformAdmin(profile)) return <Outlet />;
 

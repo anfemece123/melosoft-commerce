@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { FormErrorAlert } from '@/components/ui/FormErrorAlert';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DiscountBadge } from '@/components/ui/DiscountBadge';
+import { PanelLoadingState } from '@/components/ui/LoadingScreen';
 import { ImageCropDialog } from '@/components/admin/ImageCropDialog';
 import { ProductCategorySelect } from '@/components/admin/ProductCategorySelect';
 import { ProductCollectionsMultiSelect } from '@/components/admin/ProductCollectionsMultiSelect';
@@ -829,9 +830,10 @@ export function ProductFormPage() {
 
   if (loadingProduct) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-6 h-6 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-      </div>
+      <PanelLoadingState
+        label={`Cargando ${entitySingular}…`}
+        className="border-0 bg-transparent"
+      />
     );
   }
 

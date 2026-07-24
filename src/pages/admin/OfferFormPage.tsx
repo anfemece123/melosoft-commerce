@@ -12,6 +12,7 @@ import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { FormErrorAlert } from '@/components/ui/FormErrorAlert';
 import { DiscountBadge } from '@/components/ui/DiscountBadge';
+import { PanelLoadingState } from '@/components/ui/LoadingScreen';
 import { ImageUploadField } from '@/components/admin/ImageUploadField';
 import { useAppSelector } from '@/app/hooks';
 import { offersService } from '@/features/offers/offersService';
@@ -189,9 +190,10 @@ export function OfferFormPage() {
 
   if (loadingOffer) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-6 h-6 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-      </div>
+      <PanelLoadingState
+        label="Cargando campaña…"
+        className="border-0 bg-transparent"
+      />
     );
   }
 

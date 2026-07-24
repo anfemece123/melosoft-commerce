@@ -18,12 +18,12 @@ export function StoreAccessRoute() {
     hasAccess ? storeId : undefined
   );
 
-  if (isBootstrapping) return <LoadingScreen />;
+  if (isBootstrapping) return <LoadingScreen label="Validando tu acceso…" />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (!storeId) return <Navigate to="/admin" replace />;
 
   if (hasAccess) {
-    if (isStoreLoading) return <LoadingScreen />;
+    if (isStoreLoading) return <LoadingScreen label="Cargando empresa…" />;
     if (storeError) {
       return (
         <div className="flex min-h-[60vh] flex-col items-center justify-center gap-2 text-center px-4">

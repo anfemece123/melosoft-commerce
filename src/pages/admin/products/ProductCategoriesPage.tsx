@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { PanelLoadingState } from '@/components/ui/LoadingScreen';
 import { categoriesService } from '@/features/categories/categoriesService';
 import type { PublicStoreCategory } from '@/types/common.types';
 import { notify } from '@/lib/notifications';
@@ -161,7 +162,7 @@ export function ProductCategoriesPage() {
       )}
 
       {loading ? (
-        <div className="py-8 text-center text-sm text-gray-400">Cargando categorías…</div>
+        <PanelLoadingState label="Cargando categorías…" />
       ) : categories.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-200 py-12 text-center text-sm text-gray-400">
           No hay categorías. Crea la primera para organizar tu catálogo.

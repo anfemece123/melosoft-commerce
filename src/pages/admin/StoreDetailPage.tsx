@@ -100,7 +100,7 @@ export function StoreDetailPage() {
     return () => { cancelled = true; };
   }, [storeId]);
 
-  if (!store) return <LoadingScreen />;
+  if (!store) return <LoadingScreen label="Cargando empresa…" />;
 
   const publicUrl = domainsService.getStorePublicUrl(store.slug, domains);
 

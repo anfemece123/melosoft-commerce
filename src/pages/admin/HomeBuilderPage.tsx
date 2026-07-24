@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { ExternalLink, Plus } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
-import { LoadingScreen } from '@/components/ui/LoadingScreen';
+import { LoadingScreen, PanelLoadingState } from '@/components/ui/LoadingScreen';
 import { HomeBuilderCanvas } from '@/components/admin/homeBuilder/canvas/HomeBuilderCanvas';
 import { AddHomeSectionModal } from '@/components/admin/homeBuilder/AddHomeSectionModal';
 import { SectionWizardModal } from '@/components/admin/homeBuilder/wizard/SectionWizardModal';
@@ -112,7 +112,7 @@ export function HomeBuilderPage() {
   const previewProductCardCtaLabel = getProductCardCtaLabel(previewCommerceConfig);
   const previewCurrency = publicStore?.currency ?? 'COP';
 
-  if (!store || !storeId) return <LoadingScreen />;
+  if (!store || !storeId) return <LoadingScreen label="Preparando el editor…" />;
 
   if (!canManage) {
     return (
@@ -146,7 +146,7 @@ export function HomeBuilderPage() {
       />
 
       {loading ? (
-        <p className="py-8 text-center text-sm text-gray-400">Cargando secciones…</p>
+        <PanelLoadingState label="Cargando diseño de inicio…" />
       ) : (
         <HomeBuilderCanvas
           storeId={storeId}

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { PanelLoadingState } from '@/components/ui/LoadingScreen';
 import { facetsService } from '@/features/facets/facetsService';
 import { categoriesService } from '@/features/categories/categoriesService';
 import type { StoreFacet, StoreFacetValue, FacetInputType, FacetCategoryAssignment } from '@/features/facets/facets.types';
@@ -469,7 +470,7 @@ export function ProductFiltersPage() {
       )}
 
       {loading ? (
-        <div className="py-8 text-center text-sm text-gray-400">Cargando características…</div>
+        <PanelLoadingState label="Cargando características…" />
       ) : facets.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-200 py-12 text-center text-sm text-gray-400">
           No hay características. Créalas para activar los filtros del catálogo.

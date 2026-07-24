@@ -9,7 +9,7 @@ export function ProtectedRoute() {
   // Wait for the initial session check before evaluating auth state.
   // Prevents flash redirect to /login on page reload.
   if (isBootstrapping) {
-    return <LoadingScreen />;
+    return <LoadingScreen label="Iniciando tu panel…" />;
   }
 
   if (!isAuthenticated) {

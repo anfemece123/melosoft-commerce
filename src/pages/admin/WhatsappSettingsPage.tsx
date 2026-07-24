@@ -9,6 +9,7 @@ import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { PanelLoadingState } from '@/components/ui/LoadingScreen';
 import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
 import { notify } from '@/lib/notifications';
 import { whatsappService } from '@/features/whatsapp/whatsappService';
@@ -316,11 +317,7 @@ export function WhatsappSettingsPage() {
   const canSendTest = isConnected && connection?.templateStatus === 'approved';
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <div className="w-6 h-6 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <PanelLoadingState label="Cargando configuración de WhatsApp…" />;
   }
 
   const statusInfo = CONNECTION_STATUS_LABELS[connection?.connectionStatus ?? 'not_connected'];

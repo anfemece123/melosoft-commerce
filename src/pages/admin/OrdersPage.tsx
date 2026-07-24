@@ -4,6 +4,7 @@ import { ShoppingCart, RefreshCw, Utensils, Package, AlertCircle, Calendar, Layo
 import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { PanelLoadingState } from '@/components/ui/LoadingScreen';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { setOrders, setOrdersStatus, setOrdersError, updateOrder } from '@/features/orders/ordersSlice';
 import { ordersService, type OrdersDateParams } from '@/features/orders/ordersService';
@@ -406,9 +407,7 @@ export function OrdersPage() {
       {/* Content */}
       {!isFailed && bootstrapped && viewMode && (
         isLoading && items.length === 0 ? (
-          <div className="flex items-center justify-center py-24">
-            <div className="w-6 h-6 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-          </div>
+          <PanelLoadingState label="Cargando pedidos…" />
         ) : items.length === 0 ? (
           <EmptyState
             icon={<ShoppingCart className="w-10 h-10 text-gray-300" />}

@@ -108,6 +108,33 @@ export interface Database {
         };
         Relationships: [];
       };
+      store_activation_events: {
+        Row: {
+          id: string;
+          store_id: string;
+          previous_status: string;
+          new_status: string;
+          changed_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          previous_status: string;
+          new_status: string;
+          changed_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          previous_status?: string;
+          new_status?: string;
+          changed_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       store_theme_settings: {
         Row: {
           id: string;
@@ -2958,6 +2985,13 @@ export interface Database {
           reason: string;
         }>;
       };
+      set_store_activation: {
+        Args: {
+          p_store_id: string;
+          p_active: boolean;
+        };
+        Returns: undefined;
+      };
       get_or_create_campaign_offer_session: {
         Args: {
           p_offer_id: string;
@@ -3053,6 +3087,8 @@ export interface Database {
 export type StoreRow = Database['public']['Tables']['stores']['Row'];
 export type StoreRowInsert = Database['public']['Tables']['stores']['Insert'];
 export type StoreRowUpdate = Database['public']['Tables']['stores']['Update'];
+
+export type StoreActivationEventRow = Database['public']['Tables']['store_activation_events']['Row'];
 
 export type StoreThemeRow = Database['public']['Tables']['store_theme_settings']['Row'];
 export type StoreThemeRowInsert = Database['public']['Tables']['store_theme_settings']['Insert'];

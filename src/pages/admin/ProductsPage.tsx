@@ -11,6 +11,7 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { StockAdjustmentModal } from '@/components/admin/StockAdjustmentModal';
 import { DiscountBadge } from '@/components/ui/DiscountBadge';
+import { PanelLoadingState } from '@/components/ui/LoadingScreen';
 import { AdminPanelTabs } from '@/components/admin/AdminPanelTabs';
 import { useAppSelector } from '@/app/hooks';
 import { selectCurrentStore, selectCurrentCommerceSettings, selectCurrentBusinessLimits } from '@/features/stores/stores.selectors';
@@ -260,9 +261,7 @@ export function ProductsPage() {
       />
 
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="w-6 h-6 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <PanelLoadingState label={`Cargando ${entityLabel}…`} />
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={<>{sectionIcon}</>}

@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Card, CardBody } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DiscountBadge } from '@/components/ui/DiscountBadge';
+import { PanelLoadingState } from '@/components/ui/LoadingScreen';
 import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { AdminPanelTabs } from '@/components/admin/AdminPanelTabs';
 import { useAppSelector } from '@/app/hooks';
@@ -228,9 +229,7 @@ export function OffersPage() {
       )}
     >
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="w-6 h-6 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <PanelLoadingState label="Cargando campañas…" />
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={<Tag className="w-10 h-10 text-gray-300" />}

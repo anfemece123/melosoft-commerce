@@ -7,8 +7,14 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
+import { StoreActivationControl } from '@/components/admin/StoreActivationControl';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { setStores, setStoresStatus, setStoresError } from '@/features/stores/storesSlice';
+import {
+  setStores,
+  setStoresStatus,
+  setStoresError,
+  updateStore,
+} from '@/features/stores/storesSlice';
 import { storesService } from '@/features/stores/storesService';
 import { domainsService } from '@/features/domains/domainsService';
 import type { StoreStatus, BadgeVariant } from '@/types/common.types';
@@ -50,7 +56,7 @@ export function StoresPage() {
     void load();
   }, [dispatch]);
 
-  if (status === 'loading') return <LoadingScreen />;
+  if (status === 'loading') return <LoadingScreen label="Cargando empresas…" />;
 
   return (
     <div>
@@ -120,12 +126,24 @@ export function StoresPage() {
                         Gestionar
                       </Button>
                     </Link>
-                    <a href={storefrontUrl} target="_blank" rel="noopener noreferrer">
-                      <Button variant="ghost" size="sm">
-                        <ExternalLink className="w-4 h-4" />
-                      </Button>
-                    </a>
+                    {store.status === 'active' && (
+                      <a
+                        href={storefrontUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={`Abrir ecommerce de ${store.name}`}
+                      >
+                        <Button variant="ghost" size="sm">
+                          <ExternalLink className="w-4 h-4" />
+                        </Button>
+                      </a>
+                    )}
                   </div>
+
+                  <StoreActivationControl
+                    store={store}
+                    onChanged={(updatedStore) => dispatch(updateStore(updatedStore))}
+                  />
                 </CardBody>
               </Card>
             );

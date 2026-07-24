@@ -44,7 +44,7 @@ export function PlatformWhatsappConnectionsPage() {
       });
   }, []);
 
-  if (rows === null) return <LoadingScreen />;
+  if (rows === null) return <LoadingScreen label="Cargando conexiones…" />;
 
   return (
     <div>

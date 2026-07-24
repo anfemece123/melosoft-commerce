@@ -132,6 +132,29 @@ export const storesService = {
     return mapStoreRowToStore(data);
   },
 
+  async setStoreActivation(id: string, isActive: boolean): Promise<Store> {
+    const { error } = await supabase.rpc('set_store_activation', {
+      p_store_id: id,
+      p_active: isActive,
+    });
+    if (error) {
+      if (error.message.includes('store_not_found')) {
+        throw new Error('La empresa ya no existe o no está disponible.');
+      }
+      if (error.message.includes('store_status_not_toggleable')) {
+        throw new Error('Esta empresa tiene un estado administrativo que no se puede cambiar desde este control.');
+      }
+      if (error.code === '42501' || error.message.includes('insufficient_privilege')) {
+        throw new Error('No tienes permisos para cambiar el estado de esta empresa.');
+      }
+      throw new Error(error.message);
+    }
+
+    const updatedStore = await storesService.getStoreById(id);
+    if (!updatedStore) throw new Error('No se pudo recargar la empresa después de cambiar su estado.');
+    return updatedStore;
+  },
+
   async uploadStoreLogo(storeKey: string, file: File): Promise<string> {
     return storesService.uploadStoreBrandingAsset(storeKey, file, 'logo');
   },
