@@ -367,6 +367,12 @@ verify_jwt = false
 [functions.whatsapp-webhook]
 verify_jwt = false
 
+# The worker accepts the legacy service_role JWT only after the Edge Gateway
+# has verified its project signature. Keep this explicit: disabling it would
+# invalidate the security assumption in verifiedServiceRoleJwt.ts.
+[functions.send-whatsapp-notification]
+verify_jwt = true
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 

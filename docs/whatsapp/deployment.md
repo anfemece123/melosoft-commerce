@@ -87,7 +87,10 @@ remitente correcto por fila (ver el header de
 
 `send-whatsapp-notification` (Edge Function) solo acepta llamadas cuyo
 header `Authorization: Bearer <token>` sea exactamente la
-`SUPABASE_SERVICE_ROLE_KEY` del proyecto. Para que `pg_cron` la invoque
+`SUPABASE_SERVICE_ROLE_KEY` del proyecto, o el JWT heredado con rol
+`service_role` después de que la firma haya sido validada por el Edge
+Gateway (`verify_jwt=true`). Esto cubre proyectos que ya habilitaron el
+nuevo sistema de API Keys pero conservan las claves JWT heredadas. Para que `pg_cron` la invoque
 cada minuto necesita guardar ese secreto en algún lugar de la base de
 datos — la forma segura de hacerlo es **Supabase Vault**, configurada a
 mano una sola vez desde el SQL Editor del dashboard (nunca desde un

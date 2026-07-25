@@ -43,6 +43,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { resolveWhatsappTemplateSelection } from '../_shared/whatsappTemplateSelection.ts';
+import { readVerifiedJwtRole } from '../_shared/verifiedServiceRoleJwt.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -323,7 +324,21 @@ serve(async (req: Request) => {
   }
   const providedToken = authHeader.slice('Bearer '.length);
 
-  if (!providedToken || !timingSafeEqual(providedToken, serviceRoleKey)) {
+  // Projects using Supabase's newer API-key system can expose a different
+  // internal SUPABASE_SERVICE_ROLE_KEY to Edge Functions than the legacy
+  // service_role JWT displayed in the dashboard. The Edge Gateway has already
+  // verified any JWT before this handler runs (verify_jwt=true is explicit in
+  // config.toml), so accepting its verified service_role claim is equivalent
+  // to accepting the exact injected legacy key while remaining closed to anon
+  // and authenticated-user JWTs.
+  const isExactInjectedKey = providedToken
+    ? timingSafeEqual(providedToken, serviceRoleKey)
+    : false;
+  const isVerifiedServiceRoleJwt = providedToken
+    ? readVerifiedJwtRole(providedToken) === 'service_role'
+    : false;
+
+  if (!providedToken || (!isExactInjectedKey && !isVerifiedServiceRoleJwt)) {
     return json({ error: 'Unauthorized' }, 401);
   }
 
