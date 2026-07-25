@@ -61,14 +61,17 @@ supabase secrets unset META_WHATSAPP_ACCESS_TOKEN META_WHATSAPP_PHONE_NUMBER_ID
 
 - **URL:** `https://omgkiynnpaygxulugxmc.supabase.co/functions/v1/whatsapp-webhook`
 - **Verify token:** el valor de `META_WHATSAPP_VERIFY_TOKEN`
-- **Campo:** `messages` únicamente
+- **Campos:** `messages` y `message_template_status_update`
 
 Regístralo **una sola vez** en App Dashboard → WhatsApp →
 Configuration → Webhook. Cada WABA que se conecta después (una por
 tienda) queda automáticamente suscrita a este mismo webhook — lo hace
 `whatsapp-embedded-signup` llamando a `POST /{waba_id}/subscribed_apps`
 al final de cada conexión exitosa, no requiere repetir este paso a mano
-por tienda.
+por tienda. El campo `message_template_status_update` es el que permite
+que la insignia de la aplicación pase automáticamente de "En revisión de
+Meta" a "Aprobada" (o a rechazada/pausada/deshabilitada) cuando Meta
+termina la revisión.
 
 ## 3. El worker de la cola (`pg_cron` + Vault) — sin cambios de fondo respecto a Modelo A
 

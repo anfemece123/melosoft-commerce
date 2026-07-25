@@ -149,6 +149,13 @@ Function `whatsapp-template-sync`, que:
 3. Guarda el estado devuelto por Meta (`pending`/`approved`/`rejected`/
    `paused`/`disabled`) en `store_whatsapp_connections.template_status`.
 
+Después, el webhook `message_template_status_update` mantiene ese estado
+sincronizado automáticamente cuando Meta termina la revisión. Si el webhook
+se habilitó después de que Meta ya había aprobado la plantilla, el botón
+**"Verificar plantilla"** recupera el estado actual por Graph API. La
+búsqueda selecciona el idioma exacto (`es_CO`), incluso si la WABA conserva
+otra variante del mismo nombre (por ejemplo, una versión anterior `es_MX`).
+
 El sistema **no envía nada** hasta que el estado sea `approved` — un
 envío contra una plantilla pendiente o rechazada respondería
 `132001`/`132000`, así que `send-whatsapp-notification` ni siquiera

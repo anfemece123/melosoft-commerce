@@ -32,6 +32,12 @@ import {
   buildMetaTemplatePermissionContext,
   type MetaTemplatePermissionContext,
 } from '../_shared/metaTemplatePermissionContext.ts';
+import {
+  findMetaTemplateForLanguage,
+  mapMetaTemplateStatus,
+  type MetaTemplateRecord,
+  type WhatsappTemplateStatus,
+} from '../_shared/whatsappTemplateStatus.ts';
 
 function json(body: unknown, status: number, cors: Record<string, string>) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...cors } });
@@ -65,10 +71,8 @@ interface MetaErrorShape {
   error?: MetaOAuthError;
 }
 
-type TemplateStatus = ReturnType<typeof mapTemplateStatus>;
-
 interface TemplateSyncResult {
-  status: TemplateStatus;
+  status: WhatsappTemplateStatus;
   rejectedReason: string | null;
   diagnostic: MetaTemplateSyncDiagnostic | null;
 }
@@ -137,18 +141,6 @@ async function getTemplatePermissionContext(
   return buildMetaTemplatePermissionContext(permissionsResult, wabaResult);
 }
 
-// Meta's template status strings are UPPERCASE; our DB enum is lowercase.
-function mapTemplateStatus(metaStatus: string | undefined): 'not_created' | 'pending' | 'approved' | 'rejected' | 'paused' | 'disabled' {
-  switch ((metaStatus ?? '').toUpperCase()) {
-    case 'APPROVED': return 'approved';
-    case 'PENDING': return 'pending';
-    case 'REJECTED': return 'rejected';
-    case 'PAUSED': return 'paused';
-    case 'DISABLED': return 'disabled';
-    default: return 'not_created';
-  }
-}
-
 async function syncOneTemplate(
   graphApiVersion: string,
   wabaId: string,
@@ -157,7 +149,8 @@ async function syncOneTemplate(
 ): Promise<TemplateSyncResult> {
   const lookup = await metaGet(
     `https://graph.facebook.com/${graphApiVersion}/${encodeURIComponent(wabaId)}/message_templates` +
-    `?name=${encodeURIComponent(template.name)}`,
+    `?name=${encodeURIComponent(template.name)}` +
+    '&fields=name,language,status,rejected_reason',
     accessToken,
   );
 
@@ -172,10 +165,14 @@ async function syncOneTemplate(
     return { status: 'not_created', rejectedReason: null, diagnostic };
   }
 
-  const existing = (lookup.body.data as Array<{ status?: string; rejected_reason?: string }> | undefined)?.[0];
+  const existing = findMetaTemplateForLanguage(
+    lookup.body.data as MetaTemplateRecord[] | undefined,
+    template.name,
+    template.language,
+  );
   if (existing) {
     return {
-      status: mapTemplateStatus(existing.status),
+      status: mapMetaTemplateStatus(existing.status),
       rejectedReason: existing.rejected_reason ? String(existing.rejected_reason).slice(0, 300) : null,
       diagnostic: null,
     };
@@ -201,7 +198,7 @@ async function syncOneTemplate(
 
   // A freshly created template starts in review.
   return {
-    status: mapTemplateStatus((createResult.body.status as string | undefined) ?? 'PENDING'),
+    status: mapMetaTemplateStatus((createResult.body.status as string | undefined) ?? 'PENDING'),
     rejectedReason: null,
     diagnostic: null,
   };

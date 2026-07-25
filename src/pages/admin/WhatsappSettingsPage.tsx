@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useFormik } from 'formik';
 import {
@@ -133,6 +133,7 @@ export function WhatsappSettingsPage() {
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
   const [testPhone, setTestPhone] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
+  const pendingTemplateSyncStoreRef = useRef<string | null>(null);
 
   const loading = loadedStoreId !== storeId;
 
@@ -166,6 +167,41 @@ export function WhatsappSettingsPage() {
       cancelled = true;
     };
   }, [storeId]);
+
+  useEffect(() => {
+    if (!storeId) return;
+    return whatsappService.subscribeToConnection(storeId, setConnection);
+  }, [storeId]);
+
+  // A template may already have been approved before the status webhook was
+  // enabled. Recover that one stale "pending" state on page load; the exact
+  // es_CO lookup is read-only when the templates already exist.
+  useEffect(() => {
+    if (
+      !storeId ||
+      connection?.connectionStatus !== 'connected' ||
+      connection.templateStatus !== 'pending'
+    ) {
+      if (connection?.templateStatus !== 'pending') {
+        pendingTemplateSyncStoreRef.current = null;
+      }
+      return;
+    }
+    if (pendingTemplateSyncStoreRef.current === storeId) return;
+
+    pendingTemplateSyncStoreRef.current = storeId;
+    let cancelled = false;
+    void whatsappService.syncTemplate(storeId)
+      .then(() => whatsappService.getConnection(storeId))
+      .then((latestConnection) => {
+        if (!cancelled) setConnection(latestConnection);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [storeId, connection?.connectionStatus, connection?.templateStatus]);
 
   const formik = useFormik<WhatsappSettingsFormValues>({
     initialValues: {

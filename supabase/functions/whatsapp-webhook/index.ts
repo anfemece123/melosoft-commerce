@@ -27,7 +27,9 @@
 // Handles:
 //   - GET  — subscription verification (hub.mode/hub.verify_token/hub.challenge)
 //   - POST — message status callbacks (sent/delivered/read/failed), matched
-//            back to whatsapp_notifications by provider_message_id.
+//            back to whatsapp_notifications by provider_message_id; and
+//            message_template_status_update callbacks, matched to active
+//            connections by WABA + exact template name/language.
 //
 // Security:
 //   - POST requests are validated against META_WHATSAPP_APP_SECRET using
@@ -49,10 +51,11 @@
 // Register this ONE URL in the Meta App Dashboard → WhatsApp →
 // Configuration (once, for the Melosoft app — not per store):
 //   https://<project-ref>.supabase.co/functions/v1/whatsapp-webhook
-// Subscribe to the "messages" webhook field only.
+// Subscribe to both "messages" and "message_template_status_update".
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { mapMetaTemplateWebhookEvent } from '../_shared/whatsappTemplateStatus.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -88,6 +91,14 @@ interface MetaStatusEvent {
   status: string;
   timestamp?: string;
   errors?: Array<{ code?: number; title?: string; message?: string }>;
+}
+
+interface MetaTemplateStatusEvent {
+  event?: string;
+  message_template_id?: string | number;
+  message_template_name?: string;
+  message_template_language?: string;
+  reason?: string;
 }
 
 serve(async (req: Request) => {
@@ -135,7 +146,16 @@ serve(async (req: Request) => {
       id?: string; // WABA id
       changes?: Array<{
         field?: string;
-        value?: { statuses?: MetaStatusEvent[]; messages?: unknown[]; metadata?: { phone_number_id?: string } };
+        value?: {
+          statuses?: MetaStatusEvent[];
+          messages?: unknown[];
+          metadata?: { phone_number_id?: string };
+          event?: string;
+          message_template_id?: string | number;
+          message_template_name?: string;
+          message_template_language?: string;
+          reason?: string;
+        };
       }>;
     }>;
   };
@@ -154,21 +174,30 @@ serve(async (req: Request) => {
   // arrived tagged with — logged per event below, never used to choose
   // which row to update (see header comment).
   const statusEvents: Array<{ event: MetaStatusEvent; wabaId: string | null; phoneNumberId: string | null }> = [];
+  const templateStatusEvents: Array<{ event: MetaTemplateStatusEvent; wabaId: string | null }> = [];
   let hadIncomingMessages = false;
 
   for (const entry of payload.entry ?? []) {
     for (const change of entry.changes ?? []) {
-      if (change.field && change.field !== 'messages') continue;
-      for (const statusEvent of change.value?.statuses ?? []) {
-        statusEvents.push({
-          event: statusEvent,
+      if (!change.field || change.field === 'messages') {
+        for (const statusEvent of change.value?.statuses ?? []) {
+          statusEvents.push({
+            event: statusEvent,
+            wabaId: entry.id ?? null,
+            phoneNumberId: change.value?.metadata?.phone_number_id ?? null,
+          });
+        }
+        // Incoming customer messages: out of scope (see header comment).
+        // Not read, not stored — only counted for observability.
+        if (change.value?.messages?.length) hadIncomingMessages = true;
+      }
+
+      if (change.field === 'message_template_status_update') {
+        templateStatusEvents.push({
+          event: change.value ?? {},
           wabaId: entry.id ?? null,
-          phoneNumberId: change.value?.metadata?.phone_number_id ?? null,
         });
       }
-      // Incoming customer messages: out of scope (see header comment).
-      // Not read, not stored — only counted for observability.
-      if (change.value?.messages?.length) hadIncomingMessages = true;
     }
   }
 
@@ -214,5 +243,54 @@ serve(async (req: Request) => {
     }
   }
 
-  return json({ received: true, statuses_processed: statusEvents.length, had_incoming_messages: hadIncomingMessages });
+  for (const { event, wabaId } of templateStatusEvents) {
+    const templateStatus = mapMetaTemplateWebhookEvent(event.event);
+    const templateName = event.message_template_name?.trim();
+    if (!templateStatus || !wabaId || !templateName) {
+      console.log(
+        `[whatsapp-webhook] ignored template event: waba=${wabaId}, template=${templateName}, event=${event.event}`,
+      );
+      continue;
+    }
+
+    const rejectedReason = templateStatus === 'rejected' && event.reason
+      ? String(event.reason).slice(0, 300)
+      : null;
+    const { data: applyResult, error: rpcErr } = await supabase.rpc(
+      'apply_whatsapp_template_status_event',
+      {
+        p_waba_id: wabaId,
+        p_template_name: templateName,
+        p_template_language: event.message_template_language ?? null,
+        p_template_status: templateStatus,
+        p_rejected_reason: rejectedReason,
+      },
+    );
+
+    if (rpcErr) {
+      console.error(
+        '[whatsapp-webhook] apply_whatsapp_template_status_event failed:',
+        rpcErr.message,
+        'waba=',
+        wabaId,
+        'template=',
+        templateName,
+      );
+      continue;
+    }
+
+    const result = applyResult as { matched?: number; applied?: number } | null;
+    console.log(
+      `[whatsapp-webhook] template event applied: waba=${wabaId}, template=${templateName}, ` +
+        `language=${event.message_template_language ?? 'unknown'}, status=${templateStatus}, ` +
+        `matched=${result?.matched ?? 0}, applied=${result?.applied ?? 0}`,
+    );
+  }
+
+  return json({
+    received: true,
+    statuses_processed: statusEvents.length,
+    template_statuses_processed: templateStatusEvents.length,
+    had_incoming_messages: hadIncomingMessages,
+  });
 });

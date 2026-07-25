@@ -21,6 +21,7 @@ vi.mock('@/features/whatsapp/whatsappService', () => ({
   whatsappService: {
     getSettings: vi.fn().mockResolvedValue(null),
     getConnection: vi.fn().mockResolvedValue(null),
+    subscribeToConnection: vi.fn(() => () => undefined),
     getRecentNotifications: vi.fn().mockResolvedValue([]),
     completeEmbeddedSignup: vi.fn(),
     upsertSettings: vi.fn(),
@@ -257,5 +258,60 @@ describe('WhatsappSettingsPage — configuración de envíos', () => {
       timezone: 'America/Bogota',
       finalMessage: null,
     }));
+  });
+});
+
+describe('WhatsappSettingsPage — estado de plantilla', () => {
+  it('recovers an already-approved template that was still stored as pending', async () => {
+    const pendingConnection = {
+      id: 'connection-1',
+      storeId: 'store-1',
+      metaBusinessId: 'business-1',
+      wabaId: 'waba-1',
+      phoneNumberId: 'phone-1',
+      displayPhoneNumber: '+57 321 3706466',
+      verifiedName: 'MelosoftApp',
+      connectionStatus: 'connected' as const,
+      onboardingType: 'new_number' as const,
+      coexistenceEnabled: false,
+      templateName: 'melosoft_order_confirmation_v1',
+      templateLanguage: 'es_CO',
+      templateStatus: 'pending' as const,
+      templateRejectedReason: null,
+      connectedAt: '2026-07-25T00:00:00.000Z',
+      lastVerifiedAt: '2026-07-25T00:00:00.000Z',
+      disconnectedAt: null,
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      createdAt: '2026-07-25T00:00:00.000Z',
+      updatedAt: '2026-07-25T00:00:00.000Z',
+    };
+    const { whatsappService } = await import('@/features/whatsapp/whatsappService');
+    const getConnection = whatsappService.getConnection as ReturnType<typeof vi.fn>;
+    const syncTemplate = whatsappService.syncTemplate as ReturnType<typeof vi.fn>;
+    getConnection.mockReset()
+      .mockResolvedValueOnce(pendingConnection)
+      .mockResolvedValueOnce({ ...pendingConnection, templateStatus: 'approved' });
+    syncTemplate.mockResolvedValueOnce({
+      ok: true,
+      orderConfirmationTemplate: {
+        name: 'melosoft_order_confirmation_v1',
+        status: 'approved',
+        rejectedReason: null,
+      },
+      testTemplate: { name: 'melosoft_whatsapp_test_v1', status: 'approved' },
+    });
+
+    const { WhatsappSettingsPage } = await import('./WhatsappSettingsPage');
+    render(
+      <MemoryRouter initialEntries={['/admin/stores/store-1/whatsapp']}>
+        <Routes>
+          <Route path="/admin/stores/:storeId/whatsapp" element={<WhatsappSettingsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Aprobada')).toBeTruthy();
+    expect(syncTemplate).toHaveBeenCalledWith('store-1');
   });
 });

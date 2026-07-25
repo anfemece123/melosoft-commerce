@@ -171,6 +171,32 @@ export const whatsappService = {
     return mapStoreWhatsappConnectionRowToStoreWhatsappConnection(data);
   },
 
+  subscribeToConnection(
+    storeId: string,
+    onConnection: (connection: StoreWhatsappConnection) => void,
+  ): () => void {
+    const channel = supabase
+      .channel(`whatsapp-connection:${storeId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'store_whatsapp_connections',
+          filter: `store_id=eq.${storeId}`,
+        },
+        (payload) => {
+          const row = payload.new as Parameters<typeof mapStoreWhatsappConnectionRowToStoreWhatsappConnection>[0];
+          onConnection(mapStoreWhatsappConnectionRowToStoreWhatsappConnection(row));
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  },
+
   // Completes Embedded Signup after the frontend has already run
   // FB.login() (see src/lib/whatsapp/embeddedSignup.ts) and captured the
   // temporary `code` and, when Meta emits it, the session-logging
