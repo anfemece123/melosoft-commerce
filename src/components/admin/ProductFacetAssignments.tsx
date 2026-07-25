@@ -336,9 +336,9 @@ export function ProductFacetAssignments({
                 className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600"
               />
               <span>
-                <span className="font-medium text-gray-900">Mega menú</span>
+                <span className="font-medium text-gray-900">Mega menús de categoría</span>
                 <span className="block text-xs text-gray-500">
-                  Úsalo si quieres destacar esta característica dentro de la navegación pública.
+                  Muestra sus valores al desplegar una categoría en la navegación pública.
                 </span>
               </span>
             </label>
@@ -396,7 +396,7 @@ export function ProductFacetAssignments({
                       ) : null}
                       {facet.showInMegaMenu ? (
                         <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">
-                          Mega menú
+                          Mega menú de categoría
                         </span>
                       ) : null}
                     </div>

@@ -27,3 +27,13 @@ export function writeCachedPublicStoreBranding(storeSlug: string, branding: Publ
     // Ignore storage quota / serialization errors for public cache.
   }
 }
+
+export function clearCachedPublicStoreBranding(storeSlug: string) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    sessionStorage.removeItem(getStorageKey(storeSlug));
+  } catch {
+    // Storage can be unavailable in privacy-restricted browsing contexts.
+  }
+}

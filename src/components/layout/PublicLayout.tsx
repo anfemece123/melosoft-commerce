@@ -327,11 +327,11 @@ function PublicStoreShell({
       <div className="min-h-screen" style={{ backgroundColor: theme.background }}>
         {branding ? (
           <StorefrontHeader
+            key={routeKey}
             theme={theme}
             storeName={branding.storeName}
             storeSlug={storeSlug}
             logoUrl={branding.logoUrl}
-            slogan={branding.slogan}
             catalogType={branding.catalogType}
             hasHero={hasHero}
             showCart={showCart}

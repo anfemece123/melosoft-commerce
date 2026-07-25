@@ -1,9 +1,25 @@
-import { ChevronRight, Home, List, Sparkles, X } from 'lucide-react';
+import {
+  BadgePercent,
+  ChevronRight,
+  FolderTree,
+  Home,
+  Layers3,
+  List,
+  SlidersHorizontal,
+  Sparkles,
+  X,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
-import type { CatalogType, PublicHeaderSettings, PublicStoreCategory, PublicStoreCollection } from '@/types/common.types';
+import type {
+  HeaderNavigationItemType,
+  PublicHeaderSettings,
+  PublicStoreCategory,
+  PublicStoreCollection,
+} from '@/types/common.types';
 import type { StorefrontTheme } from './storefrontTheme';
 import { PublicStoreLogo } from './PublicStoreLogo';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
+import type { ResolvedHeaderNavigationItem } from '@/lib/storefront/headerNavigation';
 
 interface MobileNavDrawerProps {
   open: boolean;
@@ -12,22 +28,11 @@ interface MobileNavDrawerProps {
   storeSlug: string;
   storeName: string;
   logoUrl: string | null;
-  catalogType: CatalogType | null;
   settings: PublicHeaderSettings;
   categoryTree: PublicStoreCategory[];
   collections?: PublicStoreCollection[];
-}
-
-function getCatalogLabel(catalogType: CatalogType | null): string {
-  if (catalogType === 'menu') return 'Menú';
-  if (catalogType === 'services' || catalogType === 'mixed') return 'Catálogo';
-  return 'Productos';
-}
-
-function getViewAllLabel(catalogType: CatalogType | null): string {
-  if (catalogType === 'menu') return 'Menú completo';
-  if (catalogType === 'services' || catalogType === 'mixed') return 'Ver catálogo completo';
-  return 'Todos los productos';
+  navigationItems: ResolvedHeaderNavigationItem[];
+  showAutomaticCollections: boolean;
 }
 
 export function MobileNavDrawer({
@@ -37,18 +42,17 @@ export function MobileNavDrawer({
   storeSlug,
   storeName,
   logoUrl,
-  catalogType,
   settings,
   categoryTree,
   collections = [],
+  navigationItems,
+  showAutomaticCollections,
 }: MobileNavDrawerProps) {
   if (!open) return null;
 
-  const catalogLabel = getCatalogLabel(catalogType);
-  const viewAllLabel = getViewAllLabel(catalogType);
-  const visibleRootCats = categoryTree.filter((c) => c.showInMenu);
-  const inCategoriesMode = settings.menuMode === 'categories' && visibleRootCats.length > 0;
-  const visibleCollections = collections.filter((c) => c.showInMenu);
+  const visibleCollections = showAutomaticCollections
+    ? collections.filter((collection) => collection.showInMenu)
+    : [];
 
   const controlBg = theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
 
@@ -126,70 +130,51 @@ export function MobileNavDrawer({
             </Link>
           )}
 
-          {inCategoriesMode ? (
-            <>
-              <Link
-                to={buildStorefrontPath(storeSlug, '/catalog')}
-                onClick={onClose}
-                className="flex items-center gap-3 px-5 py-3.5 text-sm font-medium transition-opacity hover:opacity-70"
-                style={{ color: theme.mode === 'dark' ? theme.text : '#374151' }}
-              >
-                <List className="h-4 w-4 shrink-0" />
-                {viewAllLabel}
-              </Link>
-
-              <div
-                className="mx-4 my-1"
-                style={{ borderTop: `1px solid ${theme.border}` }}
-              />
-
-              {visibleRootCats.map((cat) => (
-                <div key={cat.id} className="border-b border-transparent">
-                  <Link
-                    to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(cat.slug)}`)}
-                    onClick={onClose}
-                    className="flex items-center justify-between px-5 py-3 text-sm transition-opacity hover:opacity-70"
-                    style={{ color: theme.mode === 'dark' ? theme.text : '#374151' }}
-                  >
-                    <span>{cat.name}</span>
+          {navigationItems.map((item, index) => {
+            const rootCategory = item.rootCategorySlug
+              ? categoryTree.find((category) => category.slug === item.rootCategorySlug) ?? null
+              : null;
+            return (
+              <div key={item.id} className="border-b border-transparent">
+                <Link
+                  to={item.href}
+                  onClick={onClose}
+                  className="flex items-center justify-between gap-3 px-5 py-3 text-sm font-medium transition-opacity hover:opacity-70"
+                  style={{
+                    color: !settings.showHomeLink && index === 0
+                      ? theme.primary
+                      : theme.mode === 'dark' ? theme.text : '#374151',
+                  }}
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    <NavigationItemIcon type={item.type} />
+                    <span className="truncate">{item.label}</span>
+                  </span>
+                  {(rootCategory?.children ?? []).length > 0 && (
                     <ChevronRight
                       className="h-3.5 w-3.5 shrink-0"
                       style={{ color: theme.mutedText }}
                     />
-                  </Link>
-                  {(cat.children ?? []).length > 0 && (
-                    <div className="pb-2">
-                      {(cat.children ?? []).map((child) => (
-                        <Link
-                          key={child.id}
-                          to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(cat.slug)}&sub=${encodeURIComponent(child.slug)}`)}
-                          onClick={onClose}
-                          className="block px-9 py-2 text-sm transition-opacity hover:opacity-70"
-                          style={{ color: theme.mutedText }}
-                        >
-                          {child.name}
-                        </Link>
-                      ))}
-                    </div>
                   )}
-                </div>
-              ))}
-            </>
-          ) : (
-            <Link
-              to={buildStorefrontPath(storeSlug, '/catalog')}
-              onClick={onClose}
-              className="flex items-center gap-3 px-5 py-3.5 text-sm font-medium transition-opacity hover:opacity-70"
-              style={{
-                color: settings.showHomeLink
-                  ? theme.mode === 'dark' ? theme.text : '#374151'
-                  : theme.primary,
-              }}
-            >
-              <List className="h-4 w-4 shrink-0" />
-              {catalogLabel}
-            </Link>
-          )}
+                </Link>
+                {(rootCategory?.children ?? []).length > 0 && (
+                  <div className="pb-2">
+                    {(rootCategory?.children ?? []).map((child) => (
+                      <Link
+                        key={child.id}
+                        to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(rootCategory?.slug ?? '')}&sub=${encodeURIComponent(child.slug)}`)}
+                        onClick={onClose}
+                        className="block px-12 py-2 text-sm transition-opacity hover:opacity-70"
+                        style={{ color: theme.mutedText }}
+                      >
+                        {child.name}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
           {visibleCollections.length > 0 && (
             <>
@@ -221,4 +206,14 @@ export function MobileNavDrawer({
       </div>
     </>
   );
+}
+
+function NavigationItemIcon({ type }: { type: HeaderNavigationItemType }) {
+  const className = 'h-4 w-4 shrink-0';
+  if (type === 'category') return <FolderTree className={className} />;
+  if (type === 'collection') return <Layers3 className={className} />;
+  if (type === 'facet_value') return <SlidersHorizontal className={className} />;
+  if (type === 'featured') return <Sparkles className={className} />;
+  if (type === 'sale') return <BadgePercent className={className} />;
+  return <List className={className} />;
 }

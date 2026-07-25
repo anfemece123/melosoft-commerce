@@ -1,5 +1,6 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { getCorsHeaders, resolveAppOrigin } from '../_shared/allowedOrigins.ts';
+import { ownerPasswordValidationError } from '../_shared/ownerAccess.ts';
 
 // ── Request / Response shapes ────────────────────────────────
 
@@ -37,6 +38,8 @@ interface CreateStoreWithOwnerPayload {
   ownerPhone: string;
   ownerDocumentType: string | null;
   ownerDocumentNumber: string | null;
+  ownerAccessMode: 'invitation' | 'password';
+  ownerPassword: string | null;
   // Store
   name: string;
   slug: string;
@@ -70,6 +73,7 @@ interface CreateStoreWithOwnerResponse {
   storeSlug: string;
   ownerUserId: string;
   ownerIsNew: boolean;
+  ownerAccessResult: 'invitation_sent' | 'password_assigned' | 'existing_account';
 }
 
 const STORE_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
@@ -305,7 +309,7 @@ Deno.serve(async (req) => {
   }
 
   const required: (keyof CreateStoreWithOwnerPayload)[] = [
-    'ownerFullName', 'ownerEmail', 'ownerPhone',
+    'ownerFullName', 'ownerEmail', 'ownerPhone', 'ownerAccessMode',
     'name', 'slug', 'businessVertical', 'businessSubcategory', 'description', 'whatsappNumber',
     'country', 'city', 'currency', 'mode', 'themePreset',
   ];
@@ -313,6 +317,15 @@ Deno.serve(async (req) => {
     if (!payload[field]) {
       return jsonError(`Missing required field: ${field}`, 400, cors);
     }
+  }
+
+  payload.ownerEmail = payload.ownerEmail.trim().toLowerCase();
+  if (!['invitation', 'password'].includes(payload.ownerAccessMode)) {
+    return jsonError('El método de acceso del propietario no es válido.', 400, cors);
+  }
+  if (payload.ownerAccessMode === 'password') {
+    const passwordError = ownerPasswordValidationError(payload.ownerPassword ?? '');
+    if (passwordError) return jsonError(passwordError, 400, cors);
   }
 
   payload.slug = payload.slug.trim().toLowerCase();
@@ -351,41 +364,77 @@ Deno.serve(async (req) => {
   // ── Resolve or create owner in Auth ─────────────────────
   let ownerUserId: string;
   let ownerIsNew = false;
+  let ownerAccessResult: CreateStoreWithOwnerResponse['ownerAccessResult'];
 
   // Check if a profile already exists with this email
   const { data: existingProfile } = await adminClient
     .from('profiles')
     .select('user_id')
-    .eq('email', payload.ownerEmail)
+    .ilike('email', payload.ownerEmail)
     .maybeSingle();
 
   if (existingProfile?.user_id) {
-    // User already exists — reuse their user_id
-    ownerUserId = existingProfile.user_id;
-  } else {
-    // Create new user via Admin API with an invitation.
-    // redirectTo sends the owner to /auth/callback?next=/set-password so they
-    // land on SetPasswordPage after clicking the email link.
-    const appOrigin = resolveAppOrigin(req);
-    const redirectTo = `${appOrigin}/auth/callback?next=/set-password`;
-
-    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
-      payload.ownerEmail,
-      {
-        redirectTo,
-        data: {
-          full_name: payload.ownerFullName,
-          role: 'owner',
-          store_slug: payload.slug,
-        },
-      }
-    );
-
-    if (inviteError || !inviteData.user) {
-      return jsonError(`Failed to invite owner user: ${inviteError?.message ?? 'unknown error'}`, 500, cors);
+    // Never overwrite an existing account password: the same person may own
+    // other stores. Reuse is safe for invitation mode because they already
+    // have credentials; direct-password mode must use a new email instead.
+    if (payload.ownerAccessMode === 'password') {
+      return jsonError(
+        'Ya existe una cuenta con este email. Usa la opción de invitación o registra otro correo.',
+        409,
+        cors,
+      );
     }
+    ownerUserId = existingProfile.user_id;
+    ownerAccessResult = 'existing_account';
+  } else {
+    const userMetadata = {
+      full_name: payload.ownerFullName,
+      role: 'owner',
+      store_slug: payload.slug,
+    };
 
-    ownerUserId = inviteData.user.id;
+    if (payload.ownerAccessMode === 'invitation') {
+      // redirectTo sends the owner to /auth/callback?next=/set-password so
+      // they land on SetPasswordPage after clicking the email link.
+      const appOrigin = resolveAppOrigin(req);
+      const redirectTo = `${appOrigin}/auth/callback?next=/set-password`;
+      const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
+        payload.ownerEmail,
+        { redirectTo, data: userMetadata }
+      );
+
+      if (inviteError || !inviteData.user) {
+        return jsonError(
+          `No se pudo enviar la invitación al propietario: ${inviteError?.message ?? 'error desconocido'}`,
+          500,
+          cors,
+        );
+      }
+      ownerUserId = inviteData.user.id;
+      ownerAccessResult = 'invitation_sent';
+    } else {
+      // Supabase Auth hashes the password. It is never stored in application
+      // tables, included in logs, or returned by this function.
+      const { data: createData, error: createError } = await adminClient.auth.admin.createUser({
+        email: payload.ownerEmail,
+        password: payload.ownerPassword as string,
+        email_confirm: true,
+        user_metadata: userMetadata,
+      });
+
+      if (createError || !createData.user) {
+        const alreadyExists = /already|registered|exists/i.test(createError?.message ?? '');
+        return jsonError(
+          alreadyExists
+            ? 'Ya existe una cuenta de acceso con este email. Usa la opción de invitación o registra otro correo.'
+            : `No se pudo crear el acceso del propietario: ${createError?.message ?? 'error desconocido'}`,
+          alreadyExists ? 409 : 500,
+          cors,
+        );
+      }
+      ownerUserId = createData.user.id;
+      ownerAccessResult = 'password_assigned';
+    }
     ownerIsNew = true;
   }
 
@@ -408,6 +457,9 @@ Deno.serve(async (req) => {
     );
 
   if (profileUpsertError) {
+    if (ownerIsNew) {
+      await adminClient.auth.admin.deleteUser(ownerUserId).catch(() => undefined);
+    }
     return jsonError(`Failed to upsert owner profile: ${profileUpsertError.message}`, 500, cors);
   }
 
@@ -625,5 +677,6 @@ Deno.serve(async (req) => {
     storeSlug: store.slug as string,
     ownerUserId,
     ownerIsNew,
+    ownerAccessResult,
   }, cors);
 });

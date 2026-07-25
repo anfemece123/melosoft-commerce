@@ -25,16 +25,15 @@ export function StorefrontHero({
     () => slides.filter((slide) => slide.isActive).sort((a, b) => a.sortOrder - b.sortOrder),
     [slides]
   );
-  const [activeIndex, setActiveIndex] = useState(0);
-
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [activeSlides.length]);
+  const [requestedActiveIndex, setRequestedActiveIndex] = useState(0);
+  const activeIndex = activeSlides.length > 0
+    ? requestedActiveIndex % activeSlides.length
+    : 0;
 
   useEffect(() => {
     if (activeSlides.length <= 1) return undefined;
     const timer = window.setInterval(() => {
-      setActiveIndex((current) => (current + 1) % activeSlides.length);
+      setRequestedActiveIndex((current) => (current + 1) % activeSlides.length);
     }, 6000);
     return () => window.clearInterval(timer);
   }, [activeSlides.length]);
@@ -132,7 +131,7 @@ export function StorefrontHero({
                           width: index === activeIndex ? 28 : 10,
                           backgroundColor: index === activeIndex ? theme.primary : 'rgba(255,255,255,0.42)',
                         }}
-                        onClick={() => setActiveIndex(index)}
+                        onClick={() => setRequestedActiveIndex(index)}
                       />
                     ))}
                   </div>
@@ -143,7 +142,8 @@ export function StorefrontHero({
             <div className="order-1 flex justify-center lg:order-2 lg:justify-end">
               <div className="relative">
                 <div
-                  className="absolute left-1/2 top-6 h-[248px] w-[248px] -translate-x-1/2 rounded-full sm:top-7 sm:h-[320px] sm:w-[320px] md:h-[390px] md:w-[390px] lg:h-[470px] lg:w-[470px]"
+                  aria-hidden="true"
+                  className="absolute left-1/2 top-1/2 h-[232px] w-[232px] -translate-x-1/2 -translate-y-1/2 rounded-full sm:h-[296px] sm:w-[296px] md:h-[390px] md:w-[390px] lg:h-[470px] lg:w-[470px]"
                   style={{ backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#d8e0e8' }}
                 />
 

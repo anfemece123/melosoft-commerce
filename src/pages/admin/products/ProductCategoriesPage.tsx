@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { Plus, Pencil, Trash2, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -116,6 +116,17 @@ export function ProductCategoriesPage() {
         </p>
       </div>
 
+      <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-900">
+        <strong>Una categoría indica qué producto es</strong>, por ejemplo Zapatos, Camisetas o Palas.
+        Para segmentar por Hombre, Mujer, Unisex, Color o Material utiliza{' '}
+        <Link
+          to={`/admin/stores/${storeId}/products/filters`}
+          className="font-semibold text-sky-700 underline underline-offset-2"
+        >
+          Atributos del producto
+        </Link>.
+      </div>
+
       <div className="flex items-center justify-end">
         <Button onClick={openCreate} leftIcon={<Plus className="w-4 h-4" />}>
           Nueva categoría
@@ -132,7 +143,7 @@ export function ProductCategoriesPage() {
               label="Nombre"
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="Ej: Bebidas, Ropa masculina"
+              placeholder="Ej: Zapatos, Camisetas, Bebidas"
             />
             <Select
               label="Categoría padre"

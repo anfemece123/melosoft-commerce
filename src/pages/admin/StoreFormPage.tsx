@@ -5,7 +5,7 @@ import type { FormikErrors } from 'formik';
 import {
   User, Building2, Palette, MapPin, Clock, FileText,
   Sun, Moon, CheckCircle2, AlertCircle, Utensils, ShoppingBag, ClipboardList, Home,
-  Loader2, RefreshCw, XCircle,
+  Loader2, RefreshCw, XCircle, Mail, KeyRound, Eye, EyeOff, Copy,
 } from 'lucide-react';
 import type { BusinessVertical } from '@/types/common.types';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
 import { StoreLogoField } from '@/components/admin/StoreLogoField';
+import { OwnerCredentialsDialog } from '@/components/admin/OwnerCredentialsDialog';
 import { useAppDispatch } from '@/app/hooks';
 import { addStore } from '@/features/stores/storesSlice';
 import { storesService } from '@/features/stores/storesService';
@@ -29,6 +30,8 @@ import { geoService } from '@/features/geo/geoService';
 import type { GeoDepartment, GeoCity } from '@/features/geo/geo.types';
 import { domainsService } from '@/features/domains/domainsService';
 import { normalizeStorefrontSubdomain } from '@/lib/storefront/storefrontSubdomains';
+import { generateSecureOwnerPassword } from '@/lib/auth/ownerPassword';
+import { notify } from '@/lib/notifications';
 
 // ── Business vertical constants ──────────────────────────────
 
@@ -185,6 +188,9 @@ const INITIAL_VALUES = {
   ownerPhone: '',
   ownerDocumentType: '',
   ownerDocumentNumber: '',
+  ownerAccessMode: 'invitation' as const,
+  ownerPassword: '',
+  ownerPasswordConfirm: '',
   // Company
   name: '',
   slug: '',
@@ -225,6 +231,9 @@ const FIELD_LABELS: Partial<Record<keyof StoreCreationFormValues, string>> = {
   ownerFullName: 'Nombre del propietario',
   ownerEmail: 'Email del propietario',
   ownerPhone: 'Teléfono del propietario',
+  ownerAccessMode: 'Método de acceso',
+  ownerPassword: 'Contraseña del propietario',
+  ownerPasswordConfirm: 'Confirmación de contraseña',
   name: 'Nombre de la empresa',
   slug: 'URL (slug) de la tienda',
   businessVertical: 'Tipo de empresa',
@@ -288,6 +297,13 @@ export function StoreFormPage() {
   const [departments, setDepartments] = useState<GeoDepartment[]>([]);
   const [cities, setCities] = useState<GeoCity[]>([]);
   const [loadingGeo, setLoadingGeo] = useState(false);
+  const [ownerPasswordVisible, setOwnerPasswordVisible] = useState(false);
+  const [createdCredentials, setCreatedCredentials] = useState<{
+    storeId: string;
+    storeName: string;
+    email: string;
+    password: string;
+  } | null>(null);
 
   useEffect(() => {
     geoService.getDepartments('CO').then(setDepartments).catch(() => undefined);
@@ -297,9 +313,9 @@ export function StoreFormPage() {
     initialValues: INITIAL_VALUES,
     validationSchema: storeCreationSchema,
     onSubmit: async (values, { setStatus }) => {
-      console.log('[StoreFormPage] formik onSubmit fired', values);
       try {
         const colors = getThemeColors(values.themePreset as ThemePreset, values.mode as ThemeMode);
+        const normalizedOwnerEmail = values.ownerEmail.trim().toLowerCase();
 
         const policies = values.usePolicyDefaults
           ? DEFAULT_POLICIES
@@ -311,13 +327,14 @@ export function StoreFormPage() {
               termsAndConditions: values.termsAndConditions || null,
             };
 
-        console.log('[StoreFormPage] calling create-store-with-owner');
         const result = await storesService.createStoreWithOwner({
           ownerFullName: values.ownerFullName,
-          ownerEmail: values.ownerEmail,
+          ownerEmail: normalizedOwnerEmail,
           ownerPhone: values.ownerPhone,
           ownerDocumentType: values.ownerDocumentType || null,
           ownerDocumentNumber: values.ownerDocumentNumber || null,
+          ownerAccessMode: values.ownerAccessMode,
+          ownerPassword: values.ownerAccessMode === 'password' ? values.ownerPassword : null,
           name: values.name,
           slug: values.slug,
           slogan: values.slogan || null,
@@ -358,15 +375,28 @@ export function StoreFormPage() {
           policies,
         });
 
-        console.log('[StoreFormPage] create-store-with-owner response', result);
         // Optimistically add to Redux so StoresPage shows it immediately
         const loadedStores = await storesService.getStores();
         const newStore = loadedStores.find((s) => s.id === result.storeId);
         if (newStore) dispatch(addStore(newStore));
 
+        if (result.ownerAccessResult === 'password_assigned' && values.ownerPassword) {
+          setCreatedCredentials({
+            storeId: result.storeId,
+            storeName: values.name,
+            email: normalizedOwnerEmail,
+            password: values.ownerPassword,
+          });
+          return;
+        }
+
+        notify.success(
+          result.ownerAccessResult === 'existing_account'
+            ? 'Empresa creada. El propietario ya tenía una cuenta y recibió acceso.'
+            : 'Empresa creada e invitación enviada al propietario.'
+        );
         void navigate(`/admin/stores/${result.storeId}`);
       } catch (err) {
-        console.error('[StoreFormPage] submit error', err);
         setStatus(err instanceof Error ? err.message : 'Error al crear la empresa');
       }
     },
@@ -406,6 +436,32 @@ export function StoreFormPage() {
   function handlePickSlugSuggestion(suggestion: string) {
     setSlugEditedManually(true);
     void formik.setFieldValue('slug', suggestion);
+  }
+
+  function handleOwnerAccessModeChange(mode: 'invitation' | 'password') {
+    void formik.setFieldValue('ownerAccessMode', mode);
+    if (mode === 'invitation') {
+      void formik.setFieldValue('ownerPassword', '');
+      void formik.setFieldValue('ownerPasswordConfirm', '');
+      setOwnerPasswordVisible(false);
+    }
+  }
+
+  function handleGenerateOwnerPassword() {
+    const generatedPassword = generateSecureOwnerPassword();
+    void formik.setFieldValue('ownerPassword', generatedPassword);
+    void formik.setFieldValue('ownerPasswordConfirm', generatedPassword);
+    setOwnerPasswordVisible(true);
+  }
+
+  async function handleCopyOwnerPassword() {
+    if (!formik.values.ownerPassword) return;
+    try {
+      await navigator.clipboard.writeText(formik.values.ownerPassword);
+      notify.success('Contraseña copiada.');
+    } catch {
+      notify.error('No se pudo copiar automáticamente.');
+    }
   }
 
   // Load cities when locationDepartment changes
@@ -489,13 +545,6 @@ export function StoreFormPage() {
         </div>
       )}
 
-      {/* DEV-ONLY: raw Formik errors for debugging — remove before shipping */}
-      {import.meta.env.DEV && formik.submitCount > 0 && Object.keys(formik.errors).length > 0 && (
-        <pre className="mb-4 rounded-lg bg-red-50 p-4 text-xs text-red-700 overflow-auto max-h-48">
-          {JSON.stringify(formik.errors, null, 2)}
-        </pre>
-      )}
-
       {/* Validation summary: lists the exact fields with errors after a failed submit */}
       {formik.submitCount > 0 && Object.keys(formik.errors).length > 0 && !formik.isSubmitting && (
         <div
@@ -535,7 +584,7 @@ export function StoreFormPage() {
             <SectionHeader
               icon={<User className="w-4 h-4 text-indigo-600" />}
               title="Propietario"
-              description="El email ingresado será el acceso de login del dueño de esta tienda."
+              description="Define los datos del propietario y cómo recibirá acceso a su panel."
             />
             <div className="space-y-4">
               <Input
@@ -594,6 +643,150 @@ export function StoreFormPage() {
                   onBlur={formik.handleBlur}
                 />
               </div>
+
+              <fieldset className="space-y-3 border-t border-gray-100 pt-4">
+                <legend className="text-sm font-medium text-gray-700">Método de acceso</legend>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    aria-pressed={formik.values.ownerAccessMode === 'invitation'}
+                    onClick={() => handleOwnerAccessModeChange('invitation')}
+                    className={cn(
+                      'rounded-xl border p-4 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2',
+                      formik.values.ownerAccessMode === 'invitation'
+                        ? 'border-indigo-300 bg-indigo-50/70 ring-1 ring-indigo-100'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Mail
+                        className={cn(
+                          'h-4 w-4',
+                          formik.values.ownerAccessMode === 'invitation'
+                            ? 'text-indigo-600'
+                            : 'text-gray-400'
+                        )}
+                        aria-hidden="true"
+                      />
+                      <span className="text-sm font-semibold text-gray-900">Enviar invitación</span>
+                    </div>
+                    <p className="mt-1.5 text-xs leading-5 text-gray-500">
+                      Recibirá un correo para crear personalmente su contraseña.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    aria-pressed={formik.values.ownerAccessMode === 'password'}
+                    onClick={() => handleOwnerAccessModeChange('password')}
+                    className={cn(
+                      'rounded-xl border p-4 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2',
+                      formik.values.ownerAccessMode === 'password'
+                        ? 'border-indigo-300 bg-indigo-50/70 ring-1 ring-indigo-100'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <KeyRound
+                        className={cn(
+                          'h-4 w-4',
+                          formik.values.ownerAccessMode === 'password'
+                            ? 'text-indigo-600'
+                            : 'text-gray-400'
+                        )}
+                        aria-hidden="true"
+                      />
+                      <span className="text-sm font-semibold text-gray-900">Asignar contraseña</span>
+                    </div>
+                    <p className="mt-1.5 text-xs leading-5 text-gray-500">
+                      La cuenta quedará lista para iniciar sesión inmediatamente.
+                    </p>
+                  </button>
+                </div>
+
+                {fieldError('ownerAccessMode') && (
+                  <p className="text-xs text-red-600">{fieldError('ownerAccessMode')}</p>
+                )}
+              </fieldset>
+
+              {formik.values.ownerAccessMode === 'password' && (
+                <div className="space-y-4 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">Contraseña inicial</p>
+                      <p className="mt-0.5 text-xs leading-5 text-gray-500">
+                        Mínimo 12 caracteres con mayúscula, minúscula, número y símbolo.
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        leftIcon={<RefreshCw className="h-3.5 w-3.5" />}
+                        onClick={handleGenerateOwnerPassword}
+                      >
+                        Generar segura
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!formik.values.ownerPassword}
+                        leftIcon={<Copy className="h-3.5 w-3.5" />}
+                        onClick={() => void handleCopyOwnerPassword()}
+                      >
+                        Copiar
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Input
+                    label="Contraseña"
+                    id="ownerPassword"
+                    name="ownerPassword"
+                    type={ownerPasswordVisible ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    placeholder="Genera una contraseña o escríbela"
+                    value={formik.values.ownerPassword}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={fieldError('ownerPassword')}
+                    required
+                    endAdornment={(
+                      <button
+                        type="button"
+                        onClick={() => setOwnerPasswordVisible((visible) => !visible)}
+                        aria-label={ownerPasswordVisible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                        className="rounded-md p-1 text-gray-400 hover:bg-white hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      >
+                        {ownerPasswordVisible
+                          ? <EyeOff className="h-4 w-4" aria-hidden="true" />
+                          : <Eye className="h-4 w-4" aria-hidden="true" />}
+                      </button>
+                    )}
+                  />
+
+                  <Input
+                    label="Confirmar contraseña"
+                    id="ownerPasswordConfirm"
+                    name="ownerPasswordConfirm"
+                    type={ownerPasswordVisible ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    placeholder="Repite la contraseña"
+                    value={formik.values.ownerPasswordConfirm}
+                    onChange={formik.handleChange}
+                    onBlur={formik.handleBlur}
+                    error={fieldError('ownerPasswordConfirm')}
+                    required
+                  />
+
+                  <p className="flex items-start gap-2 text-xs leading-5 text-indigo-700">
+                    <KeyRound className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                    La contraseña se envía directamente a Supabase Auth y no se guarda en la empresa.
+                  </p>
+                </div>
+              )}
             </div>
           </CardBody>
         </Card>
@@ -1238,7 +1431,9 @@ export function StoreFormPage() {
             disabled={formik.isSubmitting || slugAvailability.status !== 'available'}
             title={slugAvailability.status !== 'available' ? 'Confirma una URL de tienda disponible antes de continuar' : undefined}
           >
-            Crear empresa
+            {formik.values.ownerAccessMode === 'password'
+              ? 'Crear empresa y acceso'
+              : 'Crear empresa y enviar invitación'}
           </Button>
           <Button
             type="button"
@@ -1250,6 +1445,19 @@ export function StoreFormPage() {
           </Button>
         </div>
       </form>
+
+      <OwnerCredentialsDialog
+        open={createdCredentials !== null}
+        storeName={createdCredentials?.storeName ?? ''}
+        email={createdCredentials?.email ?? ''}
+        password={createdCredentials?.password ?? ''}
+        onContinue={() => {
+          if (!createdCredentials) return;
+          const storeId = createdCredentials.storeId;
+          setCreatedCredentials(null);
+          void navigate(`/admin/stores/${storeId}`);
+        }}
+      />
     </div>
   );
 }

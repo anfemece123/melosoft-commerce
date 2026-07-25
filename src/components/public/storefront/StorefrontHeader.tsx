@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronDown, Menu, Search, ShoppingCart, X } from 'lucide-react';
 import { PublicStoreLogo } from './PublicStoreLogo';
 import { MobileNavDrawer } from './MobileNavDrawer';
@@ -11,8 +11,12 @@ import {
   resolveHeaderSettings,
   LOGO_SIZE_MAP,
   MENU_TEXT_SIZE_MAP,
-  MAX_VISIBLE_HEADER_CATEGORIES,
+  MAX_VISIBLE_HEADER_ITEMS,
 } from '@/lib/storefront/headerSettings';
+import {
+  buildHeaderNavigationItems,
+  type ResolvedHeaderNavigationItem,
+} from '@/lib/storefront/headerNavigation';
 import { getContextualFacets } from '@/lib/storefront/catalogVisibility';
 import { buildFacetConcepts } from '@/lib/storefront/variantFilters';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
@@ -53,7 +57,6 @@ interface StorefrontHeaderProps {
   storeName: string;
   storeSlug: string;
   logoUrl: string | null;
-  slogan: string | null;
   catalogType: CatalogType | null;
   hasHero?: boolean;
   showCart?: boolean;
@@ -70,7 +73,6 @@ export function StorefrontHeader({
   storeName,
   storeSlug,
   logoUrl,
-  slogan: _slogan,
   catalogType,
   hasHero = true,
   showCart = false,
@@ -83,7 +85,6 @@ export function StorefrontHeader({
 }: StorefrontHeaderProps & { categories?: PublicStoreCategory[] }) {
   const settings = resolveHeaderSettings(headerSettings ?? DEFAULT_HEADER_SETTINGS);
   const navigate = useNavigate();
-  const location = useLocation();
   const [searchParams] = useSearchParams();
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -106,10 +107,20 @@ export function StorefrontHeader({
   const catalogLabel = getCatalogPageLabel(catalogType);
   const viewAllLabel = getViewAllLabel(catalogType);
 
-  const inCategoriesMode = settings.menuMode === 'categories' && categories.length > 0;
-  const visibleCats = inCategoriesMode ? categories.slice(0, MAX_VISIBLE_HEADER_CATEGORIES) : [];
-  const overflowCats = inCategoriesMode ? categories.slice(MAX_VISIBLE_HEADER_CATEGORIES) : [];
-  const hasOverflow = overflowCats.length > 0;
+  const navigationItems = buildHeaderNavigationItems({
+    settings,
+    storeSlug,
+    catalogLabel,
+    viewAllLabel,
+    categoryTree: settings.menuMode === 'categories'
+      ? categories
+      : catalogMeta?.categoryTree ?? [],
+    collections: catalogMeta?.collections ?? [],
+    facets: catalogMeta?.facets ?? [],
+  });
+  const visibleNavigationItems = navigationItems.slice(0, MAX_VISIBLE_HEADER_ITEMS);
+  const overflowNavigationItems = navigationItems.slice(MAX_VISIBLE_HEADER_ITEMS);
+  const hasOverflow = overflowNavigationItems.length > 0;
 
   // Mega menu: find active category in tree by slug
   const activeCategoryNode = megaMenuCategory
@@ -152,11 +163,17 @@ export function StorefrontHeader({
     setMoreMenuOpen(false);
   }
 
-  function handleCategoryMouseEnter(slug: string) {
-    const node = (catalogMeta?.categoryTree ?? []).find((c) => c.slug === slug);
+  function handleNavigationItemMouseEnter(item: ResolvedHeaderNavigationItem) {
+    if (!item.rootCategorySlug) {
+      setMegaMenuCategory(null);
+      return;
+    }
+    const node = (catalogMeta?.categoryTree ?? []).find(
+      (category) => category.slug === item.rootCategorySlug
+    );
     const facets = catalogMeta?.megaMenuFacets ?? [];
     if ((node?.children?.length ?? 0) > 0 || facets.some((f) => f.values.length > 0)) {
-      setMegaMenuCategory(slug);
+      setMegaMenuCategory(item.rootCategorySlug);
     } else {
       setMegaMenuCategory(null);
     }
@@ -187,18 +204,6 @@ export function StorefrontHeader({
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, [moreMenuOpen]);
 
-  useEffect(() => {
-    setSearchQuery(searchParams.get('q') ?? '');
-  }, [searchParams]);
-
-  // Defensive cleanup: any open header menu must close on route change,
-  // since StorefrontHeader stays mounted across nested public route navigations.
-  useEffect(() => {
-    setMobileNavOpen(false);
-    setMegaMenuCategory(null);
-    setMoreMenuOpen(false);
-  }, [location.pathname]);
-
   const positionClass = transparent
     ? 'fixed inset-x-0 top-0 z-50 transition-colors duration-300'
     : settings.isSticky
@@ -221,7 +226,7 @@ export function StorefrontHeader({
 
   // ── Shared sub-components ──────────────────────────────────
 
-  function CartButton() {
+  function renderCartButton() {
     if (!showCart) return null;
     return (
       <button
@@ -247,7 +252,7 @@ export function StorefrontHeader({
     );
   }
 
-  function HamburgerButton() {
+  function renderHamburgerButton() {
     return (
       <button
         type="button"
@@ -267,8 +272,8 @@ export function StorefrontHeader({
   }
 
   // Desktop "Más" overflow dropdown
-  function MoreDropdown() {
-    if (!inCategoriesMode || !hasOverflow) return null;
+  function renderMoreDropdown() {
+    if (!hasOverflow) return null;
     return (
       <div ref={moreMenuRef} className="relative">
         <button
@@ -295,26 +300,17 @@ export function StorefrontHeader({
             }}
           >
             <div className="flex flex-col py-1.5">
-              {overflowCats.map((cat) => (
+              {overflowNavigationItems.map((item) => (
                 <Link
-                  key={cat.id}
-                  to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(cat.slug)}`)}
-                  onClick={() => setMoreMenuOpen(false)}
+                  key={item.id}
+                  to={item.href}
+                  onClick={closeMenus}
                   className="px-4 py-2.5 text-sm font-medium transition-colors hover:opacity-80"
                   style={{ color: theme.mode === 'dark' ? theme.text : '#374151' }}
                 >
-                  {cat.name}
+                  {item.label}
                 </Link>
               ))}
-              <div className="mx-3 my-1" style={{ borderTop: `1px solid ${controlBorder}` }} />
-              <Link
-                to={buildStorefrontPath(storeSlug, '/catalog')}
-                onClick={() => setMoreMenuOpen(false)}
-                className="px-4 py-2.5 text-sm font-medium transition-colors hover:opacity-80"
-                style={{ color: theme.primary }}
-              >
-                {viewAllLabel}
-              </Link>
             </div>
           </div>
         )}
@@ -322,7 +318,7 @@ export function StorefrontHeader({
     );
   }
 
-  function DesktopNav() {
+  function renderDesktopNav() {
     return (
       <nav className="hidden flex-wrap items-center justify-center gap-6 lg:flex">
         {settings.showHomeLink && (
@@ -337,44 +333,25 @@ export function StorefrontHeader({
           </Link>
         )}
 
-        {inCategoriesMode ? (
-          <>
-            {visibleCats.map((cat) => (
-              <Link
-                key={cat.id}
-                to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(cat.slug)}`)}
-                className={`${menuTextClass} font-medium whitespace-nowrap transition-opacity hover:opacity-80`}
-                style={{ color: megaMenuCategory === cat.slug ? theme.primary : navTextColor }}
-                onMouseEnter={() => handleCategoryMouseEnter(cat.slug)}
-                onClick={() => setMegaMenuCategory(null)}
-              >
-                {cat.name}
-              </Link>
-            ))}
-
-            <MoreDropdown />
-
-            {!hasOverflow && (
-              <Link
-                to={buildStorefrontPath(storeSlug, '/catalog')}
-                className={`${menuTextClass} font-medium whitespace-nowrap transition-opacity hover:opacity-80`}
-                style={{ color: navTextColor }}
-                onMouseEnter={() => setMegaMenuCategory(null)}
-              >
-                {viewAllLabel}
-              </Link>
-            )}
-          </>
-        ) : (
+        {visibleNavigationItems.map((item) => (
           <Link
-            to={buildStorefrontPath(storeSlug, '/catalog')}
+            key={item.id}
+            to={item.href}
             className={`${menuTextClass} font-medium whitespace-nowrap transition-opacity hover:opacity-80`}
-            style={{ color: settings.showHomeLink ? navTextColor : theme.primary }}
-            onMouseEnter={() => setMegaMenuCategory(null)}
+            style={{
+              color: megaMenuCategory === item.rootCategorySlug
+                ? theme.primary
+                : !settings.showHomeLink && item === visibleNavigationItems[0]
+                  ? theme.primary
+                  : navTextColor,
+            }}
+            onMouseEnter={() => handleNavigationItemMouseEnter(item)}
+            onClick={closeMenus}
           >
-            {catalogLabel}
+            {item.label}
           </Link>
-        )}
+        ))}
+        {renderMoreDropdown()}
       </nav>
     );
   }
@@ -424,7 +401,7 @@ export function StorefrontHeader({
                 </div>
 
                 {/* CENTER: nav */}
-                <DesktopNav />
+                {renderDesktopNav()}
 
                 {/* RIGHT: search + cart + hamburger */}
                 <div className="relative flex items-center justify-end gap-2 md:gap-3">
@@ -446,8 +423,8 @@ export function StorefrontHeader({
                       <Search className="h-4 w-4" style={{ color: theme.mutedText }} />
                     </button>
                   </form>
-                  <CartButton />
-                  <HamburgerButton />
+                  {renderCartButton()}
+                  {renderHamburgerButton()}
                 </div>
               </div>
 
@@ -491,10 +468,11 @@ export function StorefrontHeader({
           storeSlug={storeSlug}
           storeName={storeName}
           logoUrl={logoUrl}
-          catalogType={catalogType}
           settings={settings}
           categoryTree={catalogMeta?.categoryTree ?? []}
           collections={menuCollections}
+          navigationItems={navigationItems}
+          showAutomaticCollections={settings.menuMode !== 'custom'}
         />
       </>
     );
@@ -564,8 +542,8 @@ export function StorefrontHeader({
 
             {/* Right */}
             <div className="relative ml-auto flex shrink-0 items-center gap-2 lg:ml-0">
-              <CartButton />
-              <HamburgerButton />
+              {renderCartButton()}
+              {renderHamburgerButton()}
             </div>
           </div>
 
@@ -586,55 +564,7 @@ export function StorefrontHeader({
             </form>
 
             {/* Desktop nav centered */}
-            <div className="hidden items-center justify-center gap-6 lg:flex">
-              {settings.showHomeLink && (
-                <Link
-                  to={buildStorefrontPath(storeSlug)}
-                  className={`${menuTextClass} font-medium whitespace-nowrap transition-opacity hover:opacity-80`}
-                  style={{ color: theme.primary }}
-                  onMouseEnter={() => setMegaMenuCategory(null)}
-                  onClick={closeMenus}
-                >
-                  Inicio
-                </Link>
-              )}
-              {inCategoriesMode ? (
-                <>
-                  {visibleCats.map((cat) => (
-                    <Link
-                      key={cat.id}
-                      to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(cat.slug)}`)}
-                      className={`${menuTextClass} font-medium whitespace-nowrap transition-opacity hover:opacity-80`}
-                      style={{ color: megaMenuCategory === cat.slug ? theme.primary : navTextColor }}
-                      onMouseEnter={() => handleCategoryMouseEnter(cat.slug)}
-                      onClick={() => setMegaMenuCategory(null)}
-                    >
-                      {cat.name}
-                    </Link>
-                  ))}
-                  <MoreDropdown />
-                  {!hasOverflow && (
-                    <Link
-                      to={buildStorefrontPath(storeSlug, '/catalog')}
-                      className={`${menuTextClass} font-medium whitespace-nowrap transition-opacity hover:opacity-80`}
-                      style={{ color: navTextColor }}
-                      onMouseEnter={() => setMegaMenuCategory(null)}
-                    >
-                      {viewAllLabel}
-                    </Link>
-                  )}
-                </>
-              ) : (
-                <Link
-                  to={buildStorefrontPath(storeSlug, '/catalog')}
-                  className={`${menuTextClass} font-medium whitespace-nowrap transition-opacity hover:opacity-80`}
-                  style={{ color: settings.showHomeLink ? navTextColor : theme.primary }}
-                  onMouseEnter={() => setMegaMenuCategory(null)}
-                >
-                  {catalogLabel}
-                </Link>
-              )}
-            </div>
+            {renderDesktopNav()}
           </div>
 
           {/* MegaMenuPanel — full width below nav */}
@@ -659,10 +589,11 @@ export function StorefrontHeader({
         storeSlug={storeSlug}
         storeName={storeName}
         logoUrl={logoUrl}
-        catalogType={catalogType}
         settings={settings}
         categoryTree={catalogMeta?.categoryTree ?? []}
         collections={menuCollections}
+        navigationItems={navigationItems}
+        showAutomaticCollections={settings.menuMode !== 'custom'}
       />
     </>
   );

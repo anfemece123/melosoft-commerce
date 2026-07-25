@@ -205,6 +205,9 @@ export interface SlugAvailabilityResult {
 
 // ── Edge Function payload types ──────────────────────────────
 
+export type OwnerAccessMode = 'invitation' | 'password';
+export type OwnerAccessResult = 'invitation_sent' | 'password_assigned' | 'existing_account';
+
 export interface CreateStoreWithOwnerInput {
   // Owner
   ownerFullName: string;
@@ -212,6 +215,8 @@ export interface CreateStoreWithOwnerInput {
   ownerPhone: string;
   ownerDocumentType: string | null;
   ownerDocumentNumber: string | null;
+  ownerAccessMode: OwnerAccessMode;
+  ownerPassword: string | null;
   // Store
   name: string;
   slug: string;
@@ -268,4 +273,5 @@ export interface CreateStoreWithOwnerResponse {
   storeSlug: string;
   ownerUserId: string;
   ownerIsNew: boolean;
+  ownerAccessResult: OwnerAccessResult;
 }

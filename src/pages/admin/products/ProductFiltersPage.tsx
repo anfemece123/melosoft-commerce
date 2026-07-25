@@ -190,7 +190,7 @@ function FacetCard({
         storeId,
         facetId: facet.id,
         value: trimmed,
-        slug: trimmed.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+        slug: '',
         sortOrder: values.length,
       });
       setValues((v) => [...v, created]);
@@ -258,7 +258,7 @@ function FacetCard({
                 [
                   ['showInProductForm', 'Mostrar en formulario de producto'],
                   ['showInCatalogFilters', 'Mostrar en filtros del catálogo'],
-                  ['showInMegaMenu', 'Mostrar en mega menú'],
+                  ['showInMegaMenu', 'Mostrar dentro de mega menús de categoría'],
                 ] as const
               ).map(([key, label]) => (
                 <label key={key} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
@@ -386,7 +386,7 @@ export function ProductFiltersPage() {
       const created = await facetsService.createFacet({
         storeId: storeId as string,
         name: form.name.trim(),
-        slug: form.name.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+        slug: '',
         inputType: form.inputType,
         showInProductForm: form.showInProductForm,
         showInCatalogFilters: form.showInCatalogFilters,
@@ -413,6 +413,12 @@ export function ProductFiltersPage() {
         <p className="mt-0.5 text-sm text-gray-500">
           Datos como Marca, Género o Nivel que describen el producto y ayudan a filtrarlo. No manejan stock, precio ni SKU.
         </p>
+      </div>
+
+      <div className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm leading-6 text-indigo-900">
+        <strong>Ejemplo para moda:</strong> crea el atributo “Género”, agrega Hombre, Mujer y
+        Unisex, y asigna el valor correspondiente en cada producto. Después podrás llevar esos
+        valores directamente al header desde Configuración → Header público.
       </div>
 
       <div className="flex items-center justify-end">
@@ -443,7 +449,7 @@ export function ProductFiltersPage() {
                 [
                   ['showInProductForm', 'Mostrar en formulario de producto'],
                   ['showInCatalogFilters', 'Mostrar en filtros del catálogo público'],
-                  ['showInMegaMenu', 'Mostrar en mega menú de navegación'],
+                  ['showInMegaMenu', 'Mostrar dentro de mega menús de categoría'],
                 ] as const
               ).map(([key, label]) => (
                 <label key={key} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">

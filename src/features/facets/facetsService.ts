@@ -304,7 +304,9 @@ export const facetsService = {
     const valuesByFacetId = new Map<string, PublicStoreFacetValue[]>();
     for (const row of (valuesResult.data ?? [])) {
       if (storeId && row.store_id !== storeId) continue;
-      if (activeFacetValueIds.size > 0 && !activeFacetValueIds.has(row.id)) continue;
+      // Public filters and header links must never advertise an attribute
+      // value that is not assigned to at least one active public product.
+      if (!activeFacetValueIds.has(row.id)) continue;
       const val: PublicStoreFacetValue = {
         id: row.id,
         storeId: row.store_id,

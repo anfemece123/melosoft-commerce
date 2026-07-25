@@ -109,7 +109,26 @@ export type TransactionStatus = 'pending' | 'approved' | 'declined' | 'error' | 
 export type PublicHeaderStyle = 'classic' | 'search';
 export type LogoSize = 'sm' | 'md' | 'lg';
 export type MenuTextSize = 'sm' | 'md' | 'lg';
-export type HeaderMenuMode = 'catalog_link' | 'categories';
+export type HeaderMenuMode = 'catalog_link' | 'categories' | 'custom';
+export type HeaderNavigationItemType =
+  | 'catalog'
+  | 'category'
+  | 'collection'
+  | 'facet_value'
+  | 'featured'
+  | 'sale';
+
+export interface HeaderNavigationItem {
+  id: string;
+  type: HeaderNavigationItemType;
+  label: string;
+  /**
+   * Stable database id for category, collection or facet value targets.
+   * Slugs are deliberately resolved at render time so renamed catalog
+   * entities cannot leave broken links in the public header.
+   */
+  targetId: string | null;
+}
 
 export interface PublicHeaderSettings {
   style: PublicHeaderStyle;
@@ -121,6 +140,7 @@ export interface PublicHeaderSettings {
   logoSize: LogoSize;
   menuTextSize: MenuTextSize;
   menuMode: HeaderMenuMode;
+  navigationItems: HeaderNavigationItem[];
 }
 
 export const DEFAULT_HEADER_SETTINGS: PublicHeaderSettings = {
@@ -133,6 +153,7 @@ export const DEFAULT_HEADER_SETTINGS: PublicHeaderSettings = {
   logoSize: 'md',
   menuTextSize: 'md',
   menuMode: 'catalog_link',
+  navigationItems: [],
 };
 
 // Public view shapes (camelCase, used by public pages)

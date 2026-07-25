@@ -1,12 +1,55 @@
-import type { PublicHeaderSettings, PublicHeaderStyle, LogoSize, MenuTextSize, HeaderMenuMode } from '@/types/common.types';
+import type {
+  HeaderMenuMode,
+  HeaderNavigationItem,
+  HeaderNavigationItemType,
+  LogoSize,
+  MenuTextSize,
+  PublicHeaderSettings,
+  PublicHeaderStyle,
+} from '@/types/common.types';
 import { DEFAULT_HEADER_SETTINGS } from '@/types/common.types';
 
 const VALID_LOGO_SIZES: LogoSize[] = ['sm', 'md', 'lg'];
 const VALID_TEXT_SIZES: MenuTextSize[] = ['sm', 'md', 'lg'];
-const VALID_MENU_MODES: HeaderMenuMode[] = ['catalog_link', 'categories'];
+const VALID_MENU_MODES: HeaderMenuMode[] = ['catalog_link', 'categories', 'custom'];
+const VALID_NAVIGATION_ITEM_TYPES: HeaderNavigationItemType[] = [
+  'catalog',
+  'category',
+  'collection',
+  'facet_value',
+  'featured',
+  'sale',
+];
 
-// Maximum category items shown inline in desktop nav before "Más" overflow
-export const MAX_VISIBLE_HEADER_CATEGORIES = 5;
+// Maximum items shown inline in desktop nav before the "Más" overflow.
+export const MAX_VISIBLE_HEADER_ITEMS = 5;
+export const MAX_CUSTOM_HEADER_ITEMS = 10;
+
+function resolveNavigationItems(raw: unknown): HeaderNavigationItem[] {
+  if (!Array.isArray(raw)) return [];
+
+  return raw.slice(0, MAX_CUSTOM_HEADER_ITEMS).flatMap((candidate, index) => {
+    if (!candidate || typeof candidate !== 'object') return [];
+    const item = candidate as Record<string, unknown>;
+    const type = item.type as HeaderNavigationItemType;
+    if (!VALID_NAVIGATION_ITEM_TYPES.includes(type)) return [];
+
+    const needsTarget = type === 'category' || type === 'collection' || type === 'facet_value';
+    const targetId = typeof item.targetId === 'string' && item.targetId.trim()
+      ? item.targetId.trim()
+      : null;
+    if (needsTarget && !targetId) return [];
+
+    const label = typeof item.label === 'string' ? item.label.trim().slice(0, 40) : '';
+    if (!label) return [];
+
+    const id = typeof item.id === 'string' && item.id.trim()
+      ? item.id.trim().slice(0, 80)
+      : `navigation-item-${index}`;
+
+    return [{ id, type, label, targetId }];
+  });
+}
 
 function resolveStyle(raw: unknown): PublicHeaderStyle {
   if (raw === 'search') return 'search';
@@ -27,6 +70,7 @@ export function resolveHeaderSettings(raw: unknown): PublicHeaderSettings {
     logoSize: VALID_LOGO_SIZES.includes(r.logoSize as LogoSize) ? (r.logoSize as LogoSize) : DEFAULT_HEADER_SETTINGS.logoSize,
     menuTextSize: VALID_TEXT_SIZES.includes(r.menuTextSize as MenuTextSize) ? (r.menuTextSize as MenuTextSize) : DEFAULT_HEADER_SETTINGS.menuTextSize,
     menuMode: VALID_MENU_MODES.includes(r.menuMode as HeaderMenuMode) ? (r.menuMode as HeaderMenuMode) : DEFAULT_HEADER_SETTINGS.menuMode,
+    navigationItems: resolveNavigationItems(r.navigationItems),
   };
 }
 

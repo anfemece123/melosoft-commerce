@@ -7,6 +7,7 @@ import {
   STOREFRONT_SUBDOMAIN_PATTERN,
   isAllNumericStorefrontSubdomain,
 } from '@/lib/storefront/storefrontSubdomains';
+import { getOwnerPasswordValidationError } from '@/lib/auth/ownerPassword';
 
 const businessHourSchema = Yup.object({
   dayOfWeek: Yup.number().min(0).max(6).required(),
@@ -36,6 +37,35 @@ export const storeCreationSchema = Yup.object({
   ownerPhone: Yup.string().trim().max(20).required('Teléfono del propietario requerido'),
   ownerDocumentType: Yup.string().trim().max(20).nullable(),
   ownerDocumentNumber: Yup.string().trim().max(30).nullable(),
+  ownerAccessMode: Yup.string()
+    .oneOf(['invitation', 'password'], 'Método de acceso inválido')
+    .required('Selecciona cómo accederá el propietario'),
+  ownerPassword: Yup.string()
+    .default('')
+    .when('ownerAccessMode', {
+      is: 'password',
+      then: (schema) => schema
+        .required('Define una contraseña para el propietario')
+        .test(
+          'strong-owner-password',
+          'La contraseña no cumple los requisitos',
+          (value, context) => {
+            if (!value) return true;
+            const validationError = getOwnerPasswordValidationError(value);
+            return validationError ? context.createError({ message: validationError }) : true;
+          }
+        ),
+      otherwise: (schema) => schema,
+    }),
+  ownerPasswordConfirm: Yup.string()
+    .default('')
+    .when('ownerAccessMode', {
+      is: 'password',
+      then: (schema) => schema
+        .required('Confirma la contraseña')
+        .oneOf([Yup.ref('ownerPassword')], 'Las contraseñas no coinciden'),
+      otherwise: (schema) => schema,
+    }),
 
   // Section 2 — Company info
   name: Yup.string().trim().min(2, 'Mínimo 2 caracteres').max(100).required('Nombre de la empresa requerido'),

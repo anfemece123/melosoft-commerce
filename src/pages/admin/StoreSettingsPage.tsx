@@ -19,6 +19,7 @@ import { StoreLogoField } from '@/components/admin/StoreLogoField';
 import { StoreFaviconField } from '@/components/admin/StoreFaviconField';
 import { StoreDomainSettings } from '@/components/admin/StoreDomainSettings';
 import { StoreHeroSlideEditor, type EditableStoreHeroSlide } from '@/components/admin/StoreHeroSlideEditor';
+import { HeaderNavigationEditor } from '@/components/admin/HeaderNavigationEditor';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import {
   buildCommerceUpdatePayload,
@@ -47,6 +48,7 @@ import { buildStorefrontTheme } from '@/components/public/storefront/storefrontT
 import { AdminPanelTabs } from '@/components/admin/AdminPanelTabs';
 import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { isPlatformAdmin } from '@/utils/permissions';
+import { clearCachedPublicStoreBranding } from '@/lib/storefront/publicStoreBrandingCache';
 
 
 const CATALOG_TYPE_LABELS: Record<string, string> = {
@@ -768,9 +770,17 @@ export function StoreSettingsPage() {
   });
   async function handleSaveHeaderSettings() {
     if (!storeId) return;
+    if (
+      headerSettings.menuMode === 'custom'
+      && headerSettings.navigationItems.some((item) => !item.label.trim())
+    ) {
+      notify.error('Todos los enlaces del header deben tener un texto.');
+      return;
+    }
     setHeaderSaving(true);
     try {
       await storesService.updateStoreTheme(storeId, { headerSettings });
+      if (currentStore?.slug) clearCachedPublicStoreBranding(currentStore.slug);
       setHeaderSaved(true);
       setTimeout(() => setHeaderSaved(false), 3000);
       notify.success('Header guardado.');
@@ -1791,8 +1801,9 @@ export function StoreSettingsPage() {
         </Card>
         )}
 
-        {activeSection === 'header' && (
+        {activeSection === 'header' && storeId && (
         <HeaderSettingsSection
+          storeId={storeId}
           settings={headerSettings}
           onChange={setHeaderSettings}
           onSave={() => void handleSaveHeaderSettings()}
@@ -1912,6 +1923,7 @@ export function StoreSettingsPage() {
 // ── HeaderSettingsSection ────────────────────────────────────
 
 interface HeaderSettingsSectionProps {
+  storeId: string;
   settings: PublicHeaderSettings;
   onChange: (s: PublicHeaderSettings) => void;
   onSave: () => void;
@@ -1959,6 +1971,7 @@ function HeaderToggle({
 }
 
 function HeaderSettingsSection({
+  storeId,
   settings,
   onChange,
   onSave,
@@ -2051,6 +2064,11 @@ function HeaderSettingsSection({
       value: 'categories',
       label: 'Por categorías',
       description: 'Muestra un link por cada categoría de producto activa.',
+    },
+    {
+      value: 'custom',
+      label: 'Navegación personalizada',
+      description: 'Elige y ordena categorías, atributos, colecciones, destacados y ofertas.',
     },
   ];
 
@@ -2193,7 +2211,7 @@ function HeaderSettingsSection({
           {/* Menu mode */}
           <div>
             <p className="text-sm font-medium text-gray-700 mb-2">Modo de navegación</p>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {MENU_MODE_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
@@ -2224,6 +2242,17 @@ function HeaderSettingsSection({
               ))}
             </div>
           </div>
+
+          {settings.menuMode === 'custom' && (
+            <div className="mt-5">
+              <HeaderNavigationEditor
+                key={storeId}
+                storeId={storeId}
+                settings={settings}
+                onChange={onChange}
+              />
+            </div>
+          )}
         </CardBody>
       </Card>
 
