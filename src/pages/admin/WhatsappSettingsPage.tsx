@@ -146,7 +146,7 @@ export function WhatsappSettingsPage() {
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
   const [testPhone, setTestPhone] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
-  const pendingTemplateSyncStoreRef = useRef<string | null>(null);
+  const templateSyncStoreRef = useRef<string | null>(null);
   const automaticRegistrationStoreRef = useRef<string | null>(null);
 
   const loading = loadedStoreId !== storeId;
@@ -187,23 +187,25 @@ export function WhatsappSettingsPage() {
     return whatsappService.subscribeToConnection(storeId, setConnection);
   }, [storeId]);
 
-  // A template may already have been approved before the status webhook was
-  // enabled. Recover that one stale "pending" state on page load; the exact
-  // es_CO lookup is read-only when the templates already exist.
+  // Create a missing template after a new WABA is connected, and recover a
+  // template that Meta approved before its status webhook arrived. This keeps
+  // onboarding automatic: merchants never need to create templates by hand.
   useEffect(() => {
+    const templateNeedsSync = connection?.templateStatus === 'not_created' ||
+      connection?.templateStatus === 'pending';
     if (
       !storeId ||
       connection?.connectionStatus !== 'connected' ||
-      connection.templateStatus !== 'pending'
+      !templateNeedsSync
     ) {
-      if (connection?.templateStatus !== 'pending') {
-        pendingTemplateSyncStoreRef.current = null;
+      if (!templateNeedsSync) {
+        templateSyncStoreRef.current = null;
       }
       return;
     }
-    if (pendingTemplateSyncStoreRef.current === storeId) return;
+    if (templateSyncStoreRef.current === storeId) return;
 
-    pendingTemplateSyncStoreRef.current = storeId;
+    templateSyncStoreRef.current = storeId;
     let cancelled = false;
     void whatsappService.syncTemplate(storeId)
       .then(() => whatsappService.getConnection(storeId))

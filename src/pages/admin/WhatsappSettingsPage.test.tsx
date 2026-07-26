@@ -260,7 +260,9 @@ describe('WhatsappSettingsPage — configuración de envíos', () => {
 });
 
 describe('WhatsappSettingsPage — estado de plantilla', () => {
-  it('recovers an already-approved template that was still stored as pending', async () => {
+  it.each(['not_created', 'pending'] as const)(
+    'synchronizes a connected template whose stored status is %s',
+    async (initialTemplateStatus) => {
     const pendingConnection = {
       id: 'connection-1',
       storeId: 'store-1',
@@ -274,7 +276,7 @@ describe('WhatsappSettingsPage — estado de plantilla', () => {
       coexistenceEnabled: false,
       templateName: 'melosoft_order_confirmation_v1',
       templateLanguage: 'es_CO',
-      templateStatus: 'pending' as const,
+      templateStatus: initialTemplateStatus,
       templateRejectedReason: null,
       registrationStatus: 'registered' as const,
       registeredAt: '2026-07-25T00:00:00.000Z',
@@ -315,7 +317,8 @@ describe('WhatsappSettingsPage — estado de plantilla', () => {
 
     expect(await screen.findByText('Aprobada')).toBeTruthy();
     expect(syncTemplate).toHaveBeenCalledWith('store-1');
-  });
+    },
+  );
 });
 
 describe('WhatsappSettingsPage — recuperación de coexistencia', () => {
