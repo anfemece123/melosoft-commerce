@@ -69,6 +69,14 @@ const TEMPLATE_STATUS_LABELS: Record<string, { label: string; className: string 
   disabled:    { label: 'Deshabilitada', className: 'bg-red-50 text-red-700' },
 };
 
+const REGISTRATION_STATUS_LABELS: Record<string, { label: string; className: string }> = {
+  pending:      { label: 'Preparando', className: 'bg-blue-50 text-blue-700' },
+  registering:  { label: 'Registrando…', className: 'bg-blue-50 text-blue-700' },
+  registered:   { label: 'Listo para enviar', className: 'bg-green-50 text-green-700' },
+  requires_pin: { label: 'Requiere PIN', className: 'bg-amber-50 text-amber-700' },
+  failed:       { label: 'Registro pendiente', className: 'bg-red-50 text-red-700' },
+};
+
 // Every error code launchWhatsAppEmbeddedSignup/completeEmbeddedSignup
 // can throw, mapped to a user-facing message — so a caught error always
 // ends in something readable instead of the button just going back to
@@ -101,6 +109,7 @@ const EMBEDDED_SIGNUP_ERROR_MESSAGES: Record<string, string> = {
   META_APP_SUBSCRIPTION_FAILED:
     'La conexión con Meta se validó, pero no se pudo suscribir la app a tu cuenta de WhatsApp Business. Intenta reconectar.',
   CONNECTION_SAVE_FAILED: 'No se pudo guardar la conexión.',
+  REGISTRATION_SAVE_FAILED: 'Meta registró el número, pero no se pudo guardar su configuración segura.',
   NO_PHONE_NUMBER_FOUND: 'La cuenta de WhatsApp Business no tiene ningún número registrado.',
   MULTIPLE_PHONE_NUMBERS_FOUND: 'Esta cuenta de WhatsApp Business tiene más de un número. Selecciona uno específico e intenta de nuevo.',
 };
@@ -130,10 +139,13 @@ export function WhatsappSettingsPage() {
   const [coexistence, setCoexistence] = useState(false);
   const [syncingTemplate, setSyncingTemplate] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [registeringPhone, setRegisteringPhone] = useState(false);
+  const [registrationPin, setRegistrationPin] = useState('');
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
   const [testPhone, setTestPhone] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
   const pendingTemplateSyncStoreRef = useRef<string | null>(null);
+  const automaticRegistrationStoreRef = useRef<string | null>(null);
 
   const loading = loadedStoreId !== storeId;
 
@@ -203,6 +215,41 @@ export function WhatsappSettingsPage() {
     };
   }, [storeId, connection?.connectionStatus, connection?.templateStatus]);
 
+  // Migration 102 also repairs connections created before phone
+  // registration was implemented. Each pending store gets one automatic
+  // attempt when its owner opens this page; the normal Embedded Signup
+  // path already performs the same step before returning.
+  useEffect(() => {
+    if (
+      !storeId ||
+      connection?.connectionStatus !== 'connected' ||
+      connection.registrationStatus !== 'pending' ||
+      automaticRegistrationStoreRef.current === storeId
+    ) return;
+
+    automaticRegistrationStoreRef.current = storeId;
+    setRegisteringPhone(true);
+    void whatsappService.registerPhone(storeId)
+      .then(() => whatsappService.getConnection(storeId))
+      .then((latestConnection) => {
+        if (automaticRegistrationStoreRef.current === storeId) {
+          setConnection(latestConnection);
+          notify.success('Número habilitado para enviar mensajes');
+        }
+      })
+      .catch((error: unknown) => {
+        if (automaticRegistrationStoreRef.current === storeId) {
+          void whatsappService.getConnection(storeId).then(setConnection).catch(() => undefined);
+          if (error instanceof Error && error.message !== 'WHATSAPP_REGISTRATION_PIN_REQUIRED') {
+            notify.error('Meta no pudo terminar de habilitar el número. Puedes reintentarlo aquí.');
+          }
+        }
+      })
+      .finally(() => {
+        if (automaticRegistrationStoreRef.current === storeId) setRegisteringPhone(false);
+      });
+  }, [storeId, connection?.connectionStatus, connection?.registrationStatus]);
+
   const formik = useFormik<WhatsappSettingsFormValues>({
     initialValues: {
       enabled: settings?.enabled ?? false,
@@ -262,7 +309,7 @@ export function WhatsappSettingsPage() {
       // browser-side WA_EMBEDDED_SIGNUP event. Send the code regardless;
       // the Edge Function resolves the WABA from the exchanged token's
       // granular scopes when session.wabaId is absent.
-      await whatsappService.completeEmbeddedSignup({
+      const completion = await whatsappService.completeEmbeddedSignup({
         storeId,
         code,
         redirectUri,
@@ -271,7 +318,13 @@ export function WhatsappSettingsPage() {
         businessId: session.businessId,
         coexistence,
       });
-      notify.success('WhatsApp Business conectado correctamente');
+      if (completion.registrationStatus === 'registered') {
+        notify.success('WhatsApp Business conectado y listo para enviar');
+      } else if (completion.registrationStatus === 'requires_pin') {
+        notify.warning('Número conectado. Meta solicita el PIN existente para habilitar los envíos.');
+      } else {
+        notify.warning('Número conectado, pero Meta todavía no terminó de habilitar los envíos.');
+      }
       await reloadAll(storeId);
     } catch (err) {
       // EmbeddedSignupError (thrown by launchWhatsAppEmbeddedSignup) carries
@@ -293,6 +346,36 @@ export function WhatsappSettingsPage() {
       }
     } finally {
       setConnecting(false);
+    }
+  }
+
+  async function handleRegisterPhone() {
+    if (!storeId) return;
+    const requiresPin = connection?.registrationStatus === 'requires_pin';
+    const pin = registrationPin.trim();
+    if (requiresPin && !/^\d{6}$/.test(pin)) {
+      notify.error('Escribe el PIN actual de seis números.');
+      return;
+    }
+
+    setRegisteringPhone(true);
+    try {
+      await whatsappService.registerPhone(storeId, requiresPin ? pin : undefined);
+      setRegistrationPin('');
+      notify.success('Número habilitado para enviar mensajes');
+      await reloadAll(storeId);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : '';
+      if (code === 'WHATSAPP_REGISTRATION_PIN_REQUIRED') {
+        notify.warning('Meta solicita el PIN actual de verificación en dos pasos de este número.');
+        await reloadAll(storeId);
+      } else if (code === 'INVALID_REGISTRATION_PIN') {
+        notify.error('El PIN debe contener exactamente seis números.');
+      } else {
+        notify.error('Meta no pudo habilitar el número. Intenta nuevamente.');
+      }
+    } finally {
+      setRegisteringPhone(false);
     }
   }
 
@@ -350,7 +433,8 @@ export function WhatsappSettingsPage() {
   const hasChanges = formik.dirty;
   const isConnected = connection?.connectionStatus === 'connected';
   const canReconnect = connection?.connectionStatus === 'requires_attention' || connection?.connectionStatus === 'disconnected';
-  const canSendTest = isConnected && connection?.templateStatus === 'approved';
+  const isPhoneRegistered = connection?.registrationStatus === 'registered';
+  const canSendTest = isConnected && isPhoneRegistered && connection?.templateStatus === 'approved';
 
   if (loading) {
     return <PanelLoadingState label="Cargando configuración de WhatsApp…" />;
@@ -358,6 +442,7 @@ export function WhatsappSettingsPage() {
 
   const statusInfo = CONNECTION_STATUS_LABELS[connection?.connectionStatus ?? 'not_connected'];
   const templateInfo = TEMPLATE_STATUS_LABELS[connection?.templateStatus ?? 'not_created'];
+  const registrationInfo = REGISTRATION_STATUS_LABELS[connection?.registrationStatus ?? 'pending'];
 
   return (
     <AdminPanelShell
@@ -408,10 +493,75 @@ export function WhatsappSettingsPage() {
                       {templateInfo.label}
                     </span>
                   </div>
+                  <div className="flex justify-between text-sm items-center">
+                    <span className="text-gray-500">Envíos desde el número</span>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${registrationInfo.className}`}>
+                      {registrationInfo.label}
+                    </span>
+                  </div>
                   {connection?.templateRejectedReason && (
                     <p className="text-xs text-red-600 pt-1">{connection.templateRejectedReason}</p>
                   )}
                 </div>
+
+                {connection?.registrationStatus === 'requires_pin' && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 space-y-3">
+                    <div className="flex items-start gap-2 text-xs text-amber-800">
+                      <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+                      <p>
+                        Este número ya tenía verificación en dos pasos antes de conectarse. Escribe una sola vez su
+                        PIN actual; Melosoft lo enviará directamente a Meta y lo guardará de forma segura.
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        value={registrationPin}
+                        onChange={(event) => setRegistrationPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="PIN de 6 números"
+                        aria-label="PIN de verificación en dos pasos"
+                        className="min-w-0 flex-1 rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void handleRegisterPhone()}
+                        disabled={registeringPhone || registrationPin.length !== 6}
+                        className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                      >
+                        {registeringPhone && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        Habilitar
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {connection?.registrationStatus === 'failed' && (
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                    <p className="text-xs text-red-700">
+                      Meta no terminó de registrar el número para enviar mensajes.
+                      {connection.registrationLastErrorMessage ? ` (${connection.registrationLastErrorMessage})` : ''}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => void handleRegisterPhone()}
+                      disabled={registeringPhone}
+                      className="shrink-0 flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+                    >
+                      {registeringPhone ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                      Reintentar
+                    </button>
+                  </div>
+                )}
+
+                {(connection?.registrationStatus === 'pending' || connection?.registrationStatus === 'registering') && (
+                  <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs text-blue-700">
+                    <Loader2 className="w-4 h-4 shrink-0 animate-spin" />
+                    Melosoft está habilitando el número automáticamente para enviar mensajes.
+                  </div>
+                )}
 
                 {connection?.connectionStatus === 'requires_attention' && (
                   <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
@@ -618,6 +768,9 @@ export function WhatsappSettingsPage() {
             )}
             {isConnected && connection?.templateStatus !== 'approved' && (
               <p className="text-xs text-amber-600 mt-2">La plantilla de prueba todavía no está aprobada por Meta.</p>
+            )}
+            {isConnected && !isPhoneRegistered && (
+              <p className="text-xs text-amber-600 mt-2">Meta todavía está habilitando este número para enviar mensajes.</p>
             )}
           </CardBody>
         </Card>

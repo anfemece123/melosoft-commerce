@@ -38,6 +38,7 @@ interface EmbeddedSignupCompletionPayload {
 interface EmbeddedSignupCompletionResponse {
   ok: true;
   connectionStatus: string;
+  registrationStatus: 'registered' | 'requires_pin' | 'failed';
   displayPhoneNumber: string | null;
   verifiedName: string | null;
   onboardingType: string;
@@ -96,6 +97,12 @@ interface TemplateSyncResponse {
   ok: true;
   orderConfirmationTemplate: { name: string; status: string; rejectedReason: string | null };
   testTemplate: { name: string; status: string };
+}
+
+interface PhoneRegistrationResponse {
+  ok: true;
+  registrationStatus: 'registered';
+  alreadyRegistered: boolean;
 }
 
 export const whatsappService = {
@@ -228,6 +235,15 @@ export const whatsappService = {
       body: { storeId },
     });
     if (error) throw new Error(await extractFunctionErrorMessage(error));
+    if (!data) throw new Error('No response from Edge Function');
+    return data;
+  },
+
+  async registerPhone(storeId: string, pin?: string): Promise<PhoneRegistrationResponse> {
+    const { data, error } = await supabase.functions.invoke<PhoneRegistrationResponse>('whatsapp-phone-register', {
+      body: { storeId, ...(pin ? { pin } : {}) },
+    });
+    if (error) throw new Error(await extractFunctionErrorCode(error));
     if (!data) throw new Error('No response from Edge Function');
     return data;
   },

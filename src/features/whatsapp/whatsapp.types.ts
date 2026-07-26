@@ -78,6 +78,8 @@ export type WhatsappOnboardingType = 'coexistence' | 'new_number' | 'existing_cl
 
 export type WhatsappTemplateStatus = 'not_created' | 'pending' | 'approved' | 'rejected' | 'paused' | 'disabled';
 
+export type WhatsappRegistrationStatus = 'pending' | 'registering' | 'registered' | 'requires_pin' | 'failed';
+
 export interface StoreWhatsappConnection {
   id: string;
   storeId: string;
@@ -93,6 +95,10 @@ export interface StoreWhatsappConnection {
   templateLanguage: string;
   templateStatus: WhatsappTemplateStatus;
   templateRejectedReason: string | null;
+  registrationStatus: WhatsappRegistrationStatus;
+  registeredAt: string | null;
+  registrationLastErrorCode: string | null;
+  registrationLastErrorMessage: string | null;
   connectedAt: string | null;
   lastVerifiedAt: string | null;
   disconnectedAt: string | null;

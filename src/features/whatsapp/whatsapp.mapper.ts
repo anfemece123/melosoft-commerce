@@ -11,6 +11,7 @@ import type {
   WhatsappConnectionStatus,
   WhatsappOnboardingType,
   WhatsappTemplateStatus,
+  WhatsappRegistrationStatus,
   PlatformWhatsappConnectionOverview,
 } from './whatsapp.types';
 
@@ -128,6 +129,10 @@ export function mapStoreWhatsappConnectionRowToStoreWhatsappConnection(row: Conn
     templateLanguage: row.template_language,
     templateStatus: row.template_status as WhatsappTemplateStatus,
     templateRejectedReason: row.template_rejected_reason,
+    registrationStatus: row.registration_status as WhatsappRegistrationStatus,
+    registeredAt: row.registered_at,
+    registrationLastErrorCode: row.registration_last_error_code,
+    registrationLastErrorMessage: row.registration_last_error_message,
     connectedAt: row.connected_at,
     lastVerifiedAt: row.last_verified_at,
     disconnectedAt: row.disconnected_at,

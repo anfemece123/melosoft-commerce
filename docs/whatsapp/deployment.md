@@ -30,6 +30,15 @@ el número de la empresa.
 4. El **App ID** (público) y el **App Secret** (privado) están en
    **App Settings → Basic**.
 
+Después de Embedded Signup no hay un paso manual por tienda. La función
+`whatsapp-embedded-signup` registra el `phone_number_id` en Cloud API,
+genera el PIN obligatorio de seis dígitos y lo guarda únicamente en
+Supabase Vault. Las conexiones creadas antes de la migración 102 se
+recuperan desde `whatsapp-phone-register` al abrir el panel. Solo si el
+número ya tenía verificación en dos pasos, el dueño ve un campo para
+ingresar su PIN existente una vez; el valor no se registra en logs ni se
+devuelve al navegador.
+
 ## 1. Secretos requeridos
 
 | Secreto | Tipo | Dónde se usa | Comando |
@@ -37,7 +46,7 @@ el número de la empresa.
 | `META_APP_ID` | Público, pero se lee como secreto de Supabase en el backend | `whatsapp-embedded-signup` (intercambio de code) | `supabase secrets set META_APP_ID=REEMPLAZA` |
 | `META_WHATSAPP_APP_SECRET` | **Secreto** | `whatsapp-embedded-signup` (intercambio de code) y `whatsapp-webhook` (firma `X-Hub-Signature-256`) — es el mismo App Secret para ambos, un solo valor | `supabase secrets set META_WHATSAPP_APP_SECRET=REEMPLAZA` |
 | `META_WHATSAPP_VERIFY_TOKEN` | Cadena que tú inventas | `whatsapp-webhook` (verificación GET) | `supabase secrets set META_WHATSAPP_VERIFY_TOKEN=REEMPLAZA` |
-| `META_GRAPH_API_VERSION` | Opcional | `whatsapp-embedded-signup`, `whatsapp-template-sync`, `send-whatsapp-notification` | `supabase secrets set META_GRAPH_API_VERSION=vXX.0` |
+| `META_GRAPH_API_VERSION` | Opcional | `whatsapp-embedded-signup`, `whatsapp-phone-register`, `whatsapp-template-sync`, `send-whatsapp-notification` | `supabase secrets set META_GRAPH_API_VERSION=vXX.0` |
 
 Además, en el **frontend** (build-time, público, nunca secreto):
 

@@ -2445,6 +2445,11 @@ export interface Database {
           template_status: string;
           template_rejected_reason: string | null;
           token_secret_reference: string | null;
+          registration_status: string;
+          registration_pin_secret_reference: string | null;
+          registered_at: string | null;
+          registration_last_error_code: string | null;
+          registration_last_error_message: string | null;
           connected_by: string | null;
           connected_at: string | null;
           last_verified_at: string | null;
@@ -2470,6 +2475,11 @@ export interface Database {
           template_status?: string;
           template_rejected_reason?: string | null;
           token_secret_reference?: string | null;
+          registration_status?: string;
+          registration_pin_secret_reference?: string | null;
+          registered_at?: string | null;
+          registration_last_error_code?: string | null;
+          registration_last_error_message?: string | null;
           connected_by?: string | null;
           connected_at?: string | null;
           last_verified_at?: string | null;
@@ -2495,6 +2505,11 @@ export interface Database {
           template_status?: string;
           template_rejected_reason?: string | null;
           token_secret_reference?: string | null;
+          registration_status?: string;
+          registration_pin_secret_reference?: string | null;
+          registered_at?: string | null;
+          registration_last_error_code?: string | null;
+          registration_last_error_message?: string | null;
           connected_by?: string | null;
           connected_at?: string | null;
           last_verified_at?: string | null;

@@ -26,6 +26,7 @@ vi.mock('@/features/whatsapp/whatsappService', () => ({
     completeEmbeddedSignup: vi.fn(),
     upsertSettings: vi.fn(),
     syncTemplate: vi.fn(),
+    registerPhone: vi.fn(),
     disconnect: vi.fn(),
     sendTestMessage: vi.fn(),
   },
@@ -85,6 +86,7 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
     (whatsappService.completeEmbeddedSignup as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: true,
       connectionStatus: 'connected',
+      registrationStatus: 'registered',
       displayPhoneNumber: '+57 321 3706466',
       verifiedName: 'MelosoftApp',
       onboardingType: 'coexistence',
@@ -112,7 +114,7 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
       coexistence: false,
     }));
     await waitFor(() => expect(connectButton.disabled).toBe(false));
-    expect(notify.success).toHaveBeenCalledWith('WhatsApp Business conectado correctamente');
+    expect(notify.success).toHaveBeenCalledWith('WhatsApp Business conectado y listo para enviar');
   });
 
   it('always leaves the loading state when the Edge Function call rejects after a successful Meta login', async () => {
@@ -163,6 +165,7 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
     (whatsappService.completeEmbeddedSignup as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: true,
       connectionStatus: 'connected',
+      registrationStatus: 'registered',
       displayPhoneNumber: '+57 321 3706466',
       verifiedName: 'MelosoftApp',
       onboardingType: 'new_number',
@@ -190,7 +193,7 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
       coexistence: false,
     }));
     await waitFor(() => expect(connectButton.disabled).toBe(false));
-    expect(notify.success).toHaveBeenCalledWith('WhatsApp Business conectado correctamente');
+    expect(notify.success).toHaveBeenCalledWith('WhatsApp Business conectado y listo para enviar');
   });
 });
 
@@ -278,6 +281,10 @@ describe('WhatsappSettingsPage — estado de plantilla', () => {
       templateLanguage: 'es_CO',
       templateStatus: 'pending' as const,
       templateRejectedReason: null,
+      registrationStatus: 'registered' as const,
+      registeredAt: '2026-07-25T00:00:00.000Z',
+      registrationLastErrorCode: null,
+      registrationLastErrorMessage: null,
       connectedAt: '2026-07-25T00:00:00.000Z',
       lastVerifiedAt: '2026-07-25T00:00:00.000Z',
       disconnectedAt: null,

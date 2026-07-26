@@ -49,6 +49,13 @@ import {
   buildMetaEmbeddedSignupTokenUrl,
   normalizeMetaSdkRedirectUri,
 } from '../_shared/metaOAuthExchange.ts';
+import {
+  buildMetaPhoneRegistrationDiagnostic,
+  generateWhatsappRegistrationPin,
+  isValidWhatsappRegistrationPin,
+  registerWhatsappPhone,
+  registrationRequiresExistingPin,
+} from '../_shared/whatsappPhoneRegistration.ts';
 
 function json(body: unknown, status: number, cors: Record<string, string>) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...cors } });
@@ -393,9 +400,78 @@ Deno.serve(async (req: Request) => {
     );
   }
 
+  // ── 11. Register the phone for Cloud API sending. Embedded Signup
+  //      authorizes the WABA but Meta still requires this explicit call.
+  //      The common path is fully automatic: generate a PIN, let Meta
+  //      enable two-step verification with it, then store it only in
+  //      Vault. If this phone already has a PIN, preserve the connection
+  //      and let the UI request that existing PIN once.
+  await adminClient.rpc('store_whatsapp_registration_mark', {
+    p_store_id: storeId,
+    p_status: 'registering',
+    p_registration_pin: null,
+    p_error_code: null,
+    p_error_message: null,
+    p_actor_user_id: callerUser.id,
+  });
+
+  const { data: rawRegistrationContext } = await adminClient.rpc(
+    'get_store_whatsapp_registration_context',
+    { p_store_id: storeId },
+  );
+  const storedRegistrationPin = rawRegistrationContext &&
+      typeof rawRegistrationContext === 'object' &&
+      'registration_pin' in rawRegistrationContext &&
+      typeof rawRegistrationContext.registration_pin === 'string' &&
+      isValidWhatsappRegistrationPin(rawRegistrationContext.registration_pin)
+    ? rawRegistrationContext.registration_pin
+    : null;
+  const registrationPin = storedRegistrationPin ?? generateWhatsappRegistrationPin();
+  const registrationResult = await registerWhatsappPhone({
+    graphApiVersion,
+    phoneNumberId,
+    accessToken,
+    pin: registrationPin,
+  });
+
+  let registrationStatus: 'registered' | 'requires_pin' | 'failed';
+  if (registrationResult.ok) {
+    const { error: registrationSaveError } = await adminClient.rpc('store_whatsapp_registration_mark', {
+      p_store_id: storeId,
+      p_status: 'registered',
+      p_registration_pin: registrationPin,
+      p_error_code: null,
+      p_error_message: null,
+      p_actor_user_id: callerUser.id,
+    });
+    if (registrationSaveError) {
+      console.error('[whatsapp-embedded-signup] registration PIN save failed:', registrationSaveError.message);
+      return json({
+        error: 'REGISTRATION_SAVE_FAILED',
+        message: 'Meta registró el número, pero no se pudo guardar su configuración segura.',
+      }, 500, cors);
+    }
+    registrationStatus = 'registered';
+  } else {
+    const diagnostic = buildMetaPhoneRegistrationDiagnostic(registrationResult);
+    const requiresPin = registrationRequiresExistingPin(diagnostic);
+    registrationStatus = requiresPin ? 'requires_pin' : 'failed';
+    const diagnosticCode = diagnostic.metaCode ?? diagnostic.metaSubcode ?? diagnostic.upstreamStatus;
+    await adminClient.rpc('store_whatsapp_registration_mark', {
+      p_store_id: storeId,
+      p_status: registrationStatus,
+      p_registration_pin: null,
+      p_error_code: String(diagnosticCode || 'META_ERROR'),
+      p_error_message: diagnostic.metaUserMessage ?? diagnostic.metaMessage ?? 'Meta rechazó el registro del número.',
+      p_actor_user_id: callerUser.id,
+    });
+    console.error('[whatsapp-embedded-signup] phone registration failed:', diagnostic);
+  }
+
   return json({
     ok: true,
     connectionStatus: 'connected',
+    registrationStatus,
     displayPhoneNumber,
     verifiedName,
     onboardingType,
