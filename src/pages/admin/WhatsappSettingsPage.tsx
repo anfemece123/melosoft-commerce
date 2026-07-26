@@ -94,6 +94,8 @@ const EMBEDDED_SIGNUP_ERROR_MESSAGES: Record<string, string> = {
   EMBEDDED_SIGNUP_POPUP_CLOSED: 'La ventana de Meta se cerró antes de terminar. Intenta de nuevo sin cerrarla manualmente.',
   EMBEDDED_SIGNUP_SDK_UNAVAILABLE: 'No se pudo cargar el SDK de Meta. Revisa tu conexión o desactiva bloqueadores de anuncios/scripts e intenta de nuevo.',
   EMBEDDED_SIGNUP_ERROR: 'Meta reportó un error durante la conexión. Intenta de nuevo.',
+  COEXISTENCE_NOT_AVAILABLE:
+    'Meta no habilitó el flujo de coexistencia para esta conexión. Tu número y WhatsApp Business no fueron modificados; contacta al soporte de Melosoft.',
   EMBEDDED_SIGNUP_NO_SESSION_INFO: 'Meta autorizó la cuenta, pero no devolvió la información de WhatsApp necesaria.',
   EMBEDDED_SIGNUP_MISSING_SESSION_DATA:
     'Meta no envió los datos de la cuenta de WhatsApp Business (WABA o número). Intenta de nuevo y confirma que seleccionaste una cuenta y un número.',
@@ -552,7 +554,7 @@ export function WhatsappSettingsPage() {
                   <div className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
                     <p className="text-xs text-red-700">
                       {connection.coexistenceEnabled
-                        ? 'Meta todavía no confirmó la coexistencia. Abre el proceso otra vez y, en WhatsApp Business, acepta “Conectarte a la plataforma para empresas” e ingresa el código que muestra Meta.'
+                        ? 'Meta no confirmó el flujo oficial de coexistencia. Tu número continúa funcionando en WhatsApp Business y no fue modificado. Contacta al soporte de Melosoft.'
                         : 'Meta no terminó de registrar el número para enviar mensajes.'}
                       {!connection.coexistenceEnabled && connection.registrationLastErrorMessage
                         ? ` (${connection.registrationLastErrorMessage})`
@@ -569,7 +571,7 @@ export function WhatsappSettingsPage() {
                       {registeringPhone || connecting
                         ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         : <RefreshCw className="w-3.5 h-3.5" />}
-                      {connection.coexistenceEnabled ? 'Completar conexión' : 'Reintentar'}
+                      {connection.coexistenceEnabled ? 'Reintentar conexión' : 'Reintentar'}
                     </button>
                   </div>
                 )}

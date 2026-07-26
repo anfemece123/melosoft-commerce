@@ -141,6 +141,7 @@ const POST_LOGIN_SESSION_GRACE_MS = 3_000;
 // doesn't false-positive — the LOGIN_TIMEOUT_MS above is the real
 // backstop if this heuristic ever misfires in either direction.
 const POPUP_CLOSED_GRACE_MS = 4_000;
+const COEXISTENCE_FINISH_EVENT = 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING';
 
 // Meta's official postMessage origin for Embedded Signup. Exact-match
 // or "ends with '.facebook.com'" (WITH the leading dot) only — a check
@@ -550,6 +551,22 @@ export async function launchWhatsAppEmbeddedSignup(options: { coexistence: boole
     if (error instanceof EmbeddedSignupError) throw error;
     const errorCode = error instanceof Error ? error.message : 'EMBEDDED_SIGNUP_ERROR';
     throw new EmbeddedSignupError(errorCode, correlationId);
+  }
+
+  // An OAuth code or a normal FINISH event proves only that Meta login
+  // succeeded. It does NOT prove WhatsApp Business App coexistence. The
+  // special finish event is the authoritative browser-side signal for
+  // that flow; without it, never send the code to the backend marked as
+  // coexistence and never persist a false-positive connection.
+  if (
+    options.coexistence &&
+    session.state.lastEmbeddedSignupEvent !== COEXISTENCE_FINISH_EVENT
+  ) {
+    log('coexistence_finish_event_missing', {
+      lastEmbeddedSignupEvent: session.state.lastEmbeddedSignupEvent,
+      elapsedMs: Date.now() - startedAt,
+    });
+    throw new EmbeddedSignupError('COEXISTENCE_NOT_AVAILABLE', correlationId);
   }
 
   if (sessionData.wabaId) {

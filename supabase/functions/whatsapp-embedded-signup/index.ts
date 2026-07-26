@@ -344,10 +344,24 @@ Deno.serve(async (req: Request) => {
   const displayPhoneNumber = (phoneDetailResult.body.display_phone_number as string | undefined) ?? null;
   const verifiedName = (phoneDetailResult.body.verified_name as string | undefined) ?? null;
   const coexistenceStatus = getWhatsappCoexistenceStatus(phoneDetailResult.body);
-  // Do not trust only the browser checkbox. If Meta reports that the
-  // number remains on the Business app, it must follow coexistence rules
-  // even when the client omitted the flag.
-  const isCoexistenceFlow = Boolean(coexistence) || coexistenceStatus.isOnBizApp;
+  // The browser flag selects the requested flow, but it is not proof
+  // that Meta completed it. Reject false-positive coexistence before
+  // subscribing or persisting anything. A normal OAuth completion must
+  // never be stored as WhatsApp Business App coexistence.
+  if (coexistence && !coexistenceStatus.ready) {
+    await eventLog(
+      'connect_failed',
+      `coexistence_not_confirmed is_on_biz_app=${coexistenceStatus.isOnBizApp} platform_type=${coexistenceStatus.platformType ?? 'null'}`,
+    );
+    return json({
+      error: 'COEXISTENCE_NOT_AVAILABLE',
+      message: 'Meta no confirmó el flujo oficial de coexistencia. El número no fue modificado.',
+      coexistenceStatus,
+    }, 409, cors);
+  }
+  // If Meta itself reports is_on_biz_app, protect that number with the
+  // coexistence path even if an old or modified client omitted the flag.
+  const isCoexistenceFlow = coexistenceStatus.isOnBizApp;
 
   // ── 9. Subscribe Melosoft's app to this WABA's webhooks — required
   //      once per WABA so whatsapp-webhook receives status/message
