@@ -52,6 +52,7 @@ import {
 import {
   buildMetaPhoneRegistrationDiagnostic,
   generateWhatsappRegistrationPin,
+  getWhatsappCoexistenceStatus,
   isValidWhatsappRegistrationPin,
   registerWhatsappPhone,
   registrationRequiresExistingPin,
@@ -62,6 +63,8 @@ function json(body: unknown, status: number, cors: Record<string, string>) {
 }
 
 const DEFAULT_GRAPH_API_VERSION = 'v25.0'; // fallback only — re-verify at deploy time, see docs/whatsapp/deployment.md
+const COEXISTENCE_INCOMPLETE_MESSAGE =
+  'Meta todavía no confirmó la coexistencia con WhatsApp Business. Vuelve a completar la conexión desde Melosoft y acepta la vinculación en el celular.';
 
 interface OnboardingRequest {
   storeId: string;
@@ -329,7 +332,7 @@ Deno.serve(async (req: Request) => {
   // ── 8. Fetch display name/number for this specific phone ──
   const phoneDetailResult = await metaFetch(
     `https://graph.facebook.com/${graphApiVersion}/${encodeURIComponent(phoneNumberId)}` +
-    `?fields=display_phone_number,verified_name,code_verification_status,platform_type` +
+    `?fields=display_phone_number,verified_name,code_verification_status,platform_type,is_on_biz_app` +
     `&access_token=${encodeURIComponent(accessToken)}`,
   );
   if (!phoneDetailResult.ok) {
@@ -340,6 +343,11 @@ Deno.serve(async (req: Request) => {
   }
   const displayPhoneNumber = (phoneDetailResult.body.display_phone_number as string | undefined) ?? null;
   const verifiedName = (phoneDetailResult.body.verified_name as string | undefined) ?? null;
+  const coexistenceStatus = getWhatsappCoexistenceStatus(phoneDetailResult.body);
+  // Do not trust only the browser checkbox. If Meta reports that the
+  // number remains on the Business app, it must follow coexistence rules
+  // even when the client omitted the flag.
+  const isCoexistenceFlow = Boolean(coexistence) || coexistenceStatus.isOnBizApp;
 
   // ── 9. Subscribe Melosoft's app to this WABA's webhooks — required
   //      once per WABA so whatsapp-webhook receives status/message
@@ -373,7 +381,7 @@ Deno.serve(async (req: Request) => {
   //      real token, via the SECURITY DEFINER function that also
   //      re-checks the phone_number_id uniqueness under the DB's own
   //      UNIQUE index as the final guarantee ──
-  const onboardingType = coexistence ? 'coexistence' : 'new_number';
+  const onboardingType = isCoexistenceFlow ? 'coexistence' : 'new_number';
 
   const { error: saveErr } = await adminClient.rpc('store_whatsapp_connection_save', {
     p_store_id: storeId,
@@ -383,7 +391,7 @@ Deno.serve(async (req: Request) => {
     p_display_phone_number: displayPhoneNumber,
     p_verified_name: verifiedName,
     p_onboarding_type: onboardingType,
-    p_coexistence_enabled: Boolean(coexistence),
+    p_coexistence_enabled: isCoexistenceFlow,
     p_access_token: accessToken,
     p_connected_by: callerUser.id,
   });
@@ -400,12 +408,43 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  // ── 11. Register the phone for Cloud API sending. Embedded Signup
-  //      authorizes the WABA but Meta still requires this explicit call.
-  //      The common path is fully automatic: generate a PIN, let Meta
-  //      enable two-step verification with it, then store it only in
-  //      Vault. If this phone already has a PIN, preserve the connection
-  //      and let the UI request that existing PIN once.
+  // ── 11. Coexistence numbers are already registered in the WhatsApp
+  //      Business mobile app. Meta explicitly requires skipping
+  //      /register for this flow. The phone is send-ready only when Meta
+  //      reports both is_on_biz_app=true and platform_type=CLOUD_API.
+  if (isCoexistenceFlow) {
+    const registrationStatus = coexistenceStatus.ready ? 'registered' : 'failed';
+    const { error: coexistenceSaveError } = await adminClient.rpc('store_whatsapp_registration_mark', {
+      p_store_id: storeId,
+      p_status: registrationStatus,
+      p_registration_pin: null,
+      p_error_code: coexistenceStatus.ready ? null : 'COEXISTENCE_ONBOARDING_INCOMPLETE',
+      p_error_message: coexistenceStatus.ready ? null : COEXISTENCE_INCOMPLETE_MESSAGE,
+      p_actor_user_id: callerUser.id,
+    });
+    if (coexistenceSaveError) {
+      console.error('[whatsapp-embedded-signup] coexistence status save failed:', coexistenceSaveError.message);
+      return json({
+        error: 'REGISTRATION_SAVE_FAILED',
+        message: 'No se pudo guardar el estado de coexistencia del número.',
+      }, 500, cors);
+    }
+
+    return json({
+      ok: true,
+      connectionStatus: 'connected',
+      registrationStatus,
+      displayPhoneNumber,
+      verifiedName,
+      onboardingType,
+      coexistenceStatus,
+    }, 200, cors);
+  }
+
+  // New numbers do require explicit Cloud API registration. The common
+  // path is automatic: generate a PIN, let Meta accept it, then store it
+  // only in Vault. If the number already has a PIN, the UI requests that
+  // existing value once.
   await adminClient.rpc('store_whatsapp_registration_mark', {
     p_store_id: storeId,
     p_status: 'registering',
@@ -456,7 +495,7 @@ Deno.serve(async (req: Request) => {
     const diagnostic = buildMetaPhoneRegistrationDiagnostic(registrationResult);
     const requiresPin = registrationRequiresExistingPin(diagnostic);
     registrationStatus = requiresPin ? 'requires_pin' : 'failed';
-    const diagnosticCode = diagnostic.metaCode ?? diagnostic.metaSubcode ?? diagnostic.upstreamStatus;
+    const diagnosticCode = diagnostic.metaSubcode ?? diagnostic.metaCode ?? diagnostic.upstreamStatus;
     await adminClient.rpc('store_whatsapp_registration_mark', {
       p_store_id: storeId,
       p_status: registrationStatus,

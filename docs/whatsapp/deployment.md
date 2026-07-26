@@ -30,14 +30,20 @@ el número de la empresa.
 4. El **App ID** (público) y el **App Secret** (privado) están en
    **App Settings → Basic**.
 
-Después de Embedded Signup no hay un paso manual por tienda. La función
-`whatsapp-embedded-signup` registra el `phone_number_id` en Cloud API,
-genera el PIN obligatorio de seis dígitos y lo guarda únicamente en
-Supabase Vault. Las conexiones creadas antes de la migración 102 se
-recuperan desde `whatsapp-phone-register` al abrir el panel. Solo si el
-número ya tenía verificación en dos pasos, el dueño ve un campo para
-ingresar su PIN existente una vez; el valor no se registra en logs ni se
-devuelve al navegador.
+Después de Embedded Signup no hay configuración técnica manual por
+tienda. Para un **número nuevo**, `whatsapp-embedded-signup` ejecuta el
+registro de Cloud API, genera el PIN obligatorio de seis dígitos y lo
+guarda únicamente en Supabase Vault. Si ese número ya tenía verificación
+en dos pasos, el dueño ingresa su PIN existente una sola vez; el valor no
+se registra en logs ni se devuelve al navegador.
+
+Para **coexistencia**, Meta exige omitir `POST /{phone_number_id}/register`
+porque el número ya está registrado en WhatsApp Business. Melosoft solo
+comprueba `is_on_biz_app=true` y `platform_type=CLOUD_API`. Si todavía no
+aparecen ambos valores, el panel pide repetir Embedded Signup y terminar
+la confirmación dentro de la aplicación móvil. Esta decisión se realiza
+automáticamente por empresa; no requiere secretos, cron jobs ni cambios
+manuales adicionales por cada tienda.
 
 ## 1. Secretos requeridos
 

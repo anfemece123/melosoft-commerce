@@ -109,7 +109,7 @@ const EMBEDDED_SIGNUP_ERROR_MESSAGES: Record<string, string> = {
   META_APP_SUBSCRIPTION_FAILED:
     'La conexión con Meta se validó, pero no se pudo suscribir la app a tu cuenta de WhatsApp Business. Intenta reconectar.',
   CONNECTION_SAVE_FAILED: 'No se pudo guardar la conexión.',
-  REGISTRATION_SAVE_FAILED: 'Meta registró el número, pero no se pudo guardar su configuración segura.',
+  REGISTRATION_SAVE_FAILED: 'No se pudo guardar el estado de habilitación del número.',
   NO_PHONE_NUMBER_FOUND: 'La cuenta de WhatsApp Business no tiene ningún número registrado.',
   MULTIPLE_PHONE_NUMBERS_FOUND: 'Esta cuenta de WhatsApp Business tiene más de un número. Selecciona uno específico e intenta de nuevo.',
 };
@@ -215,15 +215,17 @@ export function WhatsappSettingsPage() {
     };
   }, [storeId, connection?.connectionStatus, connection?.templateStatus]);
 
-  // Migration 102 also repairs connections created before phone
-  // registration was implemented. Each pending store gets one automatic
-  // attempt when its owner opens this page; the normal Embedded Signup
-  // path already performs the same step before returning.
+  // Repair pre-registration connections once when their owner opens the
+  // page. For coexistence this is only a read-only Meta status check;
+  // /register is reserved for new-number onboarding.
   useEffect(() => {
     if (
       !storeId ||
       connection?.connectionStatus !== 'connected' ||
-      connection.registrationStatus !== 'pending' ||
+      !(
+        connection.registrationStatus === 'pending' ||
+        (connection.coexistenceEnabled && connection.registrationStatus === 'failed')
+      ) ||
       automaticRegistrationStoreRef.current === storeId
     ) return;
 
@@ -240,7 +242,10 @@ export function WhatsappSettingsPage() {
       .catch((error: unknown) => {
         if (automaticRegistrationStoreRef.current === storeId) {
           void whatsappService.getConnection(storeId).then(setConnection).catch(() => undefined);
-          if (error instanceof Error && error.message !== 'WHATSAPP_REGISTRATION_PIN_REQUIRED') {
+          if (
+            error instanceof Error &&
+            !['WHATSAPP_REGISTRATION_PIN_REQUIRED', 'COEXISTENCE_ONBOARDING_INCOMPLETE'].includes(error.message)
+          ) {
             notify.error('Meta no pudo terminar de habilitar el número. Puedes reintentarlo aquí.');
           }
         }
@@ -293,7 +298,7 @@ export function WhatsappSettingsPage() {
     isSubmitting: formik.isSubmitting,
   });
 
-  async function handleConnect() {
+  async function handleConnect(forceCoexistence?: boolean) {
     if (!storeId) return;
     // Embedded Signup must only ever start from the admin panel host —
     // never from a store's own public subdomain/custom domain, even if a
@@ -304,7 +309,8 @@ export function WhatsappSettingsPage() {
     }
     setConnecting(true);
     try {
-      const { code, redirectUri, session } = await launchWhatsAppEmbeddedSignup({ coexistence });
+      const useCoexistence = forceCoexistence ?? coexistence;
+      const { code, redirectUri, session } = await launchWhatsAppEmbeddedSignup({ coexistence: useCoexistence });
       // Meta sometimes returns the valid OAuth code without emitting the
       // browser-side WA_EMBEDDED_SIGNUP event. Send the code regardless;
       // the Edge Function resolves the WABA from the exchanged token's
@@ -316,12 +322,14 @@ export function WhatsappSettingsPage() {
         wabaId: session.wabaId,
         phoneNumberId: session.phoneNumberId,
         businessId: session.businessId,
-        coexistence,
+        coexistence: useCoexistence,
       });
       if (completion.registrationStatus === 'registered') {
         notify.success('WhatsApp Business conectado y listo para enviar');
       } else if (completion.registrationStatus === 'requires_pin') {
         notify.warning('Número conectado. Meta solicita el PIN existente para habilitar los envíos.');
+      } else if (completion.onboardingType === 'coexistence') {
+        notify.warning('Falta confirmar la conexión desde WhatsApp Business en el celular.');
       } else {
         notify.warning('Número conectado, pero Meta todavía no terminó de habilitar los envíos.');
       }
@@ -371,6 +379,8 @@ export function WhatsappSettingsPage() {
         await reloadAll(storeId);
       } else if (code === 'INVALID_REGISTRATION_PIN') {
         notify.error('El PIN debe contener exactamente seis números.');
+      } else if (code === 'COEXISTENCE_ONBOARDING_INCOMPLETE') {
+        notify.warning('Meta aún no confirmó la coexistencia. Completa la vinculación desde WhatsApp Business en el celular.');
       } else {
         notify.error('Meta no pudo habilitar el número. Intenta nuevamente.');
       }
@@ -541,17 +551,25 @@ export function WhatsappSettingsPage() {
                 {connection?.registrationStatus === 'failed' && (
                   <div className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
                     <p className="text-xs text-red-700">
-                      Meta no terminó de registrar el número para enviar mensajes.
-                      {connection.registrationLastErrorMessage ? ` (${connection.registrationLastErrorMessage})` : ''}
+                      {connection.coexistenceEnabled
+                        ? 'Meta todavía no confirmó la coexistencia. Abre el proceso otra vez y, en WhatsApp Business, acepta “Conectarte a la plataforma para empresas” e ingresa el código que muestra Meta.'
+                        : 'Meta no terminó de registrar el número para enviar mensajes.'}
+                      {!connection.coexistenceEnabled && connection.registrationLastErrorMessage
+                        ? ` (${connection.registrationLastErrorMessage})`
+                        : ''}
                     </p>
                     <button
                       type="button"
-                      onClick={() => void handleRegisterPhone()}
-                      disabled={registeringPhone}
+                      onClick={() => connection.coexistenceEnabled
+                        ? void handleConnect(true)
+                        : void handleRegisterPhone()}
+                      disabled={registeringPhone || connecting}
                       className="shrink-0 flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
                     >
-                      {registeringPhone ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                      Reintentar
+                      {registeringPhone || connecting
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <RefreshCw className="w-3.5 h-3.5" />}
+                      {connection.coexistenceEnabled ? 'Completar conexión' : 'Reintentar'}
                     </button>
                   </div>
                 )}

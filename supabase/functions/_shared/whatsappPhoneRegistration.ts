@@ -9,6 +9,12 @@ export interface MetaPhoneRegistrationResult {
   body: Record<string, unknown>;
 }
 
+export interface WhatsappCoexistenceStatus {
+  isOnBizApp: boolean;
+  platformType: string | null;
+  ready: boolean;
+}
+
 export interface MetaPhoneRegistrationDiagnostic {
   upstreamStatus: number;
   metaCode: number | null;
@@ -72,6 +78,47 @@ export async function registerWhatsappPhone(params: {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export async function getWhatsappPhonePlatformStatus(params: {
+  graphApiVersion: string;
+  phoneNumberId: string;
+  accessToken: string;
+  fetchImpl?: typeof fetch;
+}): Promise<MetaPhoneRegistrationResult> {
+  const fetchImpl = params.fetchImpl ?? fetch;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetchImpl(
+      `https://graph.facebook.com/${params.graphApiVersion}/${encodeURIComponent(params.phoneNumberId)}` +
+        '?fields=is_on_biz_app,platform_type',
+      {
+        headers: { Authorization: `Bearer ${params.accessToken}` },
+        signal: controller.signal,
+      },
+    );
+    const body = await response.json().catch(() => ({})) as Record<string, unknown>;
+    return { ok: response.ok, status: response.status, body };
+  } catch {
+    return { ok: false, status: 0, body: {} };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export function getWhatsappCoexistenceStatus(
+  body: Record<string, unknown>,
+): WhatsappCoexistenceStatus {
+  const isOnBizApp = body.is_on_biz_app === true;
+  const platformType = typeof body.platform_type === 'string'
+    ? body.platform_type.trim().toUpperCase()
+    : null;
+  return {
+    isOnBizApp,
+    platformType,
+    ready: isOnBizApp && platformType === 'CLOUD_API',
+  };
 }
 
 function boundedText(value: unknown, maxLength: number): string | null {

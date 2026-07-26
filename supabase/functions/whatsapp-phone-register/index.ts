@@ -1,17 +1,18 @@
 // Edge Function: whatsapp-phone-register
 //
-// Completes the required Cloud API registration step for a store's
-// already-authorized phone number. The common path is zero-touch: a PIN
-// is generated server-side, accepted by Meta, and saved only in Vault.
-// If the phone already has two-step verification, the owner/admin can
-// submit that existing six-digit PIN once; it is never logged or exposed
-// back to the browser.
+// Makes an already-authorized phone ready for Cloud API sending. New
+// numbers require POST /register and a six-digit PIN. Coexistence numbers
+// must NEVER call /register because they remain registered in the
+// WhatsApp Business mobile app; for those, this function only verifies
+// Meta's is_on_biz_app/platform_type flags.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders as corsHeaders } from '../_shared/allowedOrigins.ts';
 import {
   buildMetaPhoneRegistrationDiagnostic,
   generateWhatsappRegistrationPin,
+  getWhatsappCoexistenceStatus,
+  getWhatsappPhonePlatformStatus,
   isValidWhatsappRegistrationPin,
   registerWhatsappPhone,
   registrationRequiresExistingPin,
@@ -35,9 +36,14 @@ interface RegistrationContext {
   connected?: boolean;
   phone_number_id?: string;
   registration_status?: string;
+  onboarding_type?: string | null;
+  coexistence_enabled?: boolean;
   registration_pin?: string;
   access_token?: string;
 }
+
+const COEXISTENCE_INCOMPLETE_MESSAGE =
+  'Meta todavía no confirmó la coexistencia con WhatsApp Business. Vuelve a completar la conexión desde Melosoft y acepta la vinculación en el celular.';
 
 Deno.serve(async (req: Request) => {
   const cors = corsHeaders(req);
@@ -113,7 +119,8 @@ Deno.serve(async (req: Request) => {
       message: 'Conecta el número con Meta antes de registrarlo.',
     }, 409, cors);
   }
-  if (context.registration_status === 'registered' && suppliedPin === null) {
+  const isCoexistence = context.coexistence_enabled === true || context.onboarding_type === 'coexistence';
+  if (!isCoexistence && context.registration_status === 'registered' && suppliedPin === null) {
     return json({ ok: true, registrationStatus: 'registered', alreadyRegistered: true }, 200, cors);
   }
 
@@ -125,6 +132,72 @@ Deno.serve(async (req: Request) => {
     p_error_message: null,
     p_actor_user_id: user.id,
   });
+
+  // Meta's coexistence onboarding keeps the number registered in the
+  // mobile Business app. Calling /register here would turn this into a
+  // migration attempt and produce subcode 2388001 ("already exists").
+  if (isCoexistence) {
+    const platformResult = await getWhatsappPhonePlatformStatus({
+      graphApiVersion,
+      phoneNumberId: context.phone_number_id,
+      accessToken: context.access_token,
+    });
+
+    if (!platformResult.ok) {
+      const diagnostic = buildMetaPhoneRegistrationDiagnostic(platformResult);
+      const diagnosticCode = diagnostic.metaSubcode ?? diagnostic.metaCode ?? diagnostic.upstreamStatus;
+      await adminClient.rpc('store_whatsapp_registration_mark', {
+        p_store_id: storeId,
+        p_status: 'failed',
+        p_registration_pin: null,
+        p_error_code: String(diagnosticCode || 'COEXISTENCE_STATUS_CHECK_FAILED'),
+        p_error_message: 'No se pudo verificar el estado de coexistencia con Meta.',
+        p_actor_user_id: user.id,
+      });
+      console.error('[whatsapp-phone-register] Meta coexistence status check failed:', diagnostic);
+      return json({
+        error: 'COEXISTENCE_STATUS_CHECK_FAILED',
+        message: 'No se pudo verificar el estado de coexistencia con Meta. Intenta nuevamente.',
+        diagnostic,
+      }, 502, cors);
+    }
+
+    const coexistenceStatus = getWhatsappCoexistenceStatus(platformResult.body);
+    if (!coexistenceStatus.ready) {
+      await adminClient.rpc('store_whatsapp_registration_mark', {
+        p_store_id: storeId,
+        p_status: 'failed',
+        p_registration_pin: null,
+        p_error_code: 'COEXISTENCE_ONBOARDING_INCOMPLETE',
+        p_error_message: COEXISTENCE_INCOMPLETE_MESSAGE,
+        p_actor_user_id: user.id,
+      });
+      return json({
+        error: 'COEXISTENCE_ONBOARDING_INCOMPLETE',
+        message: COEXISTENCE_INCOMPLETE_MESSAGE,
+        coexistenceStatus,
+      }, 409, cors);
+    }
+
+    const { error: markError } = await adminClient.rpc('store_whatsapp_registration_mark', {
+      p_store_id: storeId,
+      p_status: 'registered',
+      p_registration_pin: null,
+      p_error_code: null,
+      p_error_message: null,
+      p_actor_user_id: user.id,
+    });
+    if (markError) {
+      console.error('[whatsapp-phone-register] coexistence save failed:', markError.message);
+      return json({ error: 'REGISTRATION_SAVE_FAILED' }, 500, cors);
+    }
+    return json({
+      ok: true,
+      registrationStatus: 'registered',
+      alreadyRegistered: context.registration_status === 'registered',
+      coexistenceStatus,
+    }, 200, cors);
+  }
 
   const storedPin = typeof context.registration_pin === 'string' && isValidWhatsappRegistrationPin(context.registration_pin)
     ? context.registration_pin
@@ -156,7 +229,7 @@ Deno.serve(async (req: Request) => {
   const diagnostic = buildMetaPhoneRegistrationDiagnostic(result);
   const requiresPin = registrationRequiresExistingPin(diagnostic);
   const registrationStatus = requiresPin ? 'requires_pin' : 'failed';
-  const diagnosticCode = diagnostic.metaCode ?? diagnostic.metaSubcode ?? diagnostic.upstreamStatus;
+  const diagnosticCode = diagnostic.metaSubcode ?? diagnostic.metaCode ?? diagnostic.upstreamStatus;
   const errorCode = String(diagnosticCode || 'META_ERROR');
   const errorMessage = diagnostic.metaUserMessage ?? diagnostic.metaMessage ?? 'Meta rechazó el registro del número.';
   await adminClient.rpc('store_whatsapp_registration_mark', {
