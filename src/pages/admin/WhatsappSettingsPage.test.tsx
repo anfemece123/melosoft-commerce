@@ -322,3 +322,53 @@ describe('WhatsappSettingsPage — estado de plantilla', () => {
     expect(syncTemplate).toHaveBeenCalledWith('store-1');
   });
 });
+
+describe('WhatsappSettingsPage — recuperación de coexistencia', () => {
+  it('does not retry a failed coexistence connection in the background', async () => {
+    const failedConnection = {
+      id: 'connection-coexistence',
+      storeId: 'store-1',
+      metaBusinessId: 'business-1',
+      wabaId: 'waba-1',
+      phoneNumberId: 'phone-1',
+      displayPhoneNumber: '+57 314 6014269',
+      verifiedName: 'Melosoft',
+      connectionStatus: 'connected' as const,
+      onboardingType: 'coexistence' as const,
+      coexistenceEnabled: true,
+      templateName: 'melosoft_order_confirmation_v1',
+      templateLanguage: 'es_CO',
+      templateStatus: 'approved' as const,
+      templateRejectedReason: null,
+      registrationStatus: 'failed' as const,
+      registeredAt: null,
+      registrationLastErrorCode: 'COEXISTENCE_ONBOARDING_INCOMPLETE',
+      registrationLastErrorMessage: 'Meta no confirmó la coexistencia.',
+      connectedAt: '2026-07-25T00:00:00.000Z',
+      lastVerifiedAt: '2026-07-25T00:00:00.000Z',
+      disconnectedAt: null,
+      lastErrorCode: null,
+      lastErrorMessage: null,
+      createdAt: '2026-07-25T00:00:00.000Z',
+      updatedAt: '2026-07-25T00:00:00.000Z',
+    };
+    const { whatsappService } = await import('@/features/whatsapp/whatsappService');
+    const getConnection = whatsappService.getConnection as ReturnType<typeof vi.fn>;
+    const registerPhone = whatsappService.registerPhone as ReturnType<typeof vi.fn>;
+    getConnection.mockReset().mockResolvedValue(failedConnection);
+    registerPhone.mockReset();
+
+    const { WhatsappSettingsPage } = await import('./WhatsappSettingsPage');
+    render(
+      <MemoryRouter initialEntries={['/admin/stores/store-1/whatsapp']}>
+        <Routes>
+          <Route path="/admin/stores/:storeId/whatsapp" element={<WhatsappSettingsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('button', { name: /reintentar conexión/i })).toBeTruthy();
+    await waitFor(() => expect(getConnection).toHaveBeenCalled());
+    expect(registerPhone).not.toHaveBeenCalled();
+  });
+});

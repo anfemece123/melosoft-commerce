@@ -217,17 +217,16 @@ export function WhatsappSettingsPage() {
     };
   }, [storeId, connection?.connectionStatus, connection?.templateStatus]);
 
-  // Repair pre-registration connections once when their owner opens the
-  // page. For coexistence this is only a read-only Meta status check;
-  // /register is reserved for new-number onboarding.
+  // Repair only genuinely pending pre-registration connections once
+  // when their owner opens the page. A failed coexistence connection
+  // must never retry in the background: its recovery requires a new,
+  // user-initiated Embedded Signup flow and the authoritative Meta
+  // coexistence finish event.
   useEffect(() => {
     if (
       !storeId ||
       connection?.connectionStatus !== 'connected' ||
-      !(
-        connection.registrationStatus === 'pending' ||
-        (connection.coexistenceEnabled && connection.registrationStatus === 'failed')
-      ) ||
+      connection.registrationStatus !== 'pending' ||
       automaticRegistrationStoreRef.current === storeId
     ) return;
 
