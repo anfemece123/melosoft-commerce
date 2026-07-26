@@ -105,33 +105,14 @@ Para agregarlo en el futuro:
 
 ---
 
-## 2. `melosoft_whatsapp_test_v1`
+## Mensaje de prueba
 
-Plantilla separada y deliberadamente genérica para el botón "Enviar
-mensaje de prueba" del panel — nunca reutiliza la plantilla real de
-pedidos para evitar mostrarle a un dueño de tienda un mensaje que
-parezca (pero no sea) una confirmación real.
-
-| Campo | Valor |
-|---|---|
-| Nombre exacto | `melosoft_whatsapp_test_v1` |
-| Categoría | **Utility** |
-| Idioma | `es_CO` |
-| Header | Ninguno |
-| Footer | Ninguno |
-| Botones | Ninguno |
-
-### Cuerpo (body)
-
-```
-Este es un mensaje de prueba de {{1}} enviado desde Melosoft Commerce. Si lo recibiste, la configuración de WhatsApp está funcionando correctamente.
-```
-
-### Variables
-
-| # | Nombre lógico | Ejemplo |
-|---|---|---|
-| `{{1}}` | Texto fijo `"Melosoft Commerce"` | `Melosoft Commerce` |
+El botón **Enviar mensaje de prueba** reutiliza
+`melosoft_order_confirmation_v1` con nueve valores sintéticos claramente
+marcados como prueba. No existe una segunda plantilla que el comercio deba
+crear, esperar o administrar. De esta manera la prueba valida exactamente la
+misma plantilla y ruta que utilizarán los pedidos reales, y el estado
+**Aprobada** de la pantalla siempre corresponde a lo que se intenta enviar.
 
 ---
 
@@ -142,8 +123,8 @@ Después de que una tienda completa Embedded Signup
 owner hace clic en **"Verificar plantilla"**. Eso llama a la Edge
 Function `whatsapp-template-sync`, que:
 
-1. Busca `melosoft_order_confirmation_v1` y `melosoft_whatsapp_test_v1`
-   en la WABA de esa tienda (`GET /{waba_id}/message_templates?name=...`).
+1. Busca `melosoft_order_confirmation_v1` en la WABA de esa tienda
+   (`GET /{waba_id}/message_templates?name=...`).
 2. Si no existe, la crea (`POST /{waba_id}/message_templates`) con
    exactamente el texto, categoría e idioma de este documento.
 3. Guarda el estado devuelto por Meta (`pending`/`approved`/`rejected`/
@@ -156,7 +137,8 @@ se habilitó después de que Meta ya había aprobado la plantilla, el botón
 búsqueda selecciona el idioma exacto (`es_CO`), incluso si la WABA conserva
 otra variante del mismo nombre (por ejemplo, una versión anterior `es_MX`).
 
-El sistema **no envía nada** hasta que el estado sea `approved` — un
+Tanto los pedidos como las pruebas usan esa única plantilla. El sistema
+**no envía nada** hasta que el estado sea `approved` — un
 envío contra una plantilla pendiente o rechazada respondería
 `132001`/`132000`, así que `send-whatsapp-notification` ni siquiera
 llama a Meta en ese caso: marca la notificación como `blocked`

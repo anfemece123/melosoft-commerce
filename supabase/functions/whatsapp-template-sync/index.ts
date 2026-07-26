@@ -59,14 +59,6 @@ const ORDER_CONFIRMATION_TEMPLATE = {
   ],
 } satisfies WhatsappTemplateDefinition;
 
-const TEST_TEMPLATE = {
-  name: 'melosoft_whatsapp_test_v1',
-  category: 'utility',
-  language: 'es_CO',
-  bodyText: 'Este es un mensaje de prueba de {{1}} enviado desde Melosoft Commerce. Si lo recibiste, la configuración de WhatsApp está funcionando correctamente.',
-  bodyExample: ['Melosoft Commerce'],
-} satisfies WhatsappTemplateDefinition;
-
 interface MetaErrorShape {
   error?: MetaOAuthError;
 }
@@ -279,10 +271,15 @@ Deno.serve(async (req: Request) => {
 
   const accessToken = context.access_token as string;
 
-  const [orderTemplateResult, testTemplateResult] = await Promise.all([
-    syncOneTemplate(graphApiVersion, wabaId, accessToken, ORDER_CONFIRMATION_TEMPLATE),
-    syncOneTemplate(graphApiVersion, wabaId, accessToken, TEST_TEMPLATE),
-  ]);
+  // The settings-page test send reuses this same approved template with
+  // unmistakably synthetic values. A second template created a false-ready
+  // state because only this order template's approval is persisted.
+  const orderTemplateResult = await syncOneTemplate(
+    graphApiVersion,
+    wabaId,
+    accessToken,
+    ORDER_CONFIRMATION_TEMPLATE,
+  );
 
   const { error: updateErr } = await adminClient.rpc('store_whatsapp_connection_update_template_status', {
     p_store_id: storeId,
@@ -295,14 +292,14 @@ Deno.serve(async (req: Request) => {
 
   await adminClient.from('store_whatsapp_connection_events').insert({
     store_id: storeId,
-    event_type: orderTemplateResult.diagnostic || testTemplateResult.diagnostic
+    event_type: orderTemplateResult.diagnostic
       ? 'template_status_changed'
       : 'template_created',
     actor_user_id: callerUser.id,
-    detail: `order_template=${orderTemplateResult.status} test_template=${testTemplateResult.status}`,
+    detail: `order_template=${orderTemplateResult.status}`,
   });
 
-  const diagnostics = [orderTemplateResult.diagnostic, testTemplateResult.diagnostic]
+  const diagnostics = [orderTemplateResult.diagnostic]
     .filter((item): item is MetaTemplateSyncDiagnostic => item !== null);
   if (diagnostics.length > 0) {
     const permissionDenied = diagnostics.some((diagnostic) =>
@@ -330,6 +327,8 @@ Deno.serve(async (req: Request) => {
   return json({
     ok: true,
     orderConfirmationTemplate: { name: ORDER_CONFIRMATION_TEMPLATE.name, status: orderTemplateResult.status, rejectedReason: orderTemplateResult.rejectedReason },
-    testTemplate: { name: TEST_TEMPLATE.name, status: testTemplateResult.status },
+    // Backward-compatible response field for already deployed frontends.
+    // Test sends now use the same single approved order template.
+    testTemplate: { name: ORDER_CONFIRMATION_TEMPLATE.name, status: orderTemplateResult.status },
   }, 200, cors);
 });

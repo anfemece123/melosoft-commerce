@@ -42,7 +42,10 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { resolveWhatsappTemplateSelection } from '../_shared/whatsappTemplateSelection.ts';
+import {
+  resolveWhatsappTemplateSelection,
+  WHATSAPP_TEST_ORDER_TEMPLATE_PARAMS,
+} from '../_shared/whatsappTemplateSelection.ts';
 import { readVerifiedJwtRole } from '../_shared/verifiedServiceRoleJwt.ts';
 
 const CORS_HEADERS = {
@@ -489,7 +492,10 @@ serve(async (req: Request) => {
     let bodyParams: string[];
 
     if (notification.event_type === 'test_message') {
-      bodyParams = ['Melosoft Commerce'];
+      // Exercise the exact same approved template used by real orders. This
+      // avoids requiring every merchant to wait for and track a second Meta
+      // template just for the settings-page test button.
+      bodyParams = [...WHATSAPP_TEST_ORDER_TEMPLATE_PARAMS];
     } else {
       const result = await buildOrderReceivedParams(notification);
       if ('error' in result) {

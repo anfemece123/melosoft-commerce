@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { resolveWhatsappTemplateSelection } from './whatsappTemplateSelection.ts';
+import {
+  resolveWhatsappTemplateSelection,
+  WHATSAPP_TEST_ORDER_TEMPLATE_PARAMS,
+} from './whatsappTemplateSelection.ts';
 
 describe('resolveWhatsappTemplateSelection', () => {
-  it('uses the notification template for a test message', () => {
+  it('uses the connected store template for a test message', () => {
     expect(resolveWhatsappTemplateSelection(
       'test_message',
       'melosoft_whatsapp_test_v1',
@@ -10,7 +13,7 @@ describe('resolveWhatsappTemplateSelection', () => {
       'melosoft_order_confirmation_v1',
       'es_CO',
     )).toEqual({
-      name: 'melosoft_whatsapp_test_v1',
+      name: 'melosoft_order_confirmation_v1',
       language: 'es_CO',
     });
   });
@@ -39,5 +42,10 @@ describe('resolveWhatsappTemplateSelection', () => {
       name: 'queued_template',
       language: 'es_CO',
     });
+  });
+
+  it('provides the nine parameters required by the approved order template', () => {
+    expect(WHATSAPP_TEST_ORDER_TEMPLATE_PARAMS).toHaveLength(9);
+    expect(WHATSAPP_TEST_ORDER_TEMPLATE_PARAMS.join(' ')).toContain('prueba');
   });
 });

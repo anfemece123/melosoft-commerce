@@ -301,7 +301,7 @@ describe('WhatsappSettingsPage — estado de plantilla', () => {
         status: 'approved',
         rejectedReason: null,
       },
-      testTemplate: { name: 'melosoft_whatsapp_test_v1', status: 'approved' },
+      testTemplate: { name: 'melosoft_order_confirmation_v1', status: 'approved' },
     });
 
     const { WhatsappSettingsPage } = await import('./WhatsappSettingsPage');
