@@ -553,20 +553,22 @@ export async function launchWhatsAppEmbeddedSignup(options: { coexistence: boole
     throw new EmbeddedSignupError(errorCode, correlationId);
   }
 
-  // An OAuth code or a normal FINISH event proves only that Meta login
-  // succeeded. It does NOT prove WhatsApp Business App coexistence. The
-  // special finish event is the authoritative browser-side signal for
-  // that flow; without it, never send the code to the backend marked as
-  // coexistence and never persist a false-positive connection.
+  // Meta's v4 coexistence UI can complete the QR/mobile-app flow and
+  // return a valid OAuth code without emitting the browser-side
+  // FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING message. Do not discard that
+  // one-time code here: the Edge Function independently verifies the
+  // selected phone with Meta and only persists coexistence when
+  // is_on_biz_app=true AND platform_type=CLOUD_API. That server-side
+  // check is authoritative and fails closed, while this postMessage is
+  // useful session metadata but is not reliably delivered by v4.
   if (
     options.coexistence &&
     session.state.lastEmbeddedSignupEvent !== COEXISTENCE_FINISH_EVENT
   ) {
-    log('coexistence_finish_event_missing', {
+    log('coexistence_finish_event_missing_using_server_verification', {
       lastEmbeddedSignupEvent: session.state.lastEmbeddedSignupEvent,
       elapsedMs: Date.now() - startedAt,
     });
-    throw new EmbeddedSignupError('COEXISTENCE_NOT_AVAILABLE', correlationId);
   }
 
   if (sessionData.wabaId) {

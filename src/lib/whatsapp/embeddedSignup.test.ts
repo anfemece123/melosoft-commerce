@@ -152,7 +152,7 @@ describe('launchWhatsAppEmbeddedSignup', () => {
     });
   });
 
-  it('never accepts a normal FINISH event as completed coexistence', async () => {
+  it('preserves the OAuth code when v4 emits a normal FINISH and delegates coexistence verification to the backend', async () => {
     const { launchWhatsAppEmbeddedSignup } = await importEmbeddedSignup();
     (window.FB!.login as ReturnType<typeof vi.fn>).mockImplementation((callback) => {
       callback({ status: 'connected', authResponse: { code: 'normal-oauth-code' } });
@@ -162,21 +162,24 @@ describe('launchWhatsAppEmbeddedSignup', () => {
     await vi.advanceTimersByTimeAsync(0);
     postFinishMessage({ event: 'FINISH' });
 
-    await expect(resultPromise).rejects.toThrow('COEXISTENCE_NOT_AVAILABLE');
+    const result = await resultPromise;
+    expect(result.code).toBe('normal-oauth-code');
+    expect(result.session.wabaId).toBe('880579344939347');
   });
 
-  it('never uses the server fallback when coexistence emitted no finish event', async () => {
+  it('uses the fail-closed server verification when v4 emits no coexistence finish event', async () => {
     const { launchWhatsAppEmbeddedSignup } = await importEmbeddedSignup();
     (window.FB!.login as ReturnType<typeof vi.fn>).mockImplementation((callback) => {
       callback({ status: 'connected', authResponse: { code: 'oauth-without-coexistence' } });
     });
 
     const resultPromise = launchWhatsAppEmbeddedSignup({ coexistence: true });
-    const assertion = expect(resultPromise).rejects.toThrow('COEXISTENCE_NOT_AVAILABLE');
     await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(3_000);
 
-    await assertion;
+    const result = await resultPromise;
+    expect(result.code).toBe('oauth-without-coexistence');
+    expect(result.session).toEqual({ wabaId: null, phoneNumberId: null, businessId: null });
   });
 
   it('omits the coexistence featureType instead of sending an empty string in the normal flow', async () => {
