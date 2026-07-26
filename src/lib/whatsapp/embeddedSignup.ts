@@ -115,7 +115,6 @@ export interface EmbeddedSignupSession {
 
 export interface EmbeddedSignupResult {
   code: string;
-  redirectUri: string | null;
   session: EmbeddedSignupSession;
 }
 
@@ -154,41 +153,6 @@ const COEXISTENCE_FINISH_EVENT = 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING';
 function isTrustedMetaMessageOrigin(origin: string): boolean {
   if (typeof origin !== 'string' || !origin.startsWith('https://')) return false;
   return origin === 'https://www.facebook.com' || origin.endsWith('.facebook.com');
-}
-
-function isMetaSdkRedirectUri(value: string): boolean {
-  if (!value || value.length > 4_096) return false;
-  try {
-    const url = new URL(value);
-    const trustedHost = url.hostname === 'facebook.com' || url.hostname.endsWith('.facebook.com');
-    const normalizedPath = url.pathname.replace(/\/+$/, '');
-    return url.protocol === 'https:' &&
-      trustedHost &&
-      normalizedPath === '/x/connect/xd_arbiter' &&
-      url.searchParams.has('version');
-  } catch {
-    return false;
-  }
-}
-
-// FB.login does not include its redirect_uri in authResponse. It does,
-// however, place that exact URI in the OAuth popup URL. Capture only the
-// official Meta SDK xd_arbiter URI so the backend can present the same
-// value when exchanging the one-time code.
-export function extractMetaSdkRedirectUriFromPopupUrl(
-  popupUrl: string | URL | undefined,
-): string | null {
-  if (!popupUrl) return null;
-  try {
-    const url = new URL(String(popupUrl), window.location.href);
-    if (!isTrustedMetaMessageOrigin(url.origin) || !url.pathname.includes('/dialog/oauth')) {
-      return null;
-    }
-    const redirectUri = url.searchParams.get('redirect_uri');
-    return redirectUri && isMetaSdkRedirectUri(redirectUri) ? redirectUri : null;
-  } catch {
-    return null;
-  }
 }
 
 let sdkLoadPromise: Promise<void> | null = null;
@@ -244,7 +208,6 @@ interface CoordinatorState {
 
 interface FacebookLoginResult {
   code: string;
-  redirectUri: string | null;
 }
 
 // Returns the promise, a `cancel` so the caller can tear it down
@@ -352,7 +315,6 @@ function runFacebookLogin(
   return new Promise<FacebookLoginResult>((resolve, reject) => {
     let settled = false;
     let popupCloseTimer: ReturnType<typeof setTimeout> | null = null;
-    let capturedRedirectUri: string | null = null;
 
     const hardTimeout = setTimeout(() => {
       log('login_timeout');
@@ -396,50 +358,15 @@ function runFacebookLogin(
       extras.featureType = 'whatsapp_business_app_onboarding';
     }
 
-    const originalWindowOpen = window.open;
-    const originalWindowOpenDescriptor = Object.getOwnPropertyDescriptor(window, 'open');
-    const restoreWindowOpen = () => {
-      if (window.open !== captureWindowOpen) return;
-      if (originalWindowOpenDescriptor) {
-        Object.defineProperty(window, 'open', originalWindowOpenDescriptor);
-      } else {
-        window.open = originalWindowOpen;
-      }
-    };
-    const captureWindowOpen = ((
-      url?: string | URL,
-      target?: string,
-      features?: string,
-    ): WindowProxy | null => {
-      capturedRedirectUri = extractMetaSdkRedirectUriFromPopupUrl(url);
-      if (capturedRedirectUri) {
-        const parsedRedirect = new URL(capturedRedirectUri);
-        log('oauth_redirect_captured', {
-          redirectHost: parsedRedirect.hostname,
-          redirectPath: parsedRedirect.pathname,
-        });
-      } else {
-        log('oauth_redirect_not_captured');
-      }
-      restoreWindowOpen();
-      return originalWindowOpen.call(window, url, target, features);
-    }) as typeof window.open;
-
-    Object.defineProperty(window, 'open', {
-      configurable: true,
-      writable: true,
-      value: captureWindowOpen,
-    });
     try {
       window.FB?.login(
         (response) => {
           log('login_callback_fired', {
             status: response.status ?? null,
             hasCode: Boolean(response.authResponse?.code),
-            hasRedirectUri: Boolean(capturedRedirectUri),
           });
           if (response.authResponse?.code) {
-            settle({ code: response.authResponse.code, redirectUri: capturedRedirectUri });
+            settle({ code: response.authResponse.code });
           } else {
             settle(new Error('EMBEDDED_SIGNUP_CANCELLED'));
           }
@@ -457,10 +384,6 @@ function runFacebookLogin(
       );
     } catch {
       settle(new Error('EMBEDDED_SIGNUP_ERROR'));
-    } finally {
-      // Popup creation is synchronous (otherwise browsers would block it).
-      // Restore immediately so unrelated window.open calls are untouched.
-      restoreWindowOpen();
     }
   });
 }
@@ -585,7 +508,6 @@ export async function launchWhatsAppEmbeddedSignup(options: { coexistence: boole
 
   return {
     code: loginResult.code,
-    redirectUri: loginResult.redirectUri,
     session: sessionData,
   };
 }

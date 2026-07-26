@@ -77,7 +77,6 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
   it('POSTs the OAuth code to the Edge Function when Meta omits all browser session info', async () => {
     launchWhatsAppEmbeddedSignupMock.mockResolvedValueOnce({
       code: 'auth-code-without-session',
-      redirectUri: 'https://www.facebook.com/connect/xd_arbiter/',
       session: { wabaId: null, phoneNumberId: null, businessId: null },
     });
 
@@ -107,7 +106,6 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
     await waitFor(() => expect(whatsappService.completeEmbeddedSignup).toHaveBeenCalledWith({
       storeId: 'store-1',
       code: 'auth-code-without-session',
-      redirectUri: 'https://www.facebook.com/connect/xd_arbiter/',
       wabaId: null,
       phoneNumberId: null,
       businessId: null,
@@ -121,7 +119,6 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
     
     launchWhatsAppEmbeddedSignupMock.mockResolvedValueOnce({
       code: 'auth-code',
-      redirectUri: 'https://www.facebook.com/connect/xd_arbiter/',
       session: { wabaId: '880579344939347', phoneNumberId: null, businessId: null },
     });
 
@@ -156,7 +153,6 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
   it('POSTs to whatsapp-embedded-signup with wabaId even without phoneNumberId', async () => {
     launchWhatsAppEmbeddedSignupMock.mockResolvedValueOnce({
       code: 'auth-code-only-waba',
-      redirectUri: 'https://www.facebook.com/connect/xd_arbiter/',
       session: { wabaId: '880579344939347', phoneNumberId: null, businessId: 'biz-1' },
     });
 
@@ -186,7 +182,6 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
     await waitFor(() => expect(whatsappService.completeEmbeddedSignup).toHaveBeenCalledWith({
       storeId: 'store-1',
       code: 'auth-code-only-waba',
-      redirectUri: 'https://www.facebook.com/connect/xd_arbiter/',
       wabaId: '880579344939347',
       phoneNumberId: null,
       businessId: 'biz-1',

@@ -45,10 +45,7 @@ import {
   buildMetaTokenExchangeDiagnostic,
   type MetaOAuthError,
 } from '../_shared/metaOAuthDiagnostics.ts';
-import {
-  buildMetaEmbeddedSignupTokenUrl,
-  normalizeMetaSdkRedirectUri,
-} from '../_shared/metaOAuthExchange.ts';
+import { buildMetaEmbeddedSignupTokenUrl } from '../_shared/metaOAuthExchange.ts';
 import {
   buildMetaPhoneRegistrationDiagnostic,
   generateWhatsappRegistrationPin,
@@ -69,7 +66,6 @@ const COEXISTENCE_INCOMPLETE_MESSAGE =
 interface OnboardingRequest {
   storeId: string;
   code: string;
-  redirectUri?: string | null;
   wabaId?: string | null;
   // Optional: Meta's FINISH_ONLY_WABA postMessage event (sent when the
   // WABA already has a verified number registered before running
@@ -139,7 +135,6 @@ Deno.serve(async (req: Request) => {
   }
 
   const { storeId, code, businessId, coexistence } = payload;
-  const redirectUri = normalizeMetaSdkRedirectUri(payload.redirectUri);
   const requestedWabaId = typeof payload.wabaId === 'string' && payload.wabaId.trim()
     ? payload.wabaId.trim()
     : null;
@@ -148,9 +143,6 @@ Deno.serve(async (req: Request) => {
   const requestedPhoneNumberId = payload.phoneNumberId || null;
   if (!storeId || !code) {
     return json({ error: 'Missing required fields: storeId, code' }, 400, cors);
-  }
-  if (payload.redirectUri && !redirectUri) {
-    return json({ error: 'INVALID_META_REDIRECT_URI' }, 400, cors);
   }
 
   // ── 3. storeId is NEVER trusted alone — verify real ownership ──
@@ -211,9 +203,6 @@ Deno.serve(async (req: Request) => {
     appId: metaAppId,
     appSecret: metaAppSecret,
     code,
-    // Backward-compatible only while the new frontend deployment
-    // propagates. New attempts send the exact SDK redirect URI.
-    redirectUri: redirectUri ?? '',
   });
 
   const tokenResult = await metaFetch(tokenUrl);

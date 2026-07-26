@@ -311,7 +311,7 @@ export function WhatsappSettingsPage() {
     setConnecting(true);
     try {
       const useCoexistence = forceCoexistence ?? coexistence;
-      const { code, redirectUri, session } = await launchWhatsAppEmbeddedSignup({ coexistence: useCoexistence });
+      const { code, session } = await launchWhatsAppEmbeddedSignup({ coexistence: useCoexistence });
       // Meta sometimes returns the valid OAuth code without emitting the
       // browser-side WA_EMBEDDED_SIGNUP event. Send the code regardless;
       // the Edge Function resolves the WABA from the exchanged token's
@@ -319,7 +319,6 @@ export function WhatsappSettingsPage() {
       const completion = await whatsappService.completeEmbeddedSignup({
         storeId,
         code,
-        redirectUri,
         wabaId: session.wabaId,
         phoneNumberId: session.phoneNumberId,
         businessId: session.businessId,
