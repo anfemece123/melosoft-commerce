@@ -38,6 +38,10 @@ import {
   type MetaTemplateRecord,
   type WhatsappTemplateStatus,
 } from '../_shared/whatsappTemplateStatus.ts';
+import {
+  resolveWhatsappWebhookCallbackUrl,
+  subscribeWhatsappWabaWithWebhookOverride,
+} from '../_shared/whatsappWebhookSubscription.ts';
 
 function json(body: unknown, status: number, cors: Record<string, string>) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...cors } });
@@ -204,9 +208,14 @@ Deno.serve(async (req: Request) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+  const webhookVerifyToken = Deno.env.get('META_WHATSAPP_VERIFY_TOKEN') ?? '';
   const graphApiVersion = Deno.env.get('META_GRAPH_API_VERSION') || DEFAULT_GRAPH_API_VERSION;
+  const webhookCallbackUrl = resolveWhatsappWebhookCallbackUrl({
+    supabaseUrl,
+    configuredUrl: Deno.env.get('META_WHATSAPP_WEBHOOK_URL'),
+  });
 
-  if (!supabaseUrl || !serviceRoleKey || !anonKey) {
+  if (!supabaseUrl || !serviceRoleKey || !anonKey || !webhookVerifyToken) {
     return json({ error: 'Server misconfiguration' }, 500, cors);
   }
 
@@ -270,6 +279,28 @@ Deno.serve(async (req: Request) => {
   }
 
   const accessToken = context.access_token as string;
+
+  // Safe to repeat. Besides new onboarding, this repairs connections made
+  // before Commerce used a per-WABA callback. The owner only needs to press
+  // "Verificar plantilla" once; no QR scan or Meta dashboard change.
+  const subscriptionResult = await subscribeWhatsappWabaWithWebhookOverride({
+    graphApiVersion,
+    wabaId,
+    accessToken,
+    callbackUrl: webhookCallbackUrl,
+    verifyToken: webhookVerifyToken,
+  });
+  if (!subscriptionResult.ok) {
+    const metaError = (subscriptionResult.body as MetaErrorShape).error;
+    console.error(
+      '[whatsapp-template-sync] Commerce webhook override failed:',
+      metaError?.message ?? subscriptionResult.status,
+    );
+    return json({
+      error: 'META_WEBHOOK_SUBSCRIPTION_FAILED',
+      message: 'Meta no pudo configurar el seguimiento de entrega de mensajes. Intenta nuevamente.',
+    }, 502, cors);
+  }
 
   // The settings-page test send reuses this same approved template with
   // unmistakably synthetic values. A second template created a false-ready

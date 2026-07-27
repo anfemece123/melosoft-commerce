@@ -54,6 +54,10 @@ import {
   registerWhatsappPhone,
   registrationRequiresExistingPin,
 } from '../_shared/whatsappPhoneRegistration.ts';
+import {
+  resolveWhatsappWebhookCallbackUrl,
+  subscribeWhatsappWabaWithWebhookOverride,
+} from '../_shared/whatsappWebhookSubscription.ts';
 
 function json(body: unknown, status: number, cors: Record<string, string>) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...cors } });
@@ -104,9 +108,14 @@ Deno.serve(async (req: Request) => {
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
   const metaAppId = Deno.env.get('META_APP_ID') ?? '';
   const metaAppSecret = Deno.env.get('META_WHATSAPP_APP_SECRET') ?? '';
+  const webhookVerifyToken = Deno.env.get('META_WHATSAPP_VERIFY_TOKEN') ?? '';
   const graphApiVersion = Deno.env.get('META_GRAPH_API_VERSION') || DEFAULT_GRAPH_API_VERSION;
+  const webhookCallbackUrl = resolveWhatsappWebhookCallbackUrl({
+    supabaseUrl,
+    configuredUrl: Deno.env.get('META_WHATSAPP_WEBHOOK_URL'),
+  });
 
-  if (!supabaseUrl || !serviceRoleKey || !anonKey || !metaAppId || !metaAppSecret) {
+  if (!supabaseUrl || !serviceRoleKey || !anonKey || !metaAppId || !metaAppSecret || !webhookVerifyToken) {
     console.error('[whatsapp-embedded-signup] missing required configuration');
     return json({ error: 'Server misconfiguration' }, 500, cors);
   }
@@ -352,31 +361,25 @@ Deno.serve(async (req: Request) => {
   // coexistence path even if an old or modified client omitted the flag.
   const isCoexistenceFlow = coexistenceStatus.isOnBizApp;
 
-  // ── 9. Subscribe Melosoft's app to this WABA's webhooks — required
-  //      once per WABA so whatsapp-webhook receives status/message
-  //      events for this store's number ──
-  const subscribeController = new AbortController();
-  const subscribeTimeout = setTimeout(() => subscribeController.abort(), 15_000);
-  let subscribed = false;
-  try {
-    const subRes = await fetch(
-      `https://graph.facebook.com/${graphApiVersion}/${encodeURIComponent(wabaId)}/subscribed_apps?access_token=${encodeURIComponent(accessToken)}`,
-      { method: 'POST', signal: subscribeController.signal },
+  // ── 9. Subscribe this Commerce WABA with its own callback override.
+  //      The app-level callback remains assigned to Melosoft Citas.
+  const subscriptionResult = await subscribeWhatsappWabaWithWebhookOverride({
+    graphApiVersion,
+    wabaId,
+    accessToken,
+    callbackUrl: webhookCallbackUrl,
+    verifyToken: webhookVerifyToken,
+  });
+  if (!subscriptionResult.ok) {
+    const error = (subscriptionResult.body as MetaErrorShape).error;
+    console.error(
+      '[whatsapp-embedded-signup] Commerce webhook override failed:',
+      error?.message ?? subscriptionResult.status,
     );
-    clearTimeout(subscribeTimeout);
-    subscribed = subRes.ok;
-    if (!subRes.ok) {
-      const body = await subRes.json().catch(() => ({}));
-      console.error('[whatsapp-embedded-signup] app subscription to WABA failed:', (body as MetaErrorShape).error?.message ?? subRes.status);
-    }
-  } catch {
-    clearTimeout(subscribeTimeout);
-  }
-  if (!subscribed) {
-    await eventLog('connect_failed', 'app_subscription_failed');
+    await eventLog('connect_failed', `app_subscription_failed status=${subscriptionResult.status}`);
     return json({
       error: 'META_APP_SUBSCRIPTION_FAILED',
-      message: 'La conexión con Meta se validó, pero no se pudo suscribir la app a tu cuenta de WhatsApp Business. Intenta reconectar.',
+      message: 'La conexión con Meta se validó, pero no se pudo configurar el seguimiento de mensajes. Intenta reconectar.',
     }, 502, cors);
   }
 

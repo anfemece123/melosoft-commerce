@@ -51,7 +51,8 @@ manuales adicionales por cada tienda.
 |---|---|---|---|
 | `META_APP_ID` | Público, pero se lee como secreto de Supabase en el backend | `whatsapp-embedded-signup` (intercambio de code) | `supabase secrets set META_APP_ID=REEMPLAZA` |
 | `META_WHATSAPP_APP_SECRET` | **Secreto** | `whatsapp-embedded-signup` (intercambio de code) y `whatsapp-webhook` (firma `X-Hub-Signature-256`) — es el mismo App Secret para ambos, un solo valor | `supabase secrets set META_WHATSAPP_APP_SECRET=REEMPLAZA` |
-| `META_WHATSAPP_VERIFY_TOKEN` | Cadena que tú inventas | `whatsapp-webhook` (verificación GET) | `supabase secrets set META_WHATSAPP_VERIFY_TOKEN=REEMPLAZA` |
+| `META_WHATSAPP_VERIFY_TOKEN` | Cadena que tú inventas | `whatsapp-webhook` (verificación GET), `whatsapp-embedded-signup` y `whatsapp-template-sync` (override por WABA) | `supabase secrets set META_WHATSAPP_VERIFY_TOKEN=REEMPLAZA` |
+| `META_WHATSAPP_WEBHOOK_URL` | Opcional | URL pública alternativa para el webhook de Commerce; por defecto se deriva de `SUPABASE_URL` | `supabase secrets set META_WHATSAPP_WEBHOOK_URL=https://.../whatsapp-webhook` |
 | `META_GRAPH_API_VERSION` | Opcional | `whatsapp-embedded-signup`, `whatsapp-phone-register`, `whatsapp-template-sync`, `send-whatsapp-notification` | `supabase secrets set META_GRAPH_API_VERSION=vXX.0` |
 
 Además, en el **frontend** (build-time, público, nunca secreto):
@@ -72,21 +73,29 @@ proyecto, ya no los usa ningún código — puedes eliminarlos:
 supabase secrets unset META_WHATSAPP_ACCESS_TOKEN META_WHATSAPP_PHONE_NUMBER_ID
 ```
 
-## 2. Webhook — uno solo para todas las tiendas
+## 2. Webhook de Commerce cuando la app de Meta también sirve a Citas
 
-- **URL:** `https://omgkiynnpaygxulugxmc.supabase.co/functions/v1/whatsapp-webhook`
-- **Verify token:** el valor de `META_WHATSAPP_VERIFY_TOKEN`
-- **Campos:** `messages` y `message_template_status_update`
+- **URL de Commerce:** `https://omgkiynnpaygxulugxmc.supabase.co/functions/v1/whatsapp-webhook`
+- **Verify token de Commerce:** el valor de `META_WHATSAPP_VERIFY_TOKEN`
 
-Regístralo **una sola vez** en App Dashboard → WhatsApp →
-Configuration → Webhook. Cada WABA que se conecta después (una por
-tienda) queda automáticamente suscrita a este mismo webhook — lo hace
-`whatsapp-embedded-signup` llamando a `POST /{waba_id}/subscribed_apps`
-al final de cada conexión exitosa, no requiere repetir este paso a mano
-por tienda. El campo `message_template_status_update` es el que permite
-que la insignia de la aplicación pase automáticamente de "En revisión de
-Meta" a "Aprobada" (o a rechazada/pausada/deshabilitada) cuando Meta
-termina la revisión.
+La URL principal visible en App Dashboard puede permanecer asignada a
+**Melosoft Citas**. No se reemplaza. Meta permite que el campo `messages`
+use una URL distinta por WABA mediante el cuerpo
+`override_callback_uri` + `verify_token` de
+`POST /{waba_id}/subscribed_apps`.
+
+`whatsapp-embedded-signup` aplica ese override automáticamente a cada
+WABA conectada desde Commerce. `whatsapp-template-sync` repite la misma
+operación de forma idempotente para reparar cuentas antiguas cuando el
+dueño pulsa **Verificar plantilla**. Los comercios no configuran URLs ni
+tokens y no necesitan repetir Embedded Signup.
+
+El override documentado por Meta corresponde a las notificaciones del
+campo `messages`, que incluyen los estados `sent`, `delivered`, `read` y
+`failed`. El estado de la plantilla también se consulta directamente a
+Graph API al abrir la pantalla o pulsar **Verificar plantilla**, por lo
+que Commerce no depende del webhook principal de Citas para reflejar su
+aprobación.
 
 ## 3. El worker de la cola (`pg_cron` + Vault) — sin cambios de fondo respecto a Modelo A
 
