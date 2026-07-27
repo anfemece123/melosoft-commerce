@@ -93,6 +93,7 @@ async function extractFunctionErrorMessage(error: unknown): Promise<string> {
 interface TemplateSyncResponse {
   ok: true;
   orderConfirmationTemplate: { name: string; status: string; rejectedReason: string | null };
+  orderStatusTemplate: { name: string; status: string; rejectedReason: string | null };
   testTemplate: { name: string; status: string };
 }
 

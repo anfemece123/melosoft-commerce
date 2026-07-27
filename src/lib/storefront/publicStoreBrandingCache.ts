@@ -12,7 +12,12 @@ export function readCachedPublicStoreBranding(storeSlug: string): PublicStorePag
   try {
     const raw = sessionStorage.getItem(getStorageKey(storeSlug));
     if (!raw) return null;
-    return JSON.parse(raw) as PublicStorePage;
+    const parsed = JSON.parse(raw) as PublicStorePage;
+    // Older cached storefront payloads predate the server-owned WhatsApp
+    // requirement flag. Refetch them instead of briefly rendering checkout
+    // as optional and correcting it a moment later.
+    if (typeof parsed.whatsappOrderUpdatesRequired !== 'boolean') return null;
+    return parsed;
   } catch {
     return null;
   }

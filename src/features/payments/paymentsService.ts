@@ -29,6 +29,23 @@ import {
   mapCheckoutSessionRowToStockUnavailablePayment,
 } from './payments.mapper';
 
+interface FunctionErrorWithContext extends Error {
+  context?: Response;
+}
+
+async function extractFunctionError(error: Error): Promise<string> {
+  const context = (error as FunctionErrorWithContext).context;
+  if (context instanceof Response) {
+    try {
+      const payload = await context.clone().json() as { message?: string; error?: string };
+      return payload.message ?? payload.error ?? error.message;
+    } catch {
+      // Keep the SDK error if the Edge Function did not return JSON.
+    }
+  }
+  return error.message;
+}
+
 export const paymentsService = {
   async getPaymentProviders(): Promise<PaymentProvider[]> {
     const { data, error } = await supabase
@@ -163,7 +180,7 @@ export const paymentsService = {
         redirect_url: redirectUrl,
       },
     });
-    if (error) throw new Error(error.message ?? 'Failed to create Wompi checkout session');
+    if (error) throw new Error(await extractFunctionError(error));
     if (!data?.checkoutUrl) throw new Error('Invalid response from payment service');
     return data as WompiCheckoutInitResult;
   },

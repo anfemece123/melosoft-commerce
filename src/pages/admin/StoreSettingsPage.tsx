@@ -2048,10 +2048,15 @@ function HeaderSettingsSection({
     { value: 'lg', label: 'Grande' },
   ];
 
-  const MENU_TEXT_SIZE_OPTIONS: Array<{ value: MenuTextSize; label: string }> = [
-    { value: 'sm', label: 'Original' },
-    { value: 'md', label: 'Mediano' },
-    { value: 'lg', label: 'Grande' },
+  const MENU_TEXT_SIZE_OPTIONS: Array<{
+    value: MenuTextSize;
+    label: string;
+    sizeLabel: string;
+    previewClass: string;
+  }> = [
+    { value: 'sm', label: 'Pequeño', sizeLabel: '13 px', previewClass: 'text-[13px]' },
+    { value: 'md', label: 'Mediano', sizeLabel: '15 px', previewClass: 'text-[15px]' },
+    { value: 'lg', label: 'Grande', sizeLabel: '18 px', previewClass: 'text-[18px]' },
   ];
 
   const MENU_MODE_OPTIONS: Array<{ value: HeaderMenuMode; label: string; description: string }> = [
@@ -2196,13 +2201,16 @@ function HeaderSettingsSection({
                   type="button"
                   onClick={() => set('menuTextSize', opt.value)}
                   className={cn(
-                    'flex-1 rounded-xl border py-2.5 text-sm font-medium transition-all',
+                    'flex min-h-[72px] flex-1 flex-col items-center justify-center rounded-xl border px-2 py-2.5 transition-all',
                     settings.menuTextSize === opt.value
                       ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                       : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                   )}
                 >
-                  {opt.label}
+                  <span className={cn('font-semibold leading-none', opt.previewClass)}>Aa</span>
+                  <span className="mt-1.5 text-xs font-medium">
+                    {opt.label} · {opt.sizeLabel}
+                  </span>
                 </button>
               ))}
             </div>

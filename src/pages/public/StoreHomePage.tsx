@@ -21,7 +21,7 @@ import { StorefrontActionButton } from '@/components/public/storefront/Storefron
 import { StorefrontHero } from '@/components/public/storefront/StorefrontHero';
 import { StorefrontMediaFrame } from '@/components/public/storefront/StorefrontMediaFrame';
 import { StorefrontRatingStars } from '@/components/public/storefront/StorefrontRatingStars';
-import { StorefrontPageLoader } from '@/components/public/storefront/StorefrontPageLoader';
+import { StorefrontHomeSkeleton } from '@/components/public/storefront/StorefrontSkeletons';
 import { StorefrontCampaignOffersSection } from '@/components/public/storefront/StorefrontCampaignOffersSection';
 import { StorefrontWhatsappCtaSection } from '@/components/public/storefront/StorefrontWhatsappCtaSection';
 import { HomeSectionRenderer } from '@/components/public/storefront/homeSections/HomeSectionRenderer';
@@ -92,6 +92,7 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
   const [storeResolved, setStoreResolved] = useState(Boolean(cachedPayload?.store ?? storeBranding));
   const [contentLoading, setContentLoading] = useState(!cachedPayload);
   const [error, setError] = useState<string | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
   const [unavailableProductIds, setUnavailableProductIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -147,7 +148,7 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
       }
     }
     void load();
-  }, [cacheKey, cachedPayload, storeSlug]);
+  }, [cacheKey, cachedPayload, storeSlug, retryToken]);
 
   useEffect(() => {
     const isReady = !contentLoading;
@@ -167,20 +168,27 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
   }, [selectedLocation, store?.storeId]);
 
   if (!store && !storeResolved) {
-    return <StorefrontPageLoader branding={storeBranding} label="Estamos preparando el catálogo de esta empresa." />;
+    return <StorefrontHomeSkeleton branding={storeBranding} />;
   }
 
   if (contentLoading) {
-    return <StorefrontPageLoader branding={store ?? storeBranding} label="Estamos preparando el catálogo de esta empresa." />;
+    return <StorefrontHomeSkeleton branding={store ?? storeBranding} />;
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white px-4">
+      <div role="alert" className="min-h-screen flex items-center justify-center bg-white px-4">
         <div className="text-center">
           <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
           <h1 className="text-lg font-semibold text-gray-800 mb-1">Ocurrió un error</h1>
-          <p className="text-sm text-gray-500">{error}</p>
+          <p className="text-sm text-gray-500 mb-4">{error}</p>
+          <button
+            type="button"
+            onClick={() => setRetryToken((token) => token + 1)}
+            className="text-sm font-medium text-indigo-600 hover:underline"
+          >
+            Reintentar
+          </button>
         </div>
       </div>
     );

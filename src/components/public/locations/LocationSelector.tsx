@@ -2,6 +2,7 @@ import { MapPin, ChevronDown } from 'lucide-react';
 import { useSelectedLocation } from '@/lib/locations/locationContext';
 import { useLocationChangeWithCheck } from '@/lib/locations/useLocationChangeWithCheck';
 import { LocationConflictModal } from './LocationConflictModal';
+import { Skeleton } from '@/components/ui/Skeleton';
 import type { StorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 
 interface Props {
@@ -10,9 +11,17 @@ interface Props {
 }
 
 export function LocationSelector({ theme, storeId: _storeId }: Props) {
-  const { locations, selectedLocation } = useSelectedLocation();
+  const { locations, selectedLocation, isLoading } = useSelectedLocation();
   const { requestLocationChange, confirmLocationChange, cancelLocationChange, pendingChange, checking } =
     useLocationChangeWithCheck();
+
+  // While the locations list is still resolving we don't yet know whether
+  // this store even has more than one sede — show a small placeholder
+  // instead of rendering nothing and then popping the real selector in
+  // once it turns out there are multiple locations.
+  if (isLoading) {
+    return <Skeleton className="h-6 w-32 rounded-lg" style={{ backgroundColor: theme.surfaceAlt }} />;
+  }
 
   if (locations.length <= 1) return null;
 

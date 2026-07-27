@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { isLikelyPngAsset } from '@/lib/images/imageFormat';
+import { ImagePlaceholder } from '@/components/ui/ImagePlaceholder';
 
 interface StorefrontMediaFrameProps {
   src: string | null;
@@ -11,6 +12,8 @@ interface StorefrontMediaFrameProps {
   pngImageClassName?: string;
   className?: string;
   style?: CSSProperties;
+  /** Above-the-fold images (active gallery photo, hero) should load eagerly. */
+  priority?: boolean;
 }
 
 export function StorefrontMediaFrame({
@@ -23,23 +26,19 @@ export function StorefrontMediaFrame({
   pngImageClassName = 'h-full w-full object-cover p-0 drop-shadow-[0_10px_14px_rgba(15,23,42,0.08)]',
   className = '',
   style,
+  priority = false,
 }: StorefrontMediaFrameProps) {
   const isPng = isLikelyPngAsset(src);
 
   return (
-    <div
-      className={`relative overflow-hidden ${aspectClassName} ${roundedClassName} ${className}`.trim()}
+    <ImagePlaceholder
+      src={src}
+      alt={alt}
+      fallback={fallback}
+      priority={priority}
+      className={`${aspectClassName} ${roundedClassName} ${className}`.trim()}
       style={style}
-    >
-      {src ? (
-        <img
-          src={src}
-          alt={alt}
-          className={isPng ? pngImageClassName : imageClassName}
-        />
-      ) : (
-        fallback
-      )}
-    </div>
+      imgClassName={isPng ? pngImageClassName : imageClassName}
+    />
   );
 }

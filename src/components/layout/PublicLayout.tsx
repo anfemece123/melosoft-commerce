@@ -51,16 +51,20 @@ export function PublicLayout() {
     storeSlug ? readCachedPublicStoreBranding(storeSlug) : null
   );
   const [loading, setLoading] = useState(Boolean(storeSlug && !branding));
+  const [brandingError, setBrandingError] = useState<string | null>(null);
+  const [brandingRetryToken, setBrandingRetryToken] = useState(0);
 
   useEffect(() => {
     if (!storeSlug) {
       setBranding(null);
       setLoading(false);
+      setBrandingError(null);
       return;
     }
 
     const resolvedStoreSlug = storeSlug;
     const cachedBranding = readCachedPublicStoreBranding(resolvedStoreSlug);
+    setBrandingError(null);
     if (cachedBranding) {
       setBranding(cachedBranding);
       setLoading(false);
@@ -77,6 +81,10 @@ export function PublicLayout() {
         if (cancelled) return;
         setBranding(data);
         writeCachedPublicStoreBranding(resolvedStoreSlug, data);
+      } catch (err) {
+        if (!cancelled) {
+          setBrandingError(err instanceof Error ? err.message : 'No pudimos cargar esta tienda');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -87,10 +95,27 @@ export function PublicLayout() {
     return () => {
       cancelled = true;
     };
-  }, [storeSlug]);
+  }, [storeSlug, brandingRetryToken]);
 
   if (storeSlug && loading && !branding) {
-    return <div className="min-h-screen bg-white" />;
+    return <StorefrontPageLoader branding={null} label="Cargando tienda…" />;
+  }
+
+  if (storeSlug && brandingError && !branding) {
+    return (
+      <div role="alert" className="flex min-h-screen items-center justify-center bg-white px-6">
+        <div className="text-center">
+          <p className="mb-3 text-sm text-gray-500">{brandingError}</p>
+          <button
+            type="button"
+            onClick={() => setBrandingRetryToken((token) => token + 1)}
+            className="text-sm font-medium text-indigo-600 hover:underline"
+          >
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -384,6 +409,7 @@ function PublicStoreShell({
             nationalShippingFreeFrom={branding.nationalShippingFreeFrom}
             cashOnDeliveryEnabled={branding.cashOnDeliveryEnabled}
             onlineCheckoutEnabled={branding.onlineCheckoutEnabled}
+            whatsappOrderUpdatesRequired={branding.whatsappOrderUpdatesRequired}
           />
         ) : null}
       </div>

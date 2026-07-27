@@ -598,6 +598,12 @@ serve(async (req: Request) => {
     .single();
 
   if (sessionErr || !session) {
+    if (sessionErr?.message.includes('WHATSAPP_CONSENT_REQUIRED')) {
+      return json({
+        error: 'WHATSAPP_CONSENT_REQUIRED',
+        message: 'Debes aceptar las actualizaciones del pedido por WhatsApp para continuar.',
+      }, 422);
+    }
     console.error('Failed to create checkout_session:', sessionErr?.message);
     return json({ error: 'Could not create checkout session' }, 500);
   }

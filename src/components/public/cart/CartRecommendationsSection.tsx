@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { StorefrontProductCard } from '@/components/public/storefront/StorefrontProductCard';
+import { StorefrontProductGridSkeleton } from '@/components/public/storefront/StorefrontSkeletons';
+import { Skeleton } from '@/components/ui/Skeleton';
 import type { StorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import { productsService } from '@/features/products/productsService';
 import type { PublicProductPage } from '@/types/common.types';
@@ -27,9 +29,11 @@ export function CartRecommendationsSection({
   onAddToCart,
 }: CartRecommendationsSectionProps) {
   const [products, setProducts] = useState<PublicProductPage[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    setLoaded(false);
 
     async function loadRecommendations() {
       try {
@@ -66,6 +70,8 @@ export function CartRecommendationsSection({
         setProducts(merged);
       } catch {
         if (!cancelled) setProducts([]);
+      } finally {
+        if (!cancelled) setLoaded(true);
       }
     }
 
@@ -79,6 +85,17 @@ export function CartRecommendationsSection({
     () => buildCatalogItems(products.filter((product) => !excludedIdsSet.has(product.productId))).slice(0, 4),
     [products, excludedIdsSet]
   );
+
+  if (!loaded) {
+    return (
+      <section className="mt-16 border-t pt-10" style={{ borderColor: theme.border }}>
+        <div className="mb-6">
+          <Skeleton className="h-3 w-40 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
+        </div>
+        <StorefrontProductGridSkeleton theme={theme} isMenu={isMenu} columnsClassName="grid-cols-2 lg:grid-cols-4" count={4} />
+      </section>
+    );
+  }
 
   if (items.length === 0) return null;
 

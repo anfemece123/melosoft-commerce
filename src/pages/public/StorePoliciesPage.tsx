@@ -95,7 +95,7 @@ export function StorePoliciesPage() {
             <div key={section.key}>
               <h2 className="mb-2 font-semibold">{section.title}</h2>
               <div
-                className="h-16 rounded-lg border animate-pulse"
+                className="h-16 rounded-lg border animate-pulse motion-reduce:animate-none"
                 style={{ backgroundColor: theme.surfaceAlt, borderColor: theme.border }}
               />
             </div>

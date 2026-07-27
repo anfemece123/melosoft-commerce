@@ -161,6 +161,9 @@ function PaymentResultContent({ storeSlug }: { storeSlug: string }) {
 
         {/* Status card */}
         <div
+          role="status"
+          aria-busy={isLoading}
+          aria-live="polite"
           className="space-y-4 rounded-3xl border px-6 py-10 text-center shadow-lg"
           style={{ backgroundColor: theme.surface, borderColor: theme.border, boxShadow: `0 18px 40px ${theme.shadow}` }}
         >
@@ -169,7 +172,7 @@ function PaymentResultContent({ storeSlug }: { storeSlug: string }) {
           <div className="flex justify-center">
             {isLoading && (
               <div
-                className="h-14 w-14 rounded-full border-4 animate-spin"
+                className="h-14 w-14 rounded-full border-4 animate-spin motion-reduce:animate-none"
                 style={{ borderColor: withAlpha(theme.primary, 0.18), borderTopColor: theme.primary }}
               />
             )}
@@ -210,7 +213,7 @@ function PaymentResultContent({ storeSlug }: { storeSlug: string }) {
             >
               {waitingOrder ? (
                 <div className="flex flex-col items-center gap-2">
-                  <Loader2 className="h-5 w-5 animate-spin" style={{ color: theme.primary }} />
+                  <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" style={{ color: theme.primary }} />
                   <p className="text-xs" style={{ color: theme.mutedText }}>Registrando tu pedido...</p>
                 </div>
               ) : (

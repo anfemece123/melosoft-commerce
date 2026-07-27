@@ -157,7 +157,12 @@ export const ordersService = {
         })),
       })),
     });
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (error.message.includes('WHATSAPP_CONSENT_REQUIRED')) {
+        throw new Error('Debes aceptar las actualizaciones del pedido por WhatsApp para confirmar la compra.');
+      }
+      throw new Error(error.message);
+    }
     const result = data as {
       order_id: string;
       order_number: string;

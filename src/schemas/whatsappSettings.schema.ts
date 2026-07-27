@@ -3,6 +3,9 @@ import * as Yup from 'yup';
 export const whatsappSettingsSchema = Yup.object({
   enabled: Yup.boolean().default(false),
   customerOrderConfirmationEnabled: Yup.boolean().default(true),
+  fulfillmentUpdateEnabled: Yup.boolean().default(false),
+  orderDeliveredEnabled: Yup.boolean().default(false),
+  orderCancelledEnabled: Yup.boolean().default(false),
   finalMessage: Yup.string().trim().max(300, 'Máximo 300 caracteres').nullable().default(null),
 });
 

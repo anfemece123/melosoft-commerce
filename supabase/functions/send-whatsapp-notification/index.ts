@@ -46,6 +46,10 @@ import {
   resolveWhatsappTemplateSelection,
   WHATSAPP_TEST_ORDER_TEMPLATE_PARAMS,
 } from '../_shared/whatsappTemplateSelection.ts';
+import {
+  getWhatsappOrderStatusContent,
+  isWhatsappOrderStatusEvent,
+} from '../_shared/whatsappOrderStatus.ts';
 import { readVerifiedJwtRole } from '../_shared/verifiedServiceRoleJwt.ts';
 
 const CORS_HEADERS = {
@@ -89,6 +93,9 @@ type SendContext =
       template_name: string;
       template_language: string;
       template_status: string;
+      status_template_name: string;
+      status_template_language: string;
+      status_template_status: string;
     };
 
 // 'ambiguous' is distinct from 'recoverable': it means we genuinely do
@@ -412,6 +419,36 @@ serve(async (req: Request) => {
     ];
   }
 
+  async function buildOrderStatusParams(
+    notification: WhatsappNotificationRow,
+  ): Promise<string[] | { error: string }> {
+    const { data: order, error: orderErr } = await supabase
+      .from('orders')
+      .select('id, order_number, customer_name')
+      .eq('id', notification.order_id)
+      .single();
+    if (orderErr || !order) return { error: 'ORDER_NOT_FOUND' };
+
+    const { data: store } = await supabase
+      .from('stores')
+      .select('name')
+      .eq('id', notification.store_id)
+      .single();
+
+    if (!isWhatsappOrderStatusEvent(notification.event_type)) {
+      return { error: 'UNSUPPORTED_EVENT' };
+    }
+    const milestone = getWhatsappOrderStatusContent(notification.event_type);
+
+    return [
+      sanitizeTemplateParam(order.customer_name, 60),
+      sanitizeTemplateParam(order.order_number ?? order.id.slice(0, 8).toUpperCase(), 30),
+      sanitizeTemplateParam(store?.name ?? 'la tienda', 60),
+      milestone.status,
+      milestone.detail,
+    ];
+  }
+
   const { data: claimed, error: claimErr } = await supabase.rpc('claim_pending_whatsapp_notifications', {
     p_limit: limit,
     p_worker_id: `edge-${crypto.randomUUID().slice(0, 8)}`,
@@ -474,7 +511,12 @@ serve(async (req: Request) => {
       continue;
     }
 
-    if (context.template_status !== 'approved') {
+    const isStatusUpdate = isWhatsappOrderStatusEvent(notification.event_type);
+    const requiredTemplateStatus = isStatusUpdate
+      ? context.status_template_status
+      : context.template_status;
+
+    if (requiredTemplateStatus !== 'approved') {
       await supabase.from('whatsapp_notifications').update({
         status: 'blocked',
         is_permanent_failure: false,
@@ -496,6 +538,21 @@ serve(async (req: Request) => {
       // avoids requiring every merchant to wait for and track a second Meta
       // template just for the settings-page test button.
       bodyParams = [...WHATSAPP_TEST_ORDER_TEMPLATE_PARAMS];
+    } else if (isStatusUpdate) {
+      const result = await buildOrderStatusParams(notification);
+      if ('error' in result) {
+        await supabase.from('whatsapp_notifications').update({
+          status: 'failed',
+          is_permanent_failure: true,
+          last_error_category: 'permanent',
+          last_error_code: result.error,
+          last_error_message: 'No se pudo construir la actualización de estado del pedido.',
+          failed_at: nowIso,
+        }).eq('id', notification.id);
+        failed++;
+        continue;
+      }
+      bodyParams = result;
     } else {
       const result = await buildOrderReceivedParams(notification);
       if ('error' in result) {
@@ -519,6 +576,8 @@ serve(async (req: Request) => {
       notification.template_language,
       context.template_name,
       context.template_language,
+      context.status_template_name,
+      context.status_template_language,
     );
 
     const sendResult = await sendTemplateMessage({

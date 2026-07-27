@@ -21,6 +21,16 @@ export function AuthCallbackPage() {
   const profile = useAppSelector((state) => state.auth.profile);
   const myMemberships = useAppSelector((state) => state.stores.myMemberships);
   const [urlError, setUrlError] = useState<string | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
+
+  // Guards against a stuck spinner: if Supabase's detectSessionInUrl never
+  // fires a SIGNED_IN event (network blip, blocked third-party cookies) and
+  // bootstrap never resolves, there was previously no way out of the
+  // loading view at all.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setTimedOut(true), 12000);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   // Check for error params in the URL hash (Supabase puts them there when link expires)
   useEffect(() => {
@@ -75,7 +85,7 @@ export function AuthCallbackPage() {
 
   if (urlError) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white px-4">
+      <div role="alert" className="min-h-screen flex items-center justify-center bg-white px-4">
         <div className="text-center max-w-sm">
           <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-4" />
           <h1 className="text-lg font-semibold text-gray-800 mb-2">
@@ -93,10 +103,41 @@ export function AuthCallbackPage() {
     );
   }
 
+  if (timedOut && isBootstrapping) {
+    return (
+      <div role="alert" className="min-h-screen flex items-center justify-center bg-white px-4">
+        <div className="text-center max-w-sm">
+          <AlertCircle className="w-10 h-10 text-amber-500 mx-auto mb-4" />
+          <h1 className="text-lg font-semibold text-gray-800 mb-2">
+            Esto está tomando más de lo esperado
+          </h1>
+          <p className="text-sm text-gray-500 mb-6">
+            No pudimos confirmar tu sesión. Verifica tu conexión e intenta de nuevo.
+          </p>
+          <div className="flex items-center justify-center gap-4">
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="text-sm text-indigo-600 hover:text-indigo-700 font-medium underline"
+            >
+              Reintentar
+            </button>
+            <a
+              href="/login"
+              className="text-sm text-indigo-600 hover:text-indigo-700 font-medium underline"
+            >
+              Ir al inicio de sesión
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white">
+    <div role="status" aria-busy="true" aria-live="polite" className="min-h-screen flex items-center justify-center bg-white">
       <div className="flex flex-col items-center gap-3">
-        <Loader className="w-7 h-7 text-indigo-600 animate-spin" />
+        <Loader className="w-7 h-7 text-indigo-600 animate-spin motion-reduce:animate-none" aria-hidden="true" />
         <p className="text-sm text-gray-400">Verificando sesión…</p>
       </div>
     </div>

@@ -63,6 +63,24 @@ const ORDER_CONFIRMATION_TEMPLATE = {
   ],
 } satisfies WhatsappTemplateDefinition;
 
+// One generic utility template covers the few customer-facing milestones
+// after checkout. Using one template instead of one per state keeps every
+// merchant's Meta setup small and avoids unnecessary approval work.
+const ORDER_STATUS_TEMPLATE = {
+  name: 'melosoft_order_status_v1',
+  category: 'utility',
+  language: 'es_CO',
+  bodyText:
+    'Hola {{1}} 👋\n\nTenemos una actualización de tu pedido *{{2}}* en *{{3}}*.\n\nEstado: *{{4}}*\n{{5}}\n\nEste es un mensaje transaccional sobre tu compra.',
+  bodyExample: [
+    'María García',
+    'ORD-20260720-A1B2C3',
+    'Panadería Dulce Hogar',
+    'Listo para recoger',
+    'Ya puedes acercarte al punto de entrega seleccionado.',
+  ],
+} satisfies WhatsappTemplateDefinition;
+
 interface MetaErrorShape {
   error?: MetaOAuthError;
 }
@@ -302,20 +320,27 @@ Deno.serve(async (req: Request) => {
     }, 502, cors);
   }
 
-  // The settings-page test send reuses this same approved template with
-  // unmistakably synthetic values. A second template created a false-ready
-  // state because only this order template's approval is persisted.
-  const orderTemplateResult = await syncOneTemplate(
-    graphApiVersion,
-    wabaId,
-    accessToken,
-    ORDER_CONFIRMATION_TEMPLATE,
-  );
+  const [orderTemplateResult, statusTemplateResult] = await Promise.all([
+    syncOneTemplate(
+      graphApiVersion,
+      wabaId,
+      accessToken,
+      ORDER_CONFIRMATION_TEMPLATE,
+    ),
+    syncOneTemplate(
+      graphApiVersion,
+      wabaId,
+      accessToken,
+      ORDER_STATUS_TEMPLATE,
+    ),
+  ]);
 
-  const { error: updateErr } = await adminClient.rpc('store_whatsapp_connection_update_template_status', {
+  const { error: updateErr } = await adminClient.rpc('store_whatsapp_connection_update_template_statuses', {
     p_store_id: storeId,
-    p_template_status: orderTemplateResult.status,
-    p_rejected_reason: orderTemplateResult.rejectedReason,
+    p_order_template_status: orderTemplateResult.status,
+    p_order_rejected_reason: orderTemplateResult.rejectedReason,
+    p_status_template_status: statusTemplateResult.status,
+    p_status_rejected_reason: statusTemplateResult.rejectedReason,
   });
   if (updateErr) {
     console.error('[whatsapp-template-sync] failed to persist template status:', updateErr.message);
@@ -327,10 +352,10 @@ Deno.serve(async (req: Request) => {
       ? 'template_status_changed'
       : 'template_created',
     actor_user_id: callerUser.id,
-    detail: `order_template=${orderTemplateResult.status}`,
+    detail: `order_template=${orderTemplateResult.status} status_template=${statusTemplateResult.status}`,
   });
 
-  const diagnostics = [orderTemplateResult.diagnostic]
+  const diagnostics = [orderTemplateResult.diagnostic, statusTemplateResult.diagnostic]
     .filter((item): item is MetaTemplateSyncDiagnostic => item !== null);
   if (diagnostics.length > 0) {
     const permissionDenied = diagnostics.some((diagnostic) =>
@@ -358,6 +383,7 @@ Deno.serve(async (req: Request) => {
   return json({
     ok: true,
     orderConfirmationTemplate: { name: ORDER_CONFIRMATION_TEMPLATE.name, status: orderTemplateResult.status, rejectedReason: orderTemplateResult.rejectedReason },
+    orderStatusTemplate: { name: ORDER_STATUS_TEMPLATE.name, status: statusTemplateResult.status, rejectedReason: statusTemplateResult.rejectedReason },
     // Backward-compatible response field for already deployed frontends.
     // Test sends now use the same single approved order template.
     testTemplate: { name: ORDER_CONFIRMATION_TEMPLATE.name, status: orderTemplateResult.status },

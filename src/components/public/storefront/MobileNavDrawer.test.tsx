@@ -81,6 +81,7 @@ describe('MobileNavDrawer custom navigation', () => {
           settings={{
             ...DEFAULT_HEADER_SETTINGS,
             menuMode: 'custom',
+            menuTextSize: 'lg',
           }}
           categoryTree={categoryTree}
           collections={[collection]}
@@ -97,5 +98,7 @@ describe('MobileNavDrawer custom navigation', () => {
     expect(screen.getByRole('link', { name: 'Running' }).getAttribute('href'))
       .toBe('/s/demo/catalog?cat=zapatos&sub=running');
     expect(screen.queryByRole('link', { name: 'Temporada' })).toBeNull();
+    expect(screen.getByRole('link', { name: /mujer/i }).className).toContain('text-[18px]');
+    expect(screen.getByRole('link', { name: 'Running' }).className).toContain('text-[15px]');
   });
 });

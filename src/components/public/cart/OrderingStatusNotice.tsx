@@ -27,7 +27,13 @@ export function OrderingStatusNotice({
         : 'La tienda no está recibiendo pedidos en este momento.';
 
   return (
-    <div className="flex items-center gap-2 rounded-xl border px-3 py-3 text-xs font-medium" style={{ borderColor: `${color}55`, backgroundColor, color }}>
+    <div
+      role="status"
+      aria-busy={scheduleLoading}
+      aria-live="polite"
+      className="flex items-center gap-2 rounded-xl border px-3 py-3 text-xs font-medium"
+      style={{ borderColor: `${color}55`, backgroundColor, color }}
+    >
       <Icon className="h-4 w-4 shrink-0" />
       {label}
     </div>

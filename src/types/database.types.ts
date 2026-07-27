@@ -2444,6 +2444,10 @@ export interface Database {
           template_language: string;
           template_status: string;
           template_rejected_reason: string | null;
+          status_template_name: string;
+          status_template_language: string;
+          status_template_status: string;
+          status_template_rejected_reason: string | null;
           token_secret_reference: string | null;
           registration_status: string;
           registration_pin_secret_reference: string | null;
@@ -2474,6 +2478,10 @@ export interface Database {
           template_language?: string;
           template_status?: string;
           template_rejected_reason?: string | null;
+          status_template_name?: string;
+          status_template_language?: string;
+          status_template_status?: string;
+          status_template_rejected_reason?: string | null;
           token_secret_reference?: string | null;
           registration_status?: string;
           registration_pin_secret_reference?: string | null;
@@ -2504,6 +2512,10 @@ export interface Database {
           template_language?: string;
           template_status?: string;
           template_rejected_reason?: string | null;
+          status_template_name?: string;
+          status_template_language?: string;
+          status_template_status?: string;
+          status_template_rejected_reason?: string | null;
           token_secret_reference?: string | null;
           registration_status?: string;
           registration_pin_secret_reference?: string | null;
@@ -2618,6 +2630,7 @@ export interface Database {
           allows_local_delivery: boolean | null;
           allows_national_shipping: boolean | null;
           whatsapp_checkout_enabled: boolean | null;
+          whatsapp_order_updates_required: boolean;
           web_order_enabled: boolean | null;
           cash_on_delivery_enabled: boolean | null;
           online_checkout_enabled: boolean | null;

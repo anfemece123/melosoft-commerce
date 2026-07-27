@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Home, MapPinned, StoreIcon, Truck } from 'lucide-react';
+import { Home, MapPinned, MessageCircle, StoreIcon, Truck } from 'lucide-react';
 import type { FormikProps } from 'formik';
 import { geoService } from '@/features/geo/geoService';
 import type { GeoCity, GeoDepartment } from '@/features/geo/geo.types';
 import type { PublicStoreLocation } from '@/features/locations/locations.types';
 import type { CheckoutFormValues } from '@/schemas/order.schema';
-import type { StorefrontTheme } from '../storefront/storefrontTheme';
+import { withAlpha, type StorefrontTheme } from '../storefront/storefrontTheme';
 import type { CheckoutFulfillmentMethod, LocationCityOption } from '@/lib/orders/fulfillment';
 import { getPickupLocations } from '@/lib/orders/fulfillment';
 import { getFulfillmentMethodLabel, getFulfillmentMethodDescription } from '@/lib/orders/fulfillmentLabels';
@@ -116,6 +116,7 @@ interface CheckoutCustomerFormProps {
   nationalShippingFreeFrom?: number | null;
   localDeliveryNotes?: string | null;
   nationalShippingNotes?: string | null;
+  whatsappOrderUpdatesRequired?: boolean;
   onSelectSuggestedLocation?: (location: PublicStoreLocation) => void;
 }
 
@@ -141,6 +142,7 @@ export function CheckoutCustomerForm({
   nationalShippingFreeFrom,
   localDeliveryNotes,
   nationalShippingNotes,
+  whatsappOrderUpdatesRequired = false,
   onSelectSuggestedLocation,
 }: CheckoutCustomerFormProps) {
   const [departments, setDepartments] = useState<GeoDepartment[]>([]);
@@ -531,20 +533,49 @@ export function CheckoutCustomerForm({
         />
       </div>
 
-      <label className="flex items-start gap-2.5 text-xs" style={{ color: theme.mutedText }}>
-        <input
-          type="checkbox"
-          name="whatsappConsent"
-          checked={formik.values.whatsappConsent}
-          onChange={formik.handleChange}
-          className="mt-0.5 h-4 w-4 rounded"
-          style={{ accentColor: theme.primary }}
-        />
-        <span>
-          Quiero recibir por WhatsApp actualizaciones sobre este pedido (confirmación, estado y entrega).
-          No es publicidad y puedes dejar de recibirlas cuando quieras.
-        </span>
-      </label>
+      {whatsappOrderUpdatesRequired ? (
+        <div
+          className="rounded-xl border p-3"
+          style={{
+            borderColor:
+              formik.touched.whatsappConsent && formik.errors.whatsappConsent
+                ? theme.primary
+                : theme.border,
+            backgroundColor: withAlpha(theme.primary, 0.05),
+          }}
+        >
+          <label className="flex cursor-pointer items-start gap-3 text-sm" style={{ color: theme.text }}>
+            <input
+              type="checkbox"
+              name="whatsappConsent"
+              checked={formik.values.whatsappConsent}
+              onChange={formik.handleChange}
+              onBlur={formik.handleBlur}
+              aria-invalid={Boolean(formik.touched.whatsappConsent && formik.errors.whatsappConsent)}
+              aria-describedby="whatsappConsent-help whatsappConsent-error"
+              className="mt-0.5 h-5 w-5 shrink-0 rounded"
+              style={{ accentColor: theme.primary }}
+            />
+            <span className="flex min-w-0 gap-2">
+              <MessageCircle className="mt-0.5 h-4 w-4 shrink-0" style={{ color: theme.primary }} />
+              <span>
+                <span className="block font-semibold">
+                  Recibir actualizaciones del pedido por WhatsApp <span style={{ color: theme.primary }}>*</span>
+                </span>
+                <span id="whatsappConsent-help" className="mt-0.5 block text-xs" style={{ color: theme.mutedText }}>
+                  Es necesario para confirmar este pedido. Recibirás mensajes sobre su confirmación, estado y entrega;
+                  no publicidad.
+                </span>
+              </span>
+            </span>
+          </label>
+          {formik.touched.whatsappConsent && formik.errors.whatsappConsent ? (
+            <p id="whatsappConsent-error" className="mt-2 text-xs font-medium" style={{ color: theme.primary }}>
+              {formik.errors.whatsappConsent}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
     </>
   );
 }

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   X, User, Phone, MapPin, Home, Store, Clock, CreditCard,
-  StickyNote, ChevronRight, Loader2, MessageCircle, ShoppingBag,
+  StickyNote, ChevronRight, Loader2, ShoppingBag,
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { getFulfillmentMethodLabel, normalizeFulfillmentMethod } from '@/lib/orders/fulfillmentLabels';
@@ -15,27 +15,30 @@ interface NextAction {
   label: string;
   status: OrderStatus;
   destructive?: boolean;
-  whatsapp?: boolean;
 }
 
-function getNextActions(status: OrderStatus, context: OrderViewContext, hasPhone: boolean): NextAction[] {
-  const confirmLabel = hasPhone ? 'Confirmar y avisar por WhatsApp' : 'Confirmar pedido';
-
-  // Flow: pending → confirmed → processing → delivered
-  // 'shipped' is a legacy state (old "Listo"); new orders never reach it.
-  // Existing 'shipped' orders can still be advanced to 'delivered' via the drawer.
-  const ADVANCE: Partial<Record<OrderStatus, { status: OrderStatus; label: string; whatsapp?: boolean }>> =
+function getNextActions(
+  status: OrderStatus,
+  context: OrderViewContext,
+  fulfillmentMethod: Order['fulfillmentMethod'],
+  useManualWhatsappFallback: boolean,
+): NextAction[] {
+  const isPickup = normalizeFulfillmentMethod(fulfillmentMethod) === 'pickup';
+  const ADVANCE: Partial<Record<OrderStatus, { status: OrderStatus; label: string }>> =
     context === 'restaurant'
       ? {
-          pending:    { status: 'confirmed',  label: confirmLabel, whatsapp: hasPhone },
+          pending:    { status: 'confirmed',  label: useManualWhatsappFallback ? 'Confirmar y abrir WhatsApp' : 'Confirmar pedido' },
           confirmed:  { status: 'processing', label: 'Iniciar preparación' },
           processing: { status: 'delivered',  label: 'Marcar entregado' },
           shipped:    { status: 'delivered',  label: 'Marcar entregado' },
         }
       : {
-          pending:    { status: 'confirmed',  label: confirmLabel, whatsapp: hasPhone },
+          pending:    { status: 'confirmed',  label: useManualWhatsappFallback ? 'Confirmar y abrir WhatsApp' : 'Confirmar pedido' },
           confirmed:  { status: 'processing', label: 'Procesar pedido' },
-          processing: { status: 'delivered',  label: 'Marcar entregado' },
+          processing: {
+            status: 'shipped',
+            label: isPickup ? 'Marcar listo para recoger' : 'Marcar como enviado',
+          },
           shipped:    { status: 'delivered',  label: 'Marcar entregado' },
         };
 
@@ -65,6 +68,7 @@ interface OrderDetailDrawerProps {
   order: Order | null;
   context: OrderViewContext;
   storeName: string;
+  automaticWhatsappReady: boolean;
   locationMap: Record<string, string>;
   onClose: () => void;
   onStatusChange: (orderId: string, status: OrderStatus) => Promise<void>;
@@ -74,6 +78,7 @@ export function OrderDetailDrawer({
   order,
   context,
   storeName,
+  automaticWhatsappReady,
   locationMap,
   onClose,
   onStatusChange,
@@ -85,8 +90,13 @@ export function OrderDetailDrawer({
 
   const cfg = getStatusConfig(order.status, context);
   const locationName = order.storeLocationId ? (locationMap[order.storeLocationId] ?? null) : null;
-  const hasPhone = Boolean(order.customerPhone && normalizePhoneForWhatsApp(order.customerPhone));
-  const actions = getNextActions(order.status as OrderStatus, context, hasPhone);
+  const hasWhatsappPhone = Boolean(order.customerPhone && normalizePhoneForWhatsApp(order.customerPhone));
+  const actions = getNextActions(
+    order.status as OrderStatus,
+    context,
+    order.fulfillmentMethod,
+    !automaticWhatsappReady && hasWhatsappPhone,
+  );
 
   async function handleAction(status: OrderStatus) {
     setUpdating(status);
@@ -288,22 +298,6 @@ export function OrderDetailDrawer({
                   );
                 }
 
-                if (action.whatsapp) {
-                  return (
-                    <button
-                      key={action.status}
-                      type="button"
-                      onClick={() => setShowConfirmDialog(true)}
-                      disabled={updating !== null}
-                      className="w-full flex items-center justify-center gap-2 rounded-xl bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      {action.label}
-                    </button>
-                  );
-                }
-
-                // pending → confirmed without phone
                 if (action.status === 'confirmed') {
                   return (
                     <button
@@ -352,6 +346,7 @@ export function OrderDetailDrawer({
           storeName={storeName}
           locationName={locationName}
           context={context}
+          automaticWhatsappReady={automaticWhatsappReady}
           onStatusChange={onStatusChange}
           onClose={() => setShowConfirmDialog(false)}
         />

@@ -44,6 +44,21 @@ describe('resolveWhatsappTemplateSelection', () => {
     });
   });
 
+  it('uses the generic status template for customer-facing milestones', () => {
+    expect(resolveWhatsappTemplateSelection(
+      'order_shipped',
+      'queued_status_template',
+      'es_CO',
+      'melosoft_order_confirmation_v1',
+      'es_CO',
+      'melosoft_order_status_v1',
+      'es_CO',
+    )).toEqual({
+      name: 'melosoft_order_status_v1',
+      language: 'es_CO',
+    });
+  });
+
   it('provides the nine parameters required by the approved order template', () => {
     expect(WHATSAPP_TEST_ORDER_TEMPLATE_PARAMS).toHaveLength(9);
     expect(WHATSAPP_TEST_ORDER_TEMPLATE_PARAMS.join(' ')).toContain('prueba');

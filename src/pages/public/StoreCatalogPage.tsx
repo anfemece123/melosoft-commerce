@@ -21,7 +21,7 @@ import { buildCatalogItems, catalogItemMatchesFilters } from '@/lib/storefront/c
 import type { PublicProductPage, PublicStoreCategory, PublicStoreCollection, PublicStoreFacet } from '@/types/common.types';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { StorefrontProductCard } from '@/components/public/storefront/StorefrontProductCard';
-import { StorefrontPageLoader } from '@/components/public/storefront/StorefrontPageLoader';
+import { StorefrontCatalogGridSkeleton, StorefrontProductGridSkeleton } from '@/components/public/storefront/StorefrontSkeletons';
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
 import { usePublicRouteReady } from '@/components/layout/PublicRouteReadyContext';
@@ -142,8 +142,11 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
     if (reset) {
       requestVersionRef.current = requestVersion;
       nextOffsetRef.current = 0;
-      setProducts([]);
-      setTotalProductCount(0);
+      // Deliberately don't clear `products`/`totalProductCount` here — the
+      // previous result set stays visible (dimmed via `contentLoading`)
+      // until the new page of results replaces it below, instead of
+      // flashing to an empty/skeleton state on every filter/sort/search
+      // change.
       setContentLoading(true);
       setError(null);
       setLoadMoreError(null);
@@ -568,15 +571,28 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
 
   // ── Render ───────────────────────────────────────────────────
   if (contentLoading && !store) {
-    return <StorefrontPageLoader branding={storeBranding} label="Cargando catálogo…" />;
+    return <StorefrontCatalogGridSkeleton branding={storeBranding} />;
   }
 
-  if (error) {
+  // A fetch failure only takes over the whole page when there's nothing
+  // else to show yet (first load). Once a result set already exists, a
+  // failed filter/sort/search refresh instead keeps that grid on screen
+  // with an inline retry banner (see the grid section below) — losing the
+  // whole page (sidebar, filters, breadcrumbs) over a transient refresh
+  // error would be worse than just not having refreshed.
+  if (error && products.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white px-4">
+      <div role="alert" className="min-h-screen flex items-center justify-center bg-white px-4">
         <div className="text-center">
           <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
-          <p className="text-sm text-gray-500">{error}</p>
+          <p className="text-sm text-gray-500 mb-4">{error}</p>
+          <button
+            type="button"
+            onClick={() => void loadNextProductsPage(true)}
+            className="text-sm font-medium text-indigo-600 hover:underline"
+          >
+            Reintentar
+          </button>
         </div>
       </div>
     );
@@ -862,29 +878,16 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
 
           {/* Product grid */}
           <div className="min-w-0 flex-1">
-            {contentLoading ? (
-              <div className="grid grid-cols-2 gap-4 animate-pulse sm:grid-cols-3 lg:gap-6 xl:grid-cols-4">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="overflow-hidden rounded-xl"
-                    style={{ backgroundColor: theme.surfaceAlt }}
-                  >
-                    <div
-                      className="aspect-square"
-                      style={{ backgroundColor: theme.border }}
-                    />
-                    <div className="space-y-2 p-3">
-                      <div className="h-3 rounded" style={{ backgroundColor: theme.border }} />
-                      <div
-                        className="h-3 w-2/3 rounded"
-                        style={{ backgroundColor: theme.border }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : filteredAndSorted.length === 0 ? (
+            {contentLoading && products.length === 0 ? (
+              // Nothing to show yet at all (true first load) — full skeleton.
+              <StorefrontProductGridSkeleton
+                theme={theme}
+                isMenu={isMenu}
+                columnsClassName="grid-cols-2 sm:grid-cols-3 xl:grid-cols-4"
+                size="large"
+                count={8}
+              />
+            ) : !contentLoading && filteredAndSorted.length === 0 ? (
               <div
                 className="rounded-xl border border-dashed py-16 text-center"
                 style={{ borderColor: theme.border }}
@@ -894,7 +897,32 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:gap-6 xl:grid-cols-4">
+                {error && (
+                  <div
+                    role="alert"
+                    className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed px-4 py-3"
+                    style={{ borderColor: theme.border }}
+                  >
+                    <p className="text-sm" style={{ color: theme.mutedText }}>{error}</p>
+                    <button
+                      type="button"
+                      onClick={() => void loadNextProductsPage(true)}
+                      className="text-sm font-medium underline underline-offset-2"
+                      style={{ color: theme.primary }}
+                    >
+                      Reintentar
+                    </button>
+                  </div>
+                )}
+
+                {/* A filter/sort/search change keeps the previous result set
+                    on screen (dimmed + aria-busy) instead of wiping it back
+                    to a skeleton — only the very first load (above) shows
+                    the full skeleton. */}
+                <div
+                  aria-busy={contentLoading}
+                  className={`grid grid-cols-2 gap-4 sm:grid-cols-3 lg:gap-6 xl:grid-cols-4 transition-opacity duration-200 motion-reduce:transition-none ${contentLoading ? 'opacity-50' : 'opacity-100'}`}
+                >
                   {filteredAndSorted.map((item) => {
                     const product = item.product;
                     const isUnavailable = unavailableProductIds.has(product.productId) || item.isOutOfStock;
@@ -923,20 +951,14 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
                 </div>
 
                 {loadingMore && (
-                  <div className="mt-6 grid grid-cols-2 gap-4 animate-pulse sm:grid-cols-3 lg:gap-6 xl:grid-cols-4">
-                    {Array.from({ length: 3 }).map((_, i) => (
-                      <div
-                        key={`loading-more-${i}`}
-                        className="overflow-hidden rounded-xl"
-                        style={{ backgroundColor: theme.surfaceAlt }}
-                      >
-                        <div className="aspect-square" style={{ backgroundColor: theme.border }} />
-                        <div className="space-y-2 p-3">
-                          <div className="h-3 rounded" style={{ backgroundColor: theme.border }} />
-                          <div className="h-3 w-2/3 rounded" style={{ backgroundColor: theme.border }} />
-                        </div>
-                      </div>
-                    ))}
+                  <div className="mt-6">
+                    <StorefrontProductGridSkeleton
+                      theme={theme}
+                      isMenu={isMenu}
+                      columnsClassName="grid-cols-2 sm:grid-cols-3 xl:grid-cols-4"
+                      size="large"
+                      count={3}
+                    />
                   </div>
                 )}
 

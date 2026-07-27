@@ -31,11 +31,11 @@ export function OfferLandingPage() {
   const location = useLocation();
   const { branding: storeBranding } = usePublicStoreBranding();
   const { setRouteReady } = usePublicRouteReady();
-  const cachedPayload = readPublicPageCache<OfferPageCachePayload>(`offer:${storeSlug}:${offerSlug}`);
 
-  const [offer, setOffer] = useState<PublicOfferPage | null>(cachedPayload?.offer ?? null);
-  const [loading, setLoading] = useState(!cachedPayload);
+  const [offer, setOffer] = useState<PublicOfferPage | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
   const [session, setSession] = useState<CampaignOfferSession | null>(null);
   const [sessionLoading, setSessionLoading] = useState(false);
 
@@ -44,19 +44,34 @@ export function OfferLandingPage() {
       setLoading(false);
       return;
     }
+    let cancelled = false;
+    const cacheKey = `offer:${storeSlug}:${offerSlug}`;
+    // Re-primed on every navigation (not just mount) so switching between
+    // two offer pages never leaves the *previous* offer's content/claim
+    // code on screen while the new one is in flight.
+    const cachedForKey = readPublicPageCache<OfferPageCachePayload>(cacheKey)?.offer ?? null;
+    setOffer(cachedForKey);
+    setSession(null);
+    setLoading(!cachedForKey);
+    setError(null);
+
     async function load() {
       try {
         const data = await offersService.getPublicOfferBySlug(storeSlug!, offerSlug!);
+        if (cancelled) return;
         setOffer(data);
-        writePublicPageCache(`offer:${storeSlug}:${offerSlug}`, { offer: data } satisfies OfferPageCachePayload);
+        writePublicPageCache(cacheKey, { offer: data } satisfies OfferPageCachePayload);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error cargando oferta');
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Error cargando oferta');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     void load();
-  }, [storeSlug, offerSlug]);
+    return () => {
+      cancelled = true;
+    };
+  }, [storeSlug, offerSlug, retryToken]);
 
   useEffect(() => {
     setRouteReady(!loading);
@@ -73,15 +88,23 @@ export function OfferLandingPage() {
     });
     if (offer.countdownMode !== 'per_visitor' || uiStatus !== 'active') return;
 
+    let cancelled = false;
     setSessionLoading(true);
     const token = getOrCreateVisitorToken();
     offersService
       .getOrCreateVisitorSession(offer.offerId, token)
-      .then(setSession)
+      .then((result) => {
+        if (!cancelled) setSession(result);
+      })
       .catch(() => {
         // silently fail — landing still works, just without claim code
       })
-      .finally(() => setSessionLoading(false));
+      .finally(() => {
+        if (!cancelled) setSessionLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [offer]);
 
   // Determine countdown target
@@ -99,18 +122,29 @@ export function OfferLandingPage() {
 
   if (error || !offer) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center px-4">
+      <div role="alert" className="min-h-screen bg-white flex items-center justify-center px-4">
         <div className="text-center">
           <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
           <h1 className="text-lg font-semibold text-gray-800 mb-2">
             {error ?? 'Oferta no encontrada'}
           </h1>
-          <Link
-            to={storeSlug ? buildStorefrontPath(storeSlug) : '/'}
-            className="text-sm text-indigo-600 hover:underline"
-          >
-            Ver tienda
-          </Link>
+          <div className="flex items-center justify-center gap-4">
+            {error ? (
+              <button
+                type="button"
+                onClick={() => setRetryToken((token) => token + 1)}
+                className="text-sm font-medium text-indigo-600 hover:underline"
+              >
+                Reintentar
+              </button>
+            ) : null}
+            <Link
+              to={storeSlug ? buildStorefrontPath(storeSlug) : '/'}
+              className="text-sm text-indigo-600 hover:underline"
+            >
+              Ver tienda
+            </Link>
+          </div>
         </div>
       </div>
     );

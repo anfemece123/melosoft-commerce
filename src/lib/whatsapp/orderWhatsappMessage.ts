@@ -6,13 +6,9 @@ import { getFulfillmentMethodLabel } from '@/lib/orders/fulfillmentLabels';
 export function normalizePhoneForWhatsApp(phone: string): string | null {
   const digits = phone.replace(/\D/g, '');
   if (!digits) return null;
-  // Already 12 digits with Colombia prefix
   if (digits.startsWith('57') && digits.length === 12) return digits;
-  // 10-digit Colombia mobile (starts with 3)
   if (digits.length === 10 && digits.startsWith('3')) return `57${digits}`;
-  // 11 digits starting with 0 (e.g. 0313...)
   if (digits.length === 11 && digits.startsWith('0')) return `57${digits.slice(1)}`;
-  // Assume already has country code if long enough
   if (digits.length >= 11) return digits;
   return null;
 }
@@ -32,7 +28,7 @@ function buildItemsSummary(order: Order): string {
     const variant = i.variantLabelSnapshot ? ` (${i.variantLabelSnapshot})` : '';
     const itemLine = `• ${i.quantity}× ${name}${variant}`;
     const customizationLines = i.customizations.map(
-      c => `   + ${c.optionItemLabel} (+${formatCurrency(c.priceDelta)})`
+      c => `   + ${c.optionItemLabel} (+${formatCurrency(c.priceDelta)})`,
     );
     return [itemLine, ...customizationLines];
   });
@@ -56,17 +52,12 @@ export function buildOrderConfirmationMessage(
   const lines: string[] = [
     `Hola ${order.customerName} 👋, tu pedido *#${orderRef}* fue confirmado ✅`,
     '',
+    context === 'restaurant'
+      ? `Lo estamos preparando en *${storeLabel}*.`
+      : `Ya estamos procesando tu compra en *${storeLabel}*.`,
   ];
 
-  if (context === 'restaurant') {
-    lines.push(`Lo estamos preparando en *${storeLabel}*.`);
-  } else {
-    lines.push(`Ya estamos procesando tu compra en *${storeLabel}*.`);
-  }
-
-  if (itemsSummary) {
-    lines.push('', 'Resumen:', itemsSummary);
-  }
+  if (itemsSummary) lines.push('', 'Resumen:', itemsSummary);
 
   lines.push(
     '',

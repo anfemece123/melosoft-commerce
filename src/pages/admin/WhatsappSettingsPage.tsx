@@ -24,14 +24,6 @@ import type {
   WhatsappConnectionStatus,
 } from '@/features/whatsapp/whatsapp.types';
 
-const FUTURE_EVENTS: { label: string; description: string }[] = [
-  { label: 'Pago aprobado', description: 'Se enviará cuando el pago en línea sea confirmado' },
-  { label: 'Pedido en preparación', description: 'Disponible próximamente' },
-  { label: 'Pedido listo para recoger', description: 'Disponible próximamente' },
-  { label: 'Pedido enviado', description: 'Disponible próximamente' },
-  { label: 'Pedido entregado', description: 'Disponible próximamente' },
-];
-
 function StatusBadge({ status }: { status: WhatsappNotificationStatus }) {
   const map: Record<WhatsappNotificationStatus, { label: string; className: string; icon: React.ReactNode }> = {
     queued:            { label: 'En cola',           className: 'bg-gray-100 text-gray-600',    icon: <Clock className="w-3 h-3" /> },
@@ -192,7 +184,9 @@ export function WhatsappSettingsPage() {
   // onboarding automatic: merchants never need to create templates by hand.
   useEffect(() => {
     const templateNeedsSync = connection?.templateStatus === 'not_created' ||
-      connection?.templateStatus === 'pending';
+      connection?.templateStatus === 'pending' ||
+      connection?.statusTemplateStatus === 'not_created' ||
+      connection?.statusTemplateStatus === 'pending';
     if (
       !storeId ||
       connection?.connectionStatus !== 'connected' ||
@@ -217,7 +211,7 @@ export function WhatsappSettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [storeId, connection?.connectionStatus, connection?.templateStatus]);
+  }, [storeId, connection?.connectionStatus, connection?.templateStatus, connection?.statusTemplateStatus]);
 
   // Repair only genuinely pending pre-registration connections once
   // when their owner opens the page. A failed coexistence connection
@@ -262,6 +256,10 @@ export function WhatsappSettingsPage() {
     initialValues: {
       enabled: settings?.enabled ?? false,
       customerOrderConfirmationEnabled: settings?.customerOrderConfirmationEnabled ?? true,
+      fulfillmentUpdateEnabled:
+        (settings?.orderReadyForPickupEnabled ?? false) || (settings?.orderShippedEnabled ?? false),
+      orderDeliveredEnabled: settings?.orderDeliveredEnabled ?? false,
+      orderCancelledEnabled: settings?.orderCancelledEnabled ?? false,
       finalMessage: settings?.finalMessage ?? '',
     },
     enableReinitialize: true,
@@ -274,14 +272,14 @@ export function WhatsappSettingsPage() {
           enabled: values.enabled ?? false,
           senderMode: 'dedicated',
           customerOrderConfirmationEnabled: values.customerOrderConfirmationEnabled ?? true,
-          orderConfirmedEnabled: settings?.orderConfirmedEnabled ?? false,
-          paymentApprovedEnabled: settings?.paymentApprovedEnabled ?? false,
-          paymentDeclinedEnabled: settings?.paymentDeclinedEnabled ?? false,
-          orderPreparingEnabled: settings?.orderPreparingEnabled ?? false,
-          orderReadyForPickupEnabled: settings?.orderReadyForPickupEnabled ?? false,
-          orderShippedEnabled: settings?.orderShippedEnabled ?? false,
-          orderDeliveredEnabled: settings?.orderDeliveredEnabled ?? false,
-          orderCancelledEnabled: settings?.orderCancelledEnabled ?? false,
+          orderConfirmedEnabled: false,
+          paymentApprovedEnabled: false,
+          paymentDeclinedEnabled: false,
+          orderPreparingEnabled: false,
+          orderReadyForPickupEnabled: values.fulfillmentUpdateEnabled ?? false,
+          orderShippedEnabled: values.fulfillmentUpdateEnabled ?? false,
+          orderDeliveredEnabled: values.orderDeliveredEnabled ?? false,
+          orderCancelledEnabled: values.orderCancelledEnabled ?? false,
           locale: settings?.locale ?? 'es_CO',
           timezone: settings?.timezone ?? 'America/Bogota',
           finalMessage: values.finalMessage?.trim() || null,
@@ -396,10 +394,10 @@ export function WhatsappSettingsPage() {
     setSyncingTemplate(true);
     try {
       await whatsappService.syncTemplate(storeId);
-      notify.success('Estado de la plantilla actualizado');
+      notify.success('Estado de las plantillas actualizado');
       await reloadAll(storeId);
     } catch (err) {
-      notify.error(err instanceof Error ? err.message : 'No se pudo sincronizar la plantilla');
+      notify.error(err instanceof Error ? err.message : 'No se pudieron sincronizar las plantillas');
     } finally {
       setSyncingTemplate(false);
     }
@@ -454,7 +452,9 @@ export function WhatsappSettingsPage() {
 
   const statusInfo = CONNECTION_STATUS_LABELS[connection?.connectionStatus ?? 'not_connected'];
   const templateInfo = TEMPLATE_STATUS_LABELS[connection?.templateStatus ?? 'not_created'];
+  const statusTemplateInfo = TEMPLATE_STATUS_LABELS[connection?.statusTemplateStatus ?? 'not_created'];
   const registrationInfo = REGISTRATION_STATUS_LABELS[connection?.registrationStatus ?? 'pending'];
+  const statusUpdatesReady = isConnected && connection?.statusTemplateStatus === 'approved';
 
   return (
     <AdminPanelShell
@@ -500,9 +500,15 @@ export function WhatsappSettingsPage() {
                     <span className="font-medium text-gray-800">{connection?.verifiedName ?? '—'}</span>
                   </div>
                   <div className="flex justify-between text-sm items-center">
-                    <span className="text-gray-500 flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> Plantilla</span>
+                    <span className="text-gray-500 flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> Pedido recibido</span>
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${templateInfo.className}`}>
                       {templateInfo.label}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm items-center">
+                    <span className="text-gray-500 flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> Actualizaciones</span>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusTemplateInfo.className}`}>
+                      {statusTemplateInfo.label}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm items-center">
@@ -513,6 +519,9 @@ export function WhatsappSettingsPage() {
                   </div>
                   {connection?.templateRejectedReason && (
                     <p className="text-xs text-red-600 pt-1">{connection.templateRejectedReason}</p>
+                  )}
+                  {connection?.statusTemplateRejectedReason && (
+                    <p className="text-xs text-red-600 pt-1">{connection.statusTemplateRejectedReason}</p>
                   )}
                 </div>
 
@@ -601,7 +610,7 @@ export function WhatsappSettingsPage() {
                     className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                   >
                     {syncingTemplate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                    Verificar plantilla
+                    Verificar plantillas
                   </button>
                   {canReconnect && (
                     <button
@@ -712,18 +721,72 @@ export function WhatsappSettingsPage() {
                 </div>
               </label>
 
-              {FUTURE_EVENTS.map((event) => (
-                <label
-                  key={event.label}
-                  className="flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 opacity-60 cursor-not-allowed"
-                >
-                  <input type="checkbox" disabled className="mt-0.5 h-4 w-4 rounded" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">{event.label}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{event.description}</p>
-                  </div>
-                </label>
-              ))}
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                <p className="text-sm font-semibold text-emerald-900">Flujo recomendado: máximo 3 mensajes normales</p>
+                <p className="mt-0.5 text-xs text-emerald-700">
+                  Recibido, listo/enviado y entregado. La cancelación solo se envía cuando ocurre. Confirmación,
+                  pago y preparación son cambios internos y no generan mensajes repetidos.
+                </p>
+              </div>
+
+              <label className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${
+                statusUpdatesReady ? 'border-gray-200 cursor-pointer' : 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
+              }`}>
+                <input
+                  type="checkbox"
+                  name="fulfillmentUpdateEnabled"
+                  checked={formik.values.fulfillmentUpdateEnabled ?? false}
+                  onChange={formik.handleChange}
+                  disabled={!statusUpdatesReady}
+                  className="mt-0.5 h-4 w-4 rounded"
+                />
+                <div>
+                  <p className="text-sm font-medium text-gray-800">Pedido listo para recoger o enviado</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Usa el texto correcto según el método de entrega del pedido.
+                  </p>
+                </div>
+              </label>
+
+              <label className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${
+                statusUpdatesReady ? 'border-gray-200 cursor-pointer' : 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
+              }`}>
+                <input
+                  type="checkbox"
+                  name="orderDeliveredEnabled"
+                  checked={formik.values.orderDeliveredEnabled ?? false}
+                  onChange={formik.handleChange}
+                  disabled={!statusUpdatesReady}
+                  className="mt-0.5 h-4 w-4 rounded"
+                />
+                <div>
+                  <p className="text-sm font-medium text-gray-800">Pedido entregado</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Cierra el ciclo con una confirmación breve al cliente.</p>
+                </div>
+              </label>
+
+              <label className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${
+                statusUpdatesReady ? 'border-gray-200 cursor-pointer' : 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
+              }`}>
+                <input
+                  type="checkbox"
+                  name="orderCancelledEnabled"
+                  checked={formik.values.orderCancelledEnabled ?? false}
+                  onChange={formik.handleChange}
+                  disabled={!statusUpdatesReady}
+                  className="mt-0.5 h-4 w-4 rounded"
+                />
+                <div>
+                  <p className="text-sm font-medium text-gray-800">Pedido cancelado</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Avisa únicamente si el pedido realmente fue cancelado.</p>
+                </div>
+              </label>
+
+              {!statusUpdatesReady && (
+                <p className="text-xs text-amber-600">
+                  Verifica las plantillas y espera la aprobación de Meta para activar estas actualizaciones.
+                </p>
+              )}
 
               <div className="space-y-1">
                 <label className="block text-sm font-medium text-gray-700">Mensaje final (opcional)</label>

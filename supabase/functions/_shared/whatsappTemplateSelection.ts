@@ -1,3 +1,5 @@
+import { isWhatsappOrderStatusEvent } from './whatsappOrderStatus.ts';
+
 export interface WhatsappTemplateSelection {
   name: string;
   language: string;
@@ -11,12 +13,23 @@ export interface WhatsappTemplateSelection {
  * for every merchant and makes the test exercise the real sending path.
  */
 export function resolveWhatsappTemplateSelection(
-  _eventType: string,
+  eventType: string,
   notificationTemplateName: string,
   notificationTemplateLanguage: string,
   contextTemplateName: string | null | undefined,
   contextTemplateLanguage: string | null | undefined,
+  contextStatusTemplateName?: string | null,
+  contextStatusTemplateLanguage?: string | null,
 ): WhatsappTemplateSelection {
+  const isStatusUpdate = isWhatsappOrderStatusEvent(eventType);
+
+  if (isStatusUpdate) {
+    return {
+      name: contextStatusTemplateName || notificationTemplateName,
+      language: contextStatusTemplateLanguage || notificationTemplateLanguage,
+    };
+  }
+
   return {
     name: contextTemplateName || notificationTemplateName,
     language: contextTemplateLanguage || notificationTemplateLanguage,

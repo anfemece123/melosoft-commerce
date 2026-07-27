@@ -1,5 +1,6 @@
 import { useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { isLikelyPngAsset } from '@/lib/images/imageFormat';
+import { ImagePlaceholder } from '@/components/ui/ImagePlaceholder';
 
 interface ProductImageZoomProps {
   /** Always the already-resolved "active" image — general product photo,
@@ -23,7 +24,13 @@ const ZOOM_SCALE = 2.2;
  * checked once at mount (pure CSR app, no SSR to reconcile) and every
  * mouse handler is entirely unattached when it's false — so touch devices
  * get exactly the plain, un-zoomed image with zero event listeners, never
- * a broken half-triggered zoom from a tap. */
+ * a broken half-triggered zoom from a tap.
+ *
+ * Delegates all loading-state handling (shimmer while in flight, fade-in,
+ * broken-url fallback) to `ImagePlaceholder` — this component only adds the
+ * pointer tracking + scale transform on top, so the PDP's main image gets
+ * the same guarantees as every other storefront image instead of a bare
+ * `<img>` that could linger on stale bytes during a slow load. */
 export function ProductImageZoom({ src, alt, fallback, className = '' }: ProductImageZoomProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isZooming, setIsZooming] = useState(false);
@@ -41,32 +48,26 @@ export function ProductImageZoom({ src, alt, fallback, className = '' }: Product
     setOrigin({ x: Math.min(100, Math.max(0, x)), y: Math.min(100, Math.max(0, y)) });
   }
 
-  if (!src) {
-    return <div className={`relative h-full w-full overflow-hidden ${className}`}>{fallback}</div>;
-  }
-
   const isPng = isLikelyPngAsset(src);
 
   return (
-    <div
-      ref={containerRef}
+    <ImagePlaceholder
+      src={src}
+      alt={alt}
+      fallback={fallback}
+      priority
+      containerRef={containerRef}
       role="img"
       aria-label={alt}
-      className={`relative h-full w-full overflow-hidden ${hoverCapable ? 'cursor-zoom-in' : ''} ${className}`}
+      className={`h-full w-full ${hoverCapable ? 'cursor-zoom-in' : ''} ${className}`}
       onMouseEnter={hoverCapable ? () => setIsZooming(true) : undefined}
       onMouseMove={hoverCapable ? handleMouseMove : undefined}
       onMouseLeave={hoverCapable ? () => setIsZooming(false) : undefined}
-    >
-      <img
-        src={src}
-        alt={alt}
-        className={`h-full w-full object-cover ${isPng ? 'p-0 drop-shadow-[0_10px_14px_rgba(15,23,42,0.08)]' : ''}`}
-        style={{
-          transform: isZooming ? `scale(${ZOOM_SCALE})` : 'scale(1)',
-          transformOrigin: `${origin.x}% ${origin.y}%`,
-          transition: 'transform 150ms ease-out',
-        }}
-      />
-    </div>
+      imgClassName={`h-full w-full object-cover transition-transform duration-150 ease-out motion-reduce:transition-none ${isPng ? 'p-0 drop-shadow-[0_10px_14px_rgba(15,23,42,0.08)]' : ''}`}
+      imgStyle={{
+        transform: isZooming ? `scale(${ZOOM_SCALE})` : 'scale(1)',
+        transformOrigin: `${origin.x}% ${origin.y}%`,
+      }}
+    />
   );
 }

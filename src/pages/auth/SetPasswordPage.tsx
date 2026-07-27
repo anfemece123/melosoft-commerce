@@ -1,7 +1,8 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
-import { KeyRound } from 'lucide-react';
+import { AlertCircle, KeyRound, Loader } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAppDispatch } from '@/app/hooks';
 import { setUser, setProfile } from '@/features/auth/authSlice';
@@ -29,6 +30,24 @@ interface SetPasswordFormValues {
 export function SetPasswordPage() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
+  const [sessionState, setSessionState] = useState<'checking' | 'valid' | 'invalid'>('checking');
+
+  // The recovery/invite link puts a session in place via Supabase's
+  // detectSessionInUrl before this page mounts — verify it actually landed
+  // before letting the user fill out the form, instead of only discovering
+  // an expired/missing link at submit time.
+  useEffect(() => {
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data }) => {
+      if (cancelled) return;
+      setSessionState(data.session ? 'valid' : 'invalid');
+    }).catch(() => {
+      if (!cancelled) setSessionState('invalid');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const formik = useFormik<SetPasswordFormValues>({
     initialValues: { password: '', confirmPassword: '' },
@@ -58,6 +77,42 @@ export function SetPasswordPage() {
       }
     },
   });
+
+  if (sessionState === 'checking') {
+    return (
+      <div
+        role="status"
+        aria-busy="true"
+        aria-live="polite"
+        className="min-h-screen bg-gradient-to-br from-indigo-50 to-white flex items-center justify-center px-4"
+      >
+        <div className="flex flex-col items-center gap-3">
+          <Loader className="w-7 h-7 text-indigo-600 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          <p className="text-sm text-gray-400">Verificando enlace…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (sessionState === 'invalid') {
+    return (
+      <div role="alert" className="min-h-screen bg-gradient-to-br from-indigo-50 to-white flex items-center justify-center px-4">
+        <div className="text-center max-w-sm">
+          <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-4" />
+          <h1 className="text-lg font-semibold text-gray-800 mb-2">Enlace inválido o expirado</h1>
+          <p className="text-sm text-gray-500 mb-6">
+            Este enlace para crear tu contraseña ya no es válido. Solicita uno nuevo al administrador.
+          </p>
+          <a
+            href="/login"
+            className="text-sm text-indigo-600 hover:text-indigo-700 font-medium underline"
+          >
+            Ir al inicio de sesión
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-white flex items-center justify-center px-4">

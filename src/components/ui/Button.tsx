@@ -42,6 +42,7 @@ export function Button({
   return (
     <button
       disabled={disabled || isLoading}
+      aria-busy={isLoading || undefined}
       className={cn(
         'inline-flex items-center justify-center font-medium rounded-lg',
         'focus:outline-none focus:ring-2 focus:ring-offset-2',
@@ -55,7 +56,7 @@ export function Button({
     >
       {isLoading ? (
         <svg
-          className="animate-spin -ml-1 mr-2 h-4 w-4"
+          className="animate-spin motion-reduce:animate-none -ml-1 mr-2 h-4 w-4"
           fill="none"
           viewBox="0 0 24 24"
           aria-hidden="true"

@@ -25,7 +25,7 @@ const RETAIL_STATUS: Record<string, StatusConfig> = {
   pending:    { label: 'Pendiente',  color: '#92400e', bg: '#fef3c7' },
   confirmed:  { label: 'Confirmado', color: '#1e40af', bg: '#dbeafe' },
   processing: { label: 'En proceso', color: '#5b21b6', bg: '#ede9fe' },
-  shipped:    { label: 'Enviado',    color: '#065f46', bg: '#d1fae5' },
+  shipped:    { label: 'Listo / enviado', color: '#065f46', bg: '#d1fae5' },
   delivered:  { label: 'Entregado',  color: '#166534', bg: '#dcfce7' },
   cancelled:  { label: 'Cancelado',  color: '#991b1b', bg: '#fee2e2' },
 };

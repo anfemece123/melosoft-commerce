@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { MessageCircle, AlertCircle, Lock, ShoppingBag, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { MessageCircle, AlertCircle, Lock, ShoppingBag, ChevronLeft, ChevronRight, ChevronDown, Package, UtensilsCrossed } from 'lucide-react';
 import { getProductIcon } from '@/features/products/productDescriptionIcons';
 import { StorefrontActionButton } from '@/components/public/storefront/StorefrontActionButton';
 import { StorefrontBackButton } from '@/components/public/storefront/StorefrontBackButton';
@@ -8,7 +8,8 @@ import { StorefrontBreadcrumbs } from '@/components/public/storefront/Storefront
 import { StorefrontProductCustomizer } from '@/components/public/storefront/StorefrontProductCustomizer';
 import { StorefrontPurchaseDialog } from '@/components/public/storefront/StorefrontPurchaseDialog';
 import { StorefrontSizeChartDialog } from '@/components/public/storefront/StorefrontSizeChartDialog';
-import { StorefrontProductDetailSkeleton } from '@/components/public/storefront/StorefrontSkeletons';
+import { StorefrontProductDetailSkeleton, StorefrontProductGridSkeleton } from '@/components/public/storefront/StorefrontSkeletons';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { StorefrontProductCard } from '@/components/public/storefront/StorefrontProductCard';
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
 import { usePublicRouteReady } from '@/components/layout/PublicRouteReadyContext';
@@ -107,33 +108,24 @@ export function ProductLandingPage() {
   const { storeSlug: routeStoreSlug, productSlug } = useParams<{ storeSlug: string; productSlug: string }>();
   const storeSlug = useResolvedStoreSlug(routeStoreSlug);
   if (!storeSlug || !productSlug) return null;
-  return <ProductLandingContent storeSlug={storeSlug} productSlug={productSlug} />;
+  return <ProductLandingStoreScope storeSlug={storeSlug} productSlug={productSlug} />;
 }
 
-function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; productSlug: string }) {
+/**
+ * Owns everything that only depends on the *store* (breadcrumb category
+ * list, the recommendations pool, per-location unavailable-product ids) —
+ * deliberately kept in a component that does NOT remount when the customer
+ * navigates from one product to another, so that navigation never
+ * needlessly re-fetches store-wide data it already has. Only
+ * `ProductLandingContent` below (truly product-scoped state: the gallery,
+ * selected variant, price, etc.) gets a per-product `key`.
+ */
+function ProductLandingStoreScope({ storeSlug, productSlug }: { storeSlug: string; productSlug: string }) {
   const { branding: storeBranding } = usePublicStoreBranding();
-  const { setRouteReady } = usePublicRouteReady();
-  const { addItem } = useCart();
-  const [searchParams] = useSearchParams();
-  const { selectedLocation, locations } = useSelectedLocation();
-  const cachedPayload = readPublicPageCache<ProductPageCachePayload>(`product:${storeSlug}:${productSlug}`);
-  const { requestLocationChange, confirmLocationChange, cancelLocationChange, pendingChange } =
-    useLocationChangeWithCheck();
-  const [product, setProduct] = useState<PublicProductPage | null>(
-    normalizePublicProduct(cachedPayload?.product ?? null)
-  );
-  const [selections, setSelections] = useState<ProductOptionSelections>({});
-  const [specialInstructions, setSpecialInstructions] = useState('');
-  const [purchaseDialogOpen, setPurchaseDialogOpen] = useState(false);
-  const [selectedValueIds, setSelectedValueIds] = useState<Record<string, string>>({});
-  const [sizeChartOpen, setSizeChartOpen] = useState(false);
-  const [loading, setLoading] = useState(!cachedPayload);
-  const [error, setError] = useState<string | null>(null);
-  const [productAvailability, setProductAvailability] = useState<ProductAvailabilityState | null>(null);
+  const { selectedLocation } = useSelectedLocation();
   const [categories, setCategories] = useState<PublicStoreCategory[]>([]);
-  const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [openDetailKeys, setOpenDetailKeys] = useState<string[] | null>(null);
   const [recommendedProductsSource, setRecommendedProductsSource] = useState<PublicProductPage[]>([]);
+  const [recommendationsLoaded, setRecommendationsLoaded] = useState(false);
   const [recommendedAvailability, setRecommendedAvailability] = useState<RecommendedAvailabilityState | null>(null);
 
   // Only used to resolve the parent category's name/slug for the breadcrumb
@@ -147,72 +139,17 @@ function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; 
   }, [storeSlug]);
 
   useEffect(() => {
-    async function load() {
-      try {
-        const data = await productsService.getPublicProductBySlug(storeSlug, productSlug);
-        if (!data) {
-          setProduct(null);
-          setActiveImageIndex(0);
-          setOpenDetailKeys(null);
-          return;
-        }
-        const optionGroups = await productOptionsService.getPublicProductOptionGroups(data.productId);
-        const payload = normalizePublicProduct({ ...data, optionGroups }) as PublicProductPage;
-        setProduct(payload);
-        setActiveImageIndex(0);
-        setOpenDetailKeys(null);
-        writePublicPageCache(`product:${storeSlug}:${productSlug}`, { product: payload } satisfies ProductPageCachePayload);
-        setSelections(buildInitialProductOptionSelections(optionGroups));
-        // A catalog card for one visual value (e.g. "Zapatos deportivos -
-        // Verde") links here with ?opt=<optionValueId> so the PDP opens with
-        // that Color/Modelo preselected — only that one option value; the
-        // rest (e.g. Talla) is deliberately left for the customer to choose,
-        // same as clicking it manually. Falls back to the default/only
-        // variant when there's no preset (typical direct PDP visit).
-        setSelectedValueIds(
-          resolveInitialVariantSelection(payload, searchParams.get('opt'))
-        );
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error cargando producto');
-      } finally {
-        setLoading(false);
-      }
-    }
-    void load();
-  // Preset value is only applied once, at initial load — re-running this
-  // effect on every searchParams change would refetch the whole product.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeSlug, productSlug]);
-
-  useEffect(() => {
-    setRouteReady(!loading);
-  }, [loading, setRouteReady]);
-
-  useEffect(() => {
-    if (!product || !selectedLocation || locations.length <= 1) {
-      return;
-    }
     let cancelled = false;
-    const productId = product.productId;
-    const locationId = selectedLocation.locationId;
-    productAvailabilityService.getProductAvailability(product.productId)
-      .then(map => {
-        if (!cancelled) setProductAvailability({ productId, locationId, map });
-      })
-      .catch(() => {
-        if (!cancelled) setProductAvailability({ productId, locationId, map: {} });
-      });
-    return () => { cancelled = true; };
-  }, [product, selectedLocation, locations.length]);
-
-  useEffect(() => {
-    let cancelled = false;
+    setRecommendationsLoaded(false);
     productsService.getPublicProductsByStoreSlug(storeSlug)
       .then((items) => {
         if (!cancelled) setRecommendedProductsSource(items);
       })
       .catch(() => {
         if (!cancelled) setRecommendedProductsSource([]);
+      })
+      .finally(() => {
+        if (!cancelled) setRecommendationsLoaded(true);
       });
     return () => { cancelled = true; };
   }, [storeSlug]);
@@ -235,6 +172,160 @@ function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; 
     return () => { cancelled = true; };
   }, [selectedLocation, storeBranding?.storeId]);
 
+  const recommendedAvailabilityMatches = Boolean(
+    storeBranding?.storeId
+      && selectedLocation
+      && recommendedAvailability?.storeId === storeBranding.storeId
+      && recommendedAvailability.locationId === selectedLocation.locationId
+  );
+  const recommendedUnavailableIds = recommendedAvailabilityMatches
+    ? recommendedAvailability!.unavailableIds
+    : EMPTY_PRODUCT_ID_SET;
+
+  // `ProductLandingContent` is never reused between two different products —
+  // this key forces React to fully unmount/remount it on navigation instead
+  // of patching the existing tree in place. Without this, changing only the
+  // `productSlug` route param kept the same component instance alive with
+  // the *previous* product's state (images, selected variant, gallery
+  // index) still committed to the DOM for at least one paint before the
+  // data-fetch effect below had a chance to run and overwrite it — the
+  // exact "previous product's photo flashes for a moment" bug. A key change
+  // makes the reset atomic and unmounts the old fetch's effect (and thus
+  // its `cancelled` flag) synchronously, so an out-of-order response from
+  // product A or B can never land on product C's mounted instance either.
+  return (
+    <ProductLandingContent
+      key={`${storeSlug}:${productSlug}`}
+      storeSlug={storeSlug}
+      productSlug={productSlug}
+      categories={categories}
+      recommendedProductsSource={recommendedProductsSource}
+      recommendationsLoaded={recommendationsLoaded}
+      recommendedUnavailableIds={recommendedUnavailableIds}
+    />
+  );
+}
+
+interface ProductLandingContentProps {
+  storeSlug: string;
+  productSlug: string;
+  categories: PublicStoreCategory[];
+  recommendedProductsSource: PublicProductPage[];
+  recommendationsLoaded: boolean;
+  recommendedUnavailableIds: ReadonlySet<string>;
+}
+
+function ProductLandingContent({
+  storeSlug,
+  productSlug,
+  categories,
+  recommendedProductsSource,
+  recommendationsLoaded,
+  recommendedUnavailableIds,
+}: ProductLandingContentProps) {
+  const { branding: storeBranding } = usePublicStoreBranding();
+  const { setRouteReady } = usePublicRouteReady();
+  const { addItem } = useCart();
+  const [searchParams] = useSearchParams();
+  const { selectedLocation, locations } = useSelectedLocation();
+  const { requestLocationChange, confirmLocationChange, cancelLocationChange, pendingChange } =
+    useLocationChangeWithCheck();
+  const cacheKey = `product:${storeSlug}:${productSlug}`;
+  // Read once per mount (this component remounts on every product change —
+  // see the `key` above) so a cache hit can seed every piece of
+  // product-scoped state below in the exact same synchronous batch, never
+  // a render or two behind the product itself.
+  const cachedProduct = normalizePublicProduct(
+    readPublicPageCache<ProductPageCachePayload>(cacheKey)?.product ?? null
+  );
+  const [product, setProduct] = useState<PublicProductPage | null>(cachedProduct);
+  const [selections, setSelections] = useState<ProductOptionSelections>(() =>
+    cachedProduct ? buildInitialProductOptionSelections(cachedProduct.optionGroups) : {}
+  );
+  const [specialInstructions, setSpecialInstructions] = useState('');
+  const [purchaseDialogOpen, setPurchaseDialogOpen] = useState(false);
+  const [selectedValueIds, setSelectedValueIds] = useState<Record<string, string>>(() =>
+    cachedProduct ? resolveInitialVariantSelection(cachedProduct, searchParams.get('opt')) : {}
+  );
+  const [sizeChartOpen, setSizeChartOpen] = useState(false);
+  const [loading, setLoading] = useState(!cachedProduct);
+  const [error, setError] = useState<string | null>(null);
+  const [retryToken, setRetryToken] = useState(0);
+  const [productAvailability, setProductAvailability] = useState<ProductAvailabilityState | null>(null);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [openDetailKeys, setOpenDetailKeys] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setError(null);
+    // Only force the skeleton back on when we don't already have this
+    // product's data (i.e. a retry after a hard failure) — a cache-hit
+    // mount already rendered the right product synchronously via the
+    // lazy initializers above, so this must not re-blank it while this
+    // effect's background revalidation fetch is in flight.
+    if (!product) setLoading(true);
+
+    async function load() {
+      try {
+        const data = await productsService.getPublicProductBySlug(storeSlug, productSlug);
+        if (cancelled) return;
+        if (!data) {
+          setProduct(null);
+          return;
+        }
+        const optionGroups = await productOptionsService.getPublicProductOptionGroups(data.productId);
+        if (cancelled) return;
+        const payload = normalizePublicProduct({ ...data, optionGroups }) as PublicProductPage;
+        setProduct(payload);
+        writePublicPageCache(cacheKey, { product: payload } satisfies ProductPageCachePayload);
+        setSelections(buildInitialProductOptionSelections(optionGroups));
+        // A catalog card for one visual value (e.g. "Zapatos deportivos -
+        // Verde") links here with ?opt=<optionValueId> so the PDP opens with
+        // that Color/Modelo preselected — only that one option value; the
+        // rest (e.g. Talla) is deliberately left for the customer to choose,
+        // same as clicking it manually. Falls back to the default/only
+        // variant when there's no preset (typical direct PDP visit).
+        setSelectedValueIds(
+          resolveInitialVariantSelection(payload, searchParams.get('opt'))
+        );
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Error cargando producto');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  // Preset value is only applied once, at initial load — re-running this
+  // effect on every searchParams change would refetch the whole product.
+  // `product` is read only to decide whether to re-arm the skeleton, not
+  // synchronized against — including it would refetch on every load().
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeSlug, productSlug, retryToken]);
+
+  useEffect(() => {
+    setRouteReady(!loading);
+  }, [loading, setRouteReady]);
+
+  useEffect(() => {
+    if (!product || !selectedLocation || locations.length <= 1) {
+      return;
+    }
+    let cancelled = false;
+    const productId = product.productId;
+    const locationId = selectedLocation.locationId;
+    productAvailabilityService.getProductAvailability(product.productId)
+      .then(map => {
+        if (!cancelled) setProductAvailability({ productId, locationId, map });
+      })
+      .catch(() => {
+        if (!cancelled) setProductAvailability({ productId, locationId, map: {} });
+      });
+    return () => { cancelled = true; };
+  }, [product, selectedLocation, locations.length]);
+
   const productAvailabilityMatches = Boolean(
     product
       && selectedLocation
@@ -248,15 +339,6 @@ function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; 
       && selectedLocation
       && availabilityMap[selectedLocation.locationId] === false
   );
-  const recommendedAvailabilityMatches = Boolean(
-    storeBranding?.storeId
-      && selectedLocation
-      && recommendedAvailability?.storeId === storeBranding.storeId
-      && recommendedAvailability.locationId === selectedLocation.locationId
-  );
-  const recommendedUnavailableIds = recommendedAvailabilityMatches
-    ? recommendedAvailability!.unavailableIds
-    : EMPTY_PRODUCT_ID_SET;
 
   // Keep every hook above the loading/error/not-found returns below. These
   // values deliberately support a null product so the hook order is stable
@@ -358,19 +440,30 @@ function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; 
   if (error) {
     return (
       <div
+        role="alert"
         className="min-h-screen flex items-center justify-center px-4"
         style={{ backgroundColor: shellTheme.background, color: shellTheme.text }}
       >
         <div className="text-center">
           <AlertCircle className="mx-auto mb-3 h-10 w-10" style={{ color: shellTheme.primary }} />
           <p className="text-sm" style={{ color: shellTheme.mutedText }}>{error}</p>
-          <Link
-            to={buildStorefrontPath(storeSlug)}
-            className="mt-4 inline-block text-sm hover:underline"
-            style={{ color: shellTheme.primary }}
-          >
-            Volver a la tienda
-          </Link>
+          <div className="mt-4 flex items-center justify-center gap-4">
+            <button
+              type="button"
+              onClick={() => setRetryToken((token) => token + 1)}
+              className="text-sm font-medium hover:underline"
+              style={{ color: shellTheme.primary }}
+            >
+              Reintentar
+            </button>
+            <Link
+              to={buildStorefrontPath(storeSlug)}
+              className="text-sm hover:underline"
+              style={{ color: shellTheme.mutedText }}
+            >
+              Volver a la tienda
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -414,6 +507,21 @@ function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; 
   const textColor = theme.text;
   const isMenu = currentProduct.productType === 'menu_item';
   const whatsappNumber = (currentProduct.storeWhatsappNumber ?? '').replace(/\D/g, '');
+  // A missing/broken image must still read as "no photo" — never a blank
+  // colored box that looks like a loading/blank state — so every gallery
+  // fallback here shares this one icon treatment (same visual language as
+  // the catalog card and gallery components elsewhere in the storefront).
+  function renderImageFallback(iconSizeClassName: string) {
+    return (
+      <div className="flex h-full w-full items-center justify-center" style={{ backgroundColor: theme.surface }}>
+        {isMenu ? (
+          <UtensilsCrossed className={iconSizeClassName} style={{ color: theme.mutedText }} />
+        ) : (
+          <Package className={iconSizeClassName} style={{ color: theme.mutedText }} />
+        )}
+      </div>
+    );
+  }
 
   const commerceConfig: PublicCommerceConfig = {
     catalogType: currentProduct.catalogType,
@@ -657,7 +765,7 @@ function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; 
                       roundedClassName="rounded-none"
                       imageClassName="h-full w-full object-cover"
                       pngImageClassName="h-full w-full object-cover"
-                      fallback={<div className="h-full w-full" style={{ backgroundColor: theme.surface }} />}
+                      fallback={renderImageFallback('h-4 w-4')}
                     />
                   </button>
                 );
@@ -669,7 +777,7 @@ function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; 
                 <ProductImageZoom
                   src={activeGalleryImage?.imageUrl || null}
                   alt={activeGalleryImage?.altText || product.productName}
-                  fallback={<div className="h-full w-full" style={{ backgroundColor: theme.surface }} />}
+                  fallback={renderImageFallback('h-10 w-10')}
                 />
 
                 {safeGalleryImages.length > 1 && (
@@ -787,13 +895,19 @@ function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; 
                       >
                         <div className="h-[56px] w-[56px] lg:h-[60px] lg:w-[60px]" style={{ backgroundColor: theme.surface }}>
                           <StorefrontMediaFrame
-                            src={value.images[0]?.imageUrl ?? selectedVariant?.imageUrl ?? currentProduct.mainImageUrl}
+                            // This swatch previews `value` itself (e.g. the
+                            // "Verde" choice) — it must never fall back to
+                            // `selectedVariant`, which is whatever combo is
+                            // *currently* selected and often a different
+                            // value entirely; that previously made one
+                            // color's swatch show another color's photo.
+                            src={value.images[0]?.imageUrl ?? currentProduct.mainImageUrl}
                             alt={value.value}
                             aspectClassName="aspect-square"
                             roundedClassName="rounded-none"
                             imageClassName="h-full w-full object-cover"
                             pngImageClassName="h-full w-full object-cover"
-                            fallback={<div className="h-full w-full" style={{ backgroundColor: theme.surface }} />}
+                            fallback={renderImageFallback('h-4 w-4')}
                           />
                         </div>
                       </button>
@@ -1038,7 +1152,18 @@ function ProductLandingContent({ storeSlug, productSlug }: { storeSlug: string; 
           </section>
         )}
 
-        {recommendedItems.length > 0 && (
+        {!recommendationsLoaded ? (
+          <section className="mt-16 border-t pt-10" style={{ borderColor: theme.border }}>
+            <div className="mb-6">
+              <Skeleton className="h-3 w-40 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
+            </div>
+            <StorefrontProductGridSkeleton
+              branding={storeBranding}
+              columnsClassName="grid-cols-2 lg:grid-cols-4"
+              count={4}
+            />
+          </section>
+        ) : recommendedItems.length > 0 && (
           <section className="mt-16 border-t pt-10" style={{ borderColor: theme.border }}>
             <div className="mb-6 flex items-end justify-between gap-4">
               <div>

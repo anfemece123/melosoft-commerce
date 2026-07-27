@@ -82,8 +82,15 @@ export const LOGO_SIZE_MAP: Record<LogoSize, string> = {
   lg: 'h-[72px] w-[72px] md:h-[88px] md:w-[88px]',
 };
 
-// sm = original design size (12px), md/lg step up
+// Escala perceptible para que cada opción represente un cambio real en navegación.
 export const MENU_TEXT_SIZE_MAP: Record<MenuTextSize, string> = {
+  sm: 'text-[13px]',
+  md: 'text-[15px]',
+  lg: 'text-[18px]',
+};
+
+// Mantiene la jerarquía visual de los enlaces secundarios en el menú móvil.
+export const SUBMENU_TEXT_SIZE_MAP: Record<MenuTextSize, string> = {
   sm: 'text-[12px]',
   md: 'text-[13px]',
   lg: 'text-[15px]',

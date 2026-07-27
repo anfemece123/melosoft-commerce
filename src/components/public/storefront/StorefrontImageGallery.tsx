@@ -52,6 +52,7 @@ export function StorefrontImageGallery({
           alt={activeImage?.altText || productName}
           aspectClassName={isDetail ? 'aspect-square' : 'aspect-square'}
           roundedClassName={isDetail ? 'rounded-[1.75rem]' : 'rounded-[1.5rem]'}
+          priority={isDetail}
           fallback={
             <div className="flex h-full w-full items-center justify-center">
               {isMenu

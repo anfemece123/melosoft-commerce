@@ -13,10 +13,12 @@ import { usePendingOrdersBadge } from '@/features/orders/usePendingOrdersBadge';
 import { storeCommerceService } from '@/features/stores/storeCommerceService';
 import { getOrderFlowType } from '@/features/stores/storeCommerceProfiles';
 import { locationsService } from '@/features/locations/locationsService';
+import { whatsappService } from '@/features/whatsapp/whatsappService';
 import { notify } from '@/lib/notifications';
 import type { OrderStatus } from '@/types/common.types';
 import type { StoreCommerceSettings } from '@/features/stores/storeCommerce.types';
 import type { StoreLocation } from '@/features/locations/locations.types';
+import type { StoreWhatsappConnection, StoreWhatsappSettings } from '@/features/whatsapp/whatsapp.types';
 import { RestaurantOrdersBoard } from './orders/RestaurantOrdersBoard';
 import { RetailOrdersTable } from './orders/RetailOrdersTable';
 
@@ -99,11 +101,13 @@ export function OrdersPage() {
   const { storeId } = useParams<{ storeId: string }>();
   const dispatch = useAppDispatch();
   const { items, status, error } = useAppSelector(s => s.orders);
-  const reduxCommerceSettings = useAppSelector(s => s.stores.currentCommerceSettings);
   const storeName = useAppSelector(s => s.stores.current?.name ?? '');
+  const reduxCommerceSettings = useAppSelector(s => s.stores.currentCommerceSettings);
 
   const [commerceSettings, setCommerceSettings] = useState<StoreCommerceSettings | null>(reduxCommerceSettings);
   const [locations, setLocations] = useState<StoreLocation[]>([]);
+  const [whatsappSettings, setWhatsappSettings] = useState<StoreWhatsappSettings | null>(null);
+  const [whatsappConnection, setWhatsappConnection] = useState<StoreWhatsappConnection | null>(null);
   const [bootstrapped, setBootstrapped] = useState(false);
 
   // Read persisted view immediately so there is no flicker on revisit
@@ -137,6 +141,27 @@ export function OrdersPage() {
       })
       .catch(() => undefined)
       .finally(() => setBootstrapped(true));
+  }, [storeId]);
+
+  useEffect(() => {
+    if (!storeId) return;
+    let active = true;
+    void Promise.all([
+      whatsappService.getSettings(storeId),
+      whatsappService.getConnection(storeId),
+    ]).then(([settings, connection]) => {
+      if (!active) return;
+      setWhatsappSettings(settings);
+      setWhatsappConnection(connection);
+    }).catch(() => undefined);
+
+    const unsubscribe = whatsappService.subscribeToConnection(storeId, connection => {
+      if (active) setWhatsappConnection(connection);
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, [storeId]);
 
   // Set default view only when there is no saved preference
@@ -251,6 +276,13 @@ export function OrdersPage() {
   const sharedProps = {
     orders: items,
     storeName,
+    automaticWhatsappReady: Boolean(
+      whatsappSettings?.enabled &&
+      whatsappSettings.customerOrderConfirmationEnabled &&
+      whatsappConnection?.connectionStatus === 'connected' &&
+      whatsappConnection.registrationStatus === 'registered' &&
+      whatsappConnection.templateStatus === 'approved'
+    ),
     dateLabel,
     locationMap,
     locationOptions,

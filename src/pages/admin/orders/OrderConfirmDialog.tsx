@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, MessageCircle, Loader2 } from 'lucide-react';
+import { X, CheckCircle, Loader2 } from 'lucide-react';
 import { notify } from '@/lib/notifications';
 import {
   buildOrderConfirmationMessage,
@@ -15,6 +15,7 @@ interface OrderConfirmDialogProps {
   storeName: string;
   locationName: string | null;
   context: OrderViewContext;
+  automaticWhatsappReady: boolean;
   onStatusChange: (orderId: string, status: OrderStatus) => Promise<void>;
   onClose: () => void;
 }
@@ -24,35 +25,28 @@ export function OrderConfirmDialog({
   storeName,
   locationName,
   context,
+  automaticWhatsappReady,
   onStatusChange,
   onClose,
 }: OrderConfirmDialogProps) {
   const [loading, setLoading] = useState(false);
-
   const hasPhone = Boolean(order.customerPhone && normalizePhoneForWhatsApp(order.customerPhone));
 
   function handleConfirm() {
-    const message = hasPhone
+    const shouldOpenManualWhatsapp = !automaticWhatsappReady && hasPhone;
+    const message = shouldOpenManualWhatsapp
       ? buildOrderConfirmationMessage(order, storeName, locationName, context)
       : null;
     const url = message ? buildWhatsAppUrl(order.customerPhone, message) : null;
-
-    // Open WhatsApp synchronously inside this click handler (direct user gesture).
-    // We intentionally do NOT check the return value: browsers always return null
-    // when 'noopener' is set, even if the tab actually opened successfully.
-    if (url) {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
 
     setLoading(true);
     void (async () => {
       try {
         await onStatusChange(order.id, 'confirmed');
-        if (url) {
-          notify.success('Pedido confirmado. Abrimos WhatsApp para avisarle al cliente.');
-        } else {
-          notify.warning('Pedido confirmado, pero el teléfono del cliente no es válido para WhatsApp.');
-        }
+        notify.success(url
+          ? 'Pedido confirmado. Abrimos WhatsApp como alternativa manual.'
+          : 'Pedido confirmado');
         onClose();
       } catch {
         notify.error('No se pudo confirmar el pedido. Intenta de nuevo.');
@@ -82,18 +76,14 @@ export function OrderConfirmDialog({
         </div>
 
         <div className="px-5 py-4 space-y-4">
-          {hasPhone ? (
-            <p className="text-sm text-gray-600 leading-relaxed">
-              Confirmaremos este pedido y abriremos WhatsApp con un mensaje listo para enviarle a{' '}
-              <strong className="text-gray-800">{order.customerName}</strong>.
-            </p>
-          ) : (
-            <p className="text-sm text-gray-600 leading-relaxed">
-              El pedido se confirmará, pero{' '}
-              <span className="text-amber-700 font-medium">no hay un teléfono válido</span>{' '}
-              para avisar por WhatsApp.
-            </p>
-          )}
+          <p className="text-sm text-gray-600 leading-relaxed">
+            Confirmaremos el pedido de <strong className="text-gray-800">{order.customerName}</strong>.{' '}
+            {automaticWhatsappReady
+              ? 'Melosoft gestionará los avisos automáticos activados, sin abrir otra ventana de WhatsApp.'
+              : hasPhone
+                ? 'Como la integración automática no está activa, abriremos WhatsApp como alternativa manual.'
+                : 'La integración automática no está activa y el pedido no tiene un teléfono válido para el aviso manual.'}
+          </p>
 
           <div className="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2.5">
             <p className="text-xs text-gray-400 mb-0.5">Pedido</p>
@@ -118,16 +108,14 @@ export function OrderConfirmDialog({
             type="button"
             onClick={handleConfirm}
             disabled={loading}
-            className={`flex-1 flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white disabled:opacity-50 transition-colors ${
-              hasPhone ? 'bg-green-600 hover:bg-green-700' : 'bg-indigo-600 hover:bg-indigo-700'
-            }`}
+            className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-indigo-600 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
           >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
-            ) : hasPhone ? (
-              <MessageCircle className="w-4 h-4" />
-            ) : null}
-            {hasPhone ? 'Confirmar y abrir WhatsApp' : 'Confirmar pedido'}
+            ) : (
+              <CheckCircle className="w-4 h-4" />
+            )}
+            Confirmar pedido
           </button>
         </div>
       </div>

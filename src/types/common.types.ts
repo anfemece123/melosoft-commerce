@@ -207,6 +207,7 @@ export interface PublicStorePage {
   allowsLocalDelivery: boolean | null;
   allowsNationalShipping: boolean | null;
   whatsappCheckoutEnabled: boolean | null;
+  whatsappOrderUpdatesRequired: boolean;
   webOrderEnabled: boolean | null;
   cashOnDeliveryEnabled: boolean | null;
   onlineCheckoutEnabled: boolean | null;

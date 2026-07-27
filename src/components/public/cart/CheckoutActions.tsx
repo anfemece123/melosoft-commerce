@@ -26,13 +26,14 @@ export function CheckoutActions({
       <button
         type="button"
         disabled={isSubmitting || !hasSelectedLocation || !isAcceptingOrders || orderingStatusLoading}
+        aria-busy={isSubmitting}
         onClick={onSubmit}
         className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
         style={{ backgroundColor: theme.primary }}
       >
         {isSubmitting ? (
           <>
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
             {paymentChoice === 'online' ? 'Procesando...' : 'Confirmando...'}
           </>
         ) : paymentChoice === 'online' ? (

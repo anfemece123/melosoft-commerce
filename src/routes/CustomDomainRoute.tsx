@@ -35,8 +35,14 @@ export function CustomDomainRoute() {
 
   if (mode === 'loading') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
-        <Loader2 className="h-7 w-7 animate-spin text-indigo-600" aria-label="Resolviendo dominio" />
+      <div
+        role="status"
+        aria-busy="true"
+        aria-live="polite"
+        className="flex min-h-screen items-center justify-center bg-white"
+      >
+        <Loader2 className="h-7 w-7 animate-spin text-indigo-600 motion-reduce:animate-none" aria-hidden="true" />
+        <span className="sr-only">Resolviendo dominio…</span>
       </div>
     );
   }

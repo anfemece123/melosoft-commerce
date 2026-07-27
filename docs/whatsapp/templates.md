@@ -1,6 +1,6 @@
 # Plantillas de WhatsApp — Melosoft Commerce
 
-Plantillas transaccionales para pedidos (migraciones `094` y `096`).
+Plantillas transaccionales para pedidos (migraciones `094`, `096` y `107`).
 **Modelo B**: las plantillas viven dentro de la WABA de cada empresa
 (no en una cuenta central), así que cada tienda necesita su propia
 copia aprobada. Melosoft no le pide a cada empresa que entre a Meta
@@ -105,6 +105,52 @@ Para agregarlo en el futuro:
 
 ---
 
+## 2. `melosoft_order_status_v1`
+
+Una sola plantilla genérica cubre los hitos posteriores al pedido. No se crean
+plantillas distintas para cada estado.
+
+| Campo | Valor |
+|---|---|
+| Nombre exacto | `melosoft_order_status_v1` |
+| Categoría | **Utility** |
+| Idioma | `es_CO` |
+| Header / Footer / Botones | Ninguno |
+
+### Cuerpo (body)
+
+```
+Hola {{1}} 👋
+
+Tenemos una actualización de tu pedido *{{2}}* en *{{3}}*.
+
+Estado: *{{4}}*
+{{5}}
+
+Este es un mensaje transaccional sobre tu compra.
+```
+
+### Variables
+
+| # | Nombre lógico | Ejemplo |
+|---|---|---|
+| `{{1}}` | Nombre del cliente | `María García` |
+| `{{2}}` | Número de pedido | `ORD-20260720-A1B2C3` |
+| `{{3}}` | Nombre de la tienda | `Panadería Dulce Hogar` |
+| `{{4}}` | Hito visible | `Listo para recoger`, `Enviado`, `Entregado` o `Cancelado` |
+| `{{5}}` | Indicación breve correspondiente al hito | `Ya puedes acercarte al punto de entrega seleccionado.` |
+
+### Flujo profesional de mensajes
+
+- Pedido normal: recibido → listo/enviado → entregado (máximo 3 mensajes).
+- Cancelación: se notifica únicamente cuando realmente ocurre.
+- Confirmación interna, pago aprobado y preparación no generan mensajes; así
+  se evitan avisos repetidos que no aportan una acción nueva al cliente.
+- Para pedidos de restaurante, el flujo puede pasar de preparación a entregado,
+  por lo que normalmente se envían solo recibido y entregado.
+
+---
+
 ## Mensaje de prueba
 
 El botón **Enviar mensaje de prueba** reutiliza
@@ -123,12 +169,13 @@ Después de que una tienda completa Embedded Signup
 owner hace clic en **"Verificar plantilla"**. Eso llama a la Edge
 Function `whatsapp-template-sync`, que:
 
-1. Busca `melosoft_order_confirmation_v1` en la WABA de esa tienda
-   (`GET /{waba_id}/message_templates?name=...`).
-2. Si no existe, la crea (`POST /{waba_id}/message_templates`) con
-   exactamente el texto, categoría e idioma de este documento.
-3. Guarda el estado devuelto por Meta (`pending`/`approved`/`rejected`/
-   `paused`/`disabled`) en `store_whatsapp_connections.template_status`.
+1. Busca `melosoft_order_confirmation_v1` y `melosoft_order_status_v1` en la
+   WABA de esa tienda (`GET /{waba_id}/message_templates?name=...`).
+2. Crea automáticamente cualquiera que falte (`POST
+   /{waba_id}/message_templates`) con los textos de este documento.
+3. Guarda ambos estados devueltos por Meta (`pending`/`approved`/`rejected`/
+   `paused`/`disabled`) en `store_whatsapp_connections.template_status` y
+   `status_template_status`.
 
 Después, el webhook `message_template_status_update` mantiene ese estado
 sincronizado automáticamente cuando Meta termina la revisión. Si el webhook
@@ -137,8 +184,9 @@ se habilitó después de que Meta ya había aprobado la plantilla, el botón
 búsqueda selecciona el idioma exacto (`es_CO`), incluso si la WABA conserva
 otra variante del mismo nombre (por ejemplo, una versión anterior `es_MX`).
 
-Tanto los pedidos como las pruebas usan esa única plantilla. El sistema
-**no envía nada** hasta que el estado sea `approved` — un
+La confirmación inicial y las pruebas usan la primera plantilla; los hitos
+posteriores usan la segunda. El sistema **no envía nada** con una plantilla
+hasta que su estado sea `approved` — un
 envío contra una plantilla pendiente o rechazada respondería
 `132001`/`132000`, así que `send-whatsapp-notification` ni siquiera
 llama a Meta en ese caso: marca la notificación como `blocked`
@@ -150,7 +198,7 @@ mano en **Meta Business Manager → WhatsApp Manager → Plantillas de
 mensajes** de su propia WABA, respetando el nombre exacto, categoría e
 idioma de este documento — un nombre distinto hará que Meta responda
 `132001 Template does not exist`, porque `whatsapp_notifications.
-template_name`/`store_whatsapp_connections.template_name` deben
+template_name` y el nombre guardado en `store_whatsapp_connections` deben
 coincidir carácter por carácter con lo aprobado en Meta.
 
 ## Configuración de Supabase y Meta

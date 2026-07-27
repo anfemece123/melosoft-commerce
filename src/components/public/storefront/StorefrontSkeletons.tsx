@@ -1,10 +1,10 @@
-import type { CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Search, ShoppingCart, UtensilsCrossed } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Package, Search, ShoppingCart, UtensilsCrossed } from 'lucide-react';
 import { PublicStoreLogo } from './PublicStoreLogo';
-import { buildStorefrontTheme, STOREFRONT_CONTAINER_CLASS } from './storefrontTheme';
+import { buildStorefrontTheme, STOREFRONT_CONTAINER_CLASS, type StorefrontTheme } from './storefrontTheme';
 import type { PublicStorePage } from '@/types/common.types';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
+import { Skeleton, SkeletonRegion } from '@/components/ui/Skeleton';
 
 interface StorefrontBrandingLike {
   storeName?: string | null;
@@ -17,27 +17,7 @@ interface StorefrontBrandingLike {
   backgroundColor?: string | null;
   textColor?: string | null;
   buttonRadius?: string | null;
-}
-
-function SkeletonBlock({
-  className,
-  style,
-}: {
-  className: string;
-  style?: CSSProperties;
-}) {
-  return (
-    <div className={`relative overflow-hidden ${className}`} style={style}>
-      <div className="absolute inset-0 animate-pulse bg-white/30 dark:bg-white/10" />
-      <div
-        className="absolute inset-y-0 -left-1/3 w-1/2 animate-[pulse_1.8s_ease-in-out_infinite]"
-        style={{
-          background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.28) 50%, transparent 100%)',
-          filter: 'blur(12px)',
-        }}
-      />
-    </div>
-  );
+  catalogType?: string | null;
 }
 
 function buildThemeFromBranding(branding?: StorefrontBrandingLike | null) {
@@ -100,9 +80,9 @@ function HomeSkeletonHeader({
           </div>
 
           <div className="hidden items-center justify-center gap-4 lg:flex">
-            <SkeletonBlock className="h-3 w-12 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
-            <SkeletonBlock className="h-3 w-16 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
-            <SkeletonBlock className="h-3 w-20 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
+            <Skeleton className="h-3 w-12 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
+            <Skeleton className="h-3 w-16 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
+            <Skeleton className="h-3 w-20 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
           </div>
 
           <div className="flex items-center justify-end gap-2 md:gap-3">
@@ -130,7 +110,7 @@ function HomeSkeletonHeader({
               className="flex h-11 w-11 items-center justify-center rounded-full border shadow-sm lg:hidden"
               style={{ borderColor: theme.border, backgroundColor: theme.surface }}
             >
-              <SkeletonBlock className="h-4 w-4 rounded-sm" style={{ backgroundColor: theme.softPrimary }} />
+              <Skeleton className="h-4 w-4 rounded-sm" style={{ backgroundColor: theme.softPrimary }} />
             </div>
           </div>
         </div>
@@ -151,6 +131,87 @@ function HomeSkeletonHeader({
   );
 }
 
+/** Single product/menu-item card placeholder — mirrors `StorefrontProductCard`'s
+ * real structure (image, category label, 2-line title, rating row, price
+ * row, CTA button) so the grid doesn't jump in height once real cards
+ * replace it. */
+export function StorefrontProductCardSkeleton({
+  theme,
+  size = 'default',
+}: {
+  theme: StorefrontTheme;
+  size?: 'default' | 'large';
+}) {
+  const isLarge = size === 'large';
+  return (
+    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-transparent" aria-hidden="true">
+      <Skeleton
+        className="aspect-square w-full rounded-t-2xl border-b"
+        style={{ backgroundColor: theme.surfaceAlt, borderColor: theme.border }}
+      />
+      <div className={`flex flex-1 flex-col ${isLarge ? 'p-4 sm:p-5' : 'p-3.5'}`}>
+        <Skeleton className="h-3 w-16 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
+        <Skeleton className="mt-3 h-4 w-[88%] rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
+        <Skeleton className="mt-2 h-4 w-[65%] rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
+        <Skeleton className="mt-2 h-3 w-20 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
+        <div className="mt-2 flex items-center gap-2">
+          <Skeleton className="h-5 w-20 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
+          <Skeleton className="h-4 w-12 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
+        </div>
+        <Skeleton className={`mt-3 w-full rounded-lg ${isLarge ? 'h-11' : 'h-10'}`} style={{ backgroundColor: theme.primary }} />
+      </div>
+    </div>
+  );
+}
+
+/** Grid of `StorefrontProductCardSkeleton` — shared by the home page's
+ * catalog section, `StoreCatalogPage`, and any "recommended for you" rail,
+ * so all three ever only diverge in column count / item count. */
+export function StorefrontProductGridSkeleton({
+  branding,
+  theme: themeOverride,
+  isMenu: isMenuOverride,
+  count = 6,
+  columnsClassName = 'grid-cols-2 md:grid-cols-3',
+  size = 'default',
+  title = null,
+}: {
+  branding?: StorefrontBrandingLike | null;
+  /** Pass an already-resolved theme/isMenu (e.g. from a page that built its
+   * own `StorefrontTheme`) instead of a raw branding object. Takes
+   * precedence over `branding` when provided. */
+  theme?: StorefrontTheme;
+  isMenu?: boolean;
+  count?: number;
+  columnsClassName?: string;
+  size?: 'default' | 'large';
+  title?: string | null;
+}) {
+  const theme = themeOverride ?? buildThemeFromBranding(branding);
+  const isMenu = isMenuOverride ?? branding?.catalogType === 'menu';
+
+  return (
+    <SkeletonRegion label={isMenu ? 'Cargando el menú…' : 'Cargando productos…'}>
+      {title ? (
+        <div className="mb-4 flex items-center gap-2">
+          {isMenu ? (
+            <UtensilsCrossed className="h-5 w-5" style={{ color: theme.primary }} />
+          ) : (
+            <Package className="h-5 w-5" style={{ color: theme.primary }} />
+          )}
+          <h2 className="text-lg font-bold">{title}</h2>
+        </div>
+      ) : null}
+
+      <div className={`grid gap-4 ${columnsClassName}`}>
+        {Array.from({ length: count }).map((_, index) => (
+          <StorefrontProductCardSkeleton key={index} theme={theme} size={size} />
+        ))}
+      </div>
+    </SkeletonRegion>
+  );
+}
+
 export function StorefrontHomeSkeleton({
   branding,
   hasHero = true,
@@ -161,6 +222,7 @@ export function StorefrontHomeSkeleton({
   showCart?: boolean;
 }) {
   const theme = buildThemeFromBranding(branding);
+  const isMenu = branding?.catalogType === 'menu';
 
   return (
     <div style={{ backgroundColor: theme.background, color: theme.text, minHeight: '100vh' }}>
@@ -177,21 +239,21 @@ export function StorefrontHomeSkeleton({
         <HomeSkeletonHeader branding={branding} hasHero={hasHero} showCart={showCart} />
 
         {hasHero ? (
-          <section className="w-full pb-8 pt-0 md:pb-12">
+          <section className="w-full pb-8 pt-0 md:pb-12" aria-hidden="true">
             <div className="relative overflow-hidden px-6 pb-10 pt-[130px] md:px-10 md:pb-12 md:pt-[144px] lg:px-14">
               <div className={`mx-auto grid ${STOREFRONT_CONTAINER_CLASS} items-center gap-10 px-4 md:px-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] lg:gap-12`}>
                 <div className="order-2 flex items-center lg:order-1 lg:min-h-[460px]">
                   <div className="mx-auto flex w-full max-w-[620px] flex-col items-center text-center lg:mx-0 lg:max-w-[560px] lg:items-start lg:text-left">
                     <div className="space-y-3">
-                      <SkeletonBlock className="h-12 w-[280px] rounded-[18px] sm:h-14 sm:w-[340px] md:h-16 md:w-[420px]" style={{ backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.56)' }} />
-                      <SkeletonBlock className="h-12 w-[220px] rounded-[18px] sm:h-14 sm:w-[290px] md:h-16 md:w-[340px]" style={{ backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.56)' }} />
+                      <Skeleton className="h-12 w-[280px] rounded-[18px] sm:h-14 sm:w-[340px] md:h-16 md:w-[420px]" style={{ backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.56)' }} />
+                      <Skeleton className="h-12 w-[220px] rounded-[18px] sm:h-14 sm:w-[290px] md:h-16 md:w-[340px]" style={{ backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.56)' }} />
                     </div>
                     <div className="mt-5 space-y-2">
-                      <SkeletonBlock className="h-4 w-[240px] rounded-full sm:w-[300px] md:w-[360px]" style={{ backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.46)' }} />
-                      <SkeletonBlock className="h-4 w-[190px] rounded-full sm:w-[250px] md:w-[300px]" style={{ backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.46)' }} />
+                      <Skeleton className="h-4 w-[240px] rounded-full sm:w-[300px] md:w-[360px]" style={{ backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.46)' }} />
+                      <Skeleton className="h-4 w-[190px] rounded-full sm:w-[250px] md:w-[300px]" style={{ backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.46)' }} />
                     </div>
                     <div className="mt-8 w-full max-w-[320px] sm:max-w-[360px] lg:max-w-none">
-                      <SkeletonBlock className="h-[52px] w-full rounded-full lg:h-[46px] lg:w-[176px]" style={{ backgroundColor: theme.primary }} />
+                      <Skeleton className="h-[52px] w-full rounded-full lg:h-[46px] lg:w-[176px]" style={{ backgroundColor: theme.primary }} />
                     </div>
                   </div>
                 </div>
@@ -209,7 +271,7 @@ export function StorefrontHomeSkeleton({
                         backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.5)',
                       }}
                     >
-                      <SkeletonBlock className="h-[78%] w-[72%] rounded-[42%_42%_26%_26%/38%_38%_22%_22%]" style={{ backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.72)' }} />
+                      <Skeleton className="h-[78%] w-[72%] rounded-[42%_42%_26%_26%/38%_38%_22%_22%]" style={{ backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.72)' }} />
                       <div
                         className="absolute bottom-0 left-0 right-0 h-[84px]"
                         style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.03) 0%, rgba(0,0,0,0.12) 100%)' }}
@@ -243,71 +305,52 @@ export function StorefrontHomeSkeleton({
         style={{ backgroundColor: theme.secondary }}
       >
         <div className="mx-auto max-w-5xl">
-          <div className="mb-4 flex items-center gap-2">
-            <UtensilsCrossed className="h-5 w-5" style={{ color: theme.primary }} />
-            <h2 className="text-lg font-bold">Menú</h2>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, index) => (
-              <div key={index} className="overflow-hidden rounded-[28px] p-3" style={{ backgroundColor: theme.surface }}>
-                <SkeletonBlock className="aspect-square w-full rounded-[22px]" style={{ backgroundColor: theme.surfaceAlt }} />
-                <div className="mt-3 flex flex-col">
-                  <SkeletonBlock className="h-3 w-20 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
-                  <SkeletonBlock className="mt-3 h-4 w-[88%] rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
-                  <SkeletonBlock className="mt-2 h-4 w-[72%] rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
-                  <SkeletonBlock className="mt-3 h-3 w-24 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
-                  <div className="mt-4 flex items-center gap-2">
-                    <SkeletonBlock className="h-5 w-20 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
-                    <SkeletonBlock className="h-4 w-12 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
-                  </div>
-                  <SkeletonBlock className="mt-4 h-10 w-full rounded-full" style={{ backgroundColor: theme.primary }} />
-                </div>
-              </div>
-            ))}
-          </div>
+          <StorefrontProductGridSkeleton
+            branding={branding}
+            title={isMenu ? 'Menú' : 'Catálogo'}
+            columnsClassName="grid-cols-2 md:grid-cols-3"
+            count={6}
+          />
         </div>
       </section>
     </div>
   );
 }
 
+/** @deprecated kept for existing call sites — delegates to
+ * `StorefrontProductGridSkeleton`, which is the shared implementation. */
 export function StorefrontCatalogGridSkeleton({
   branding,
   title = null,
+  columnsClassName = 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-4',
+  count = 8,
 }: {
   branding?: StorefrontBrandingLike | null;
   title?: string | null;
+  columnsClassName?: string;
+  count?: number;
 }) {
-  const theme = buildThemeFromBranding(branding);
-
   return (
     <div className="mx-auto max-w-5xl">
-      {title ? (
-        <div className="mb-4 flex items-center gap-2">
-          <UtensilsCrossed className="h-5 w-5" style={{ color: theme.primary }} />
-          <h2 className="text-lg font-bold">{title}</h2>
-        </div>
-      ) : null}
+      <StorefrontProductGridSkeleton
+        branding={branding}
+        title={title}
+        columnsClassName={columnsClassName}
+        count={count}
+        size="large"
+      />
+    </div>
+  );
+}
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, index) => (
-          <div key={index} className="overflow-hidden rounded-[28px] p-3" style={{ backgroundColor: theme.surface }}>
-            <SkeletonBlock className="aspect-square w-full rounded-[22px]" style={{ backgroundColor: theme.surfaceAlt }} />
-            <div className="mt-3 flex flex-1 flex-col">
-              <SkeletonBlock className="h-3 w-20 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
-              <SkeletonBlock className="mt-3 h-4 w-[88%] rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
-              <SkeletonBlock className="mt-2 h-4 w-[72%] rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
-              <SkeletonBlock className="mt-3 h-3 w-24 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
-              <div className="mt-4 flex items-center gap-2">
-                <SkeletonBlock className="h-5 w-20 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
-                <SkeletonBlock className="h-4 w-12 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
-              </div>
-              <SkeletonBlock className="mt-4 h-10 w-full rounded-full" style={{ backgroundColor: theme.primary }} />
-            </div>
-          </div>
-        ))}
-      </div>
+function SkeletonBreadcrumb({ theme }: { theme: StorefrontTheme }) {
+  return (
+    <div className="mb-4 flex items-center gap-1" aria-hidden="true">
+      <Skeleton className="h-3 w-10 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
+      <ChevronRight className="h-3 w-3 shrink-0" style={{ color: theme.mutedText }} />
+      <Skeleton className="h-3 w-16 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
+      <ChevronRight className="h-3 w-3 shrink-0" style={{ color: theme.mutedText }} />
+      <Skeleton className="h-3 w-24 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
     </div>
   );
 }
@@ -323,46 +366,64 @@ export function StorefrontProductDetailSkeleton({
 
   return (
     <div style={{ backgroundColor: theme.background, color: theme.text, minHeight: '100vh' }}>
-      <main className="mx-auto max-w-5xl px-4 py-10">
+      <main className={`mx-auto ${STOREFRONT_CONTAINER_CLASS} px-4 py-6 lg:px-6 lg:py-8`}>
+        <SkeletonBreadcrumb theme={theme} />
         <Link
           to={buildStorefrontPath(storeSlug)}
           className="mb-6 inline-flex items-center gap-1.5 text-sm transition-opacity hover:opacity-70"
           style={{ color: theme.text }}
         >
           <ArrowLeft className="h-4 w-4" />
-          Volver a la tienda
+          Volver al catálogo
         </Link>
-        <div className="grid grid-cols-1 gap-10 md:grid-cols-2">
-          <div>
-            <div className="rounded-[32px] border p-3 shadow-sm" style={{ borderColor: theme.border, backgroundColor: theme.surface }}>
-              <SkeletonBlock className="aspect-square w-full rounded-[24px]" style={{ backgroundColor: theme.surfaceAlt }} />
-            </div>
-            <div className="mt-3 flex gap-3">
-              {Array.from({ length: 3 }).map((_, index) => (
-                <SkeletonBlock key={index} className="h-20 w-20 rounded-2xl border" style={{ backgroundColor: theme.surfaceAlt, borderColor: theme.border }} />
+
+        <SkeletonRegion label="Cargando producto…" className="grid grid-cols-1 gap-8 lg:grid-cols-[1.3fr_1fr] lg:gap-10 lg:items-start">
+          <section className="grid gap-3 lg:grid-cols-[56px_minmax(0,1fr)] lg:items-start">
+            <div className="order-2 flex gap-2 overflow-x-auto pb-2 lg:order-1 lg:flex-col lg:overflow-visible lg:pb-0">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <Skeleton
+                  key={index}
+                  className="h-12 w-12 shrink-0 rounded-sm border lg:h-16 lg:w-16"
+                  style={{ backgroundColor: theme.surfaceAlt, borderColor: theme.border }}
+                />
               ))}
             </div>
-          </div>
+            <div className="order-1 lg:order-2">
+              <Skeleton
+                className="aspect-square w-full rounded-sm border"
+                style={{ backgroundColor: theme.surfaceAlt, borderColor: theme.border }}
+              />
+            </div>
+          </section>
 
-          <div className="space-y-4">
-            <SkeletonBlock className="h-3 w-24 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
-            <div className="space-y-3">
-              <SkeletonBlock className="h-8 w-[72%] rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
-              <SkeletonBlock className="h-5 w-[34%] rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
-              <SkeletonBlock className="h-4 w-full rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
-              <SkeletonBlock className="h-4 w-[88%] rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
+          <div className="space-y-5 pt-1">
+            <div className="space-y-2">
+              <Skeleton className="h-3 w-24 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
+              <Skeleton className="h-7 w-[80%] rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
+              <Skeleton className="h-4 w-[55%] rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
+              <Skeleton className="h-7 w-32 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
             </div>
-            <div className="rounded-[24px] border p-4" style={{ borderColor: theme.border, backgroundColor: theme.surface }}>
-              <SkeletonBlock className="h-4 w-24 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
-              <SkeletonBlock className="mt-4 h-14 w-full rounded-2xl" style={{ backgroundColor: theme.surfaceAlt }} />
-              <SkeletonBlock className="mt-3 h-14 w-full rounded-2xl" style={{ backgroundColor: theme.surfaceAlt }} />
+
+            <div className="flex flex-wrap gap-2">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <Skeleton key={index} className="h-14 w-14 rounded-md border" style={{ backgroundColor: theme.surfaceAlt, borderColor: theme.border }} />
+              ))}
             </div>
+
+            <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <Skeleton key={index} className="h-11 rounded-md border" style={{ backgroundColor: theme.surface, borderColor: theme.border }} />
+              ))}
+            </div>
+
+            <Skeleton className="h-[52px] w-full rounded-full" style={{ backgroundColor: theme.primary }} />
+
             <div className="rounded-[24px] border p-4" style={{ borderColor: theme.border, backgroundColor: theme.surface }}>
-              <SkeletonBlock className="h-4 w-28 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
-              <SkeletonBlock className="mt-4 h-12 w-full rounded-full" style={{ backgroundColor: theme.primary }} />
+              <Skeleton className="h-4 w-24 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
+              <Skeleton className="mt-4 h-16 w-full rounded-2xl" style={{ backgroundColor: theme.surfaceAlt }} />
             </div>
           </div>
-        </div>
+        </SkeletonRegion>
       </main>
     </div>
   );
@@ -388,23 +449,42 @@ export function StorefrontOfferDetailSkeleton({
           <ArrowLeft className="h-4 w-4" />
           Volver a la tienda
         </Link>
-        <div className="mb-6 rounded-[32px] border p-3 shadow-sm" style={{ borderColor: theme.border, backgroundColor: theme.surface }}>
-          <SkeletonBlock className="aspect-video w-full rounded-[24px]" style={{ backgroundColor: theme.surfaceAlt }} />
-        </div>
-        <SkeletonBlock className="h-3 w-28 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
-        <div className="mt-3 space-y-3">
-          <SkeletonBlock className="h-8 w-[78%] rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
-          <SkeletonBlock className="h-4 w-[56%] rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
-        </div>
-        <div className="mt-6 flex items-center gap-3">
-          <SkeletonBlock className="h-9 w-32 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
-          <SkeletonBlock className="h-8 w-20 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
-        </div>
-        <div className="mt-6 rounded-[24px] border p-4" style={{ borderColor: theme.border, backgroundColor: theme.surface }}>
-          <SkeletonBlock className="h-4 w-32 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
-          <SkeletonBlock className="mt-4 h-20 w-full rounded-2xl" style={{ backgroundColor: theme.surfaceAlt }} />
-        </div>
-        <SkeletonBlock className="mt-6 h-12 w-full rounded-full" style={{ backgroundColor: theme.primary }} />
+
+        <SkeletonRegion label="Cargando oferta…">
+          <Skeleton className="mb-6 aspect-video w-full rounded-2xl" style={{ backgroundColor: theme.surfaceAlt }} />
+
+          <div className="mb-4 space-y-2">
+            <Skeleton className="h-3 w-28 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
+            <Skeleton className="h-8 w-[78%] rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
+            <Skeleton className="h-4 w-[45%] rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
+          </div>
+
+          <div className="my-6 flex justify-center gap-3">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="text-center">
+                <Skeleton className="h-16 w-16 rounded-xl" style={{ backgroundColor: theme.softPrimary }} />
+                <Skeleton className="mx-auto mt-1 h-2.5 w-8 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
+              </div>
+            ))}
+          </div>
+
+          <div className="mb-6 flex items-center gap-3">
+            <Skeleton className="h-9 w-36 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
+            <Skeleton className="h-6 w-20 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
+          </div>
+
+          <div className="mb-6 rounded-xl border-2 border-dashed p-4 text-center" style={{ borderColor: theme.border }}>
+            <Skeleton className="mx-auto h-2.5 w-24 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
+            <Skeleton className="mx-auto mt-2 h-7 w-32 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
+          </div>
+
+          <Skeleton className="h-14 w-full rounded-2xl" style={{ backgroundColor: theme.primary }} />
+
+          <div className="mt-8 border-t pt-6" style={{ borderColor: theme.border }}>
+            <Skeleton className="h-3 w-32 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
+            <Skeleton className="mt-3 h-12 w-full rounded-xl" style={{ backgroundColor: theme.surfaceAlt }} />
+          </div>
+        </SkeletonRegion>
       </main>
     </div>
   );
@@ -435,15 +515,15 @@ export function StorefrontPoliciesSkeleton({
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-10">
-        <SkeletonBlock className="mb-8 h-8 w-60 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
-        <div className="space-y-8">
+        <Skeleton className="mb-8 h-8 w-60 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
+        <SkeletonRegion label="Cargando políticas…" className="space-y-8">
           {Array.from({ length: 5 }).map((_, index) => (
             <div key={index} className="rounded-[24px] border p-4" style={{ borderColor: theme.border, backgroundColor: theme.surface }}>
-              <SkeletonBlock className="mb-3 h-5 w-40 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
-              <SkeletonBlock className="h-16 w-full rounded-[18px]" style={{ backgroundColor: theme.surfaceAlt }} />
+              <Skeleton className="mb-3 h-5 w-40 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
+              <Skeleton className="h-16 w-full rounded-[18px]" style={{ backgroundColor: theme.surfaceAlt }} />
             </div>
           ))}
-        </div>
+        </SkeletonRegion>
       </main>
     </div>
   );

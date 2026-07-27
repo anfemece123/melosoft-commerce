@@ -95,6 +95,10 @@ export interface StoreWhatsappConnection {
   templateLanguage: string;
   templateStatus: WhatsappTemplateStatus;
   templateRejectedReason: string | null;
+  statusTemplateName: string;
+  statusTemplateLanguage: string;
+  statusTemplateStatus: WhatsappTemplateStatus;
+  statusTemplateRejectedReason: string | null;
   registrationStatus: WhatsappRegistrationStatus;
   registeredAt: string | null;
   registrationLastErrorCode: string | null;

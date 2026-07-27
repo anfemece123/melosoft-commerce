@@ -20,6 +20,10 @@ import type { StorefrontTheme } from './storefrontTheme';
 import { PublicStoreLogo } from './PublicStoreLogo';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 import type { ResolvedHeaderNavigationItem } from '@/lib/storefront/headerNavigation';
+import {
+  MENU_TEXT_SIZE_MAP,
+  SUBMENU_TEXT_SIZE_MAP,
+} from '@/lib/storefront/headerSettings';
 
 interface MobileNavDrawerProps {
   open: boolean;
@@ -55,6 +59,8 @@ export function MobileNavDrawer({
     : [];
 
   const controlBg = theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
+  const menuTextClass = MENU_TEXT_SIZE_MAP[settings.menuTextSize];
+  const submenuTextClass = SUBMENU_TEXT_SIZE_MAP[settings.menuTextSize];
 
   return (
     <>
@@ -122,7 +128,7 @@ export function MobileNavDrawer({
             <Link
               to={buildStorefrontPath(storeSlug)}
               onClick={onClose}
-              className="flex items-center gap-3 px-5 py-3.5 text-sm font-medium transition-opacity hover:opacity-70"
+              className={`flex items-center gap-3 px-5 py-3.5 font-medium transition-opacity hover:opacity-70 ${menuTextClass}`}
               style={{ color: theme.primary }}
             >
               <Home className="h-4 w-4 shrink-0" />
@@ -139,7 +145,7 @@ export function MobileNavDrawer({
                 <Link
                   to={item.href}
                   onClick={onClose}
-                  className="flex items-center justify-between gap-3 px-5 py-3 text-sm font-medium transition-opacity hover:opacity-70"
+                  className={`flex items-center justify-between gap-3 px-5 py-3 font-medium transition-opacity hover:opacity-70 ${menuTextClass}`}
                   style={{
                     color: !settings.showHomeLink && index === 0
                       ? theme.primary
@@ -164,7 +170,7 @@ export function MobileNavDrawer({
                         key={child.id}
                         to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(rootCategory?.slug ?? '')}&sub=${encodeURIComponent(child.slug)}`)}
                         onClick={onClose}
-                        className="block px-12 py-2 text-sm transition-opacity hover:opacity-70"
+                        className={`block px-12 py-2 transition-opacity hover:opacity-70 ${submenuTextClass}`}
                         style={{ color: theme.mutedText }}
                       >
                         {child.name}
@@ -193,7 +199,7 @@ export function MobileNavDrawer({
                   key={collection.id}
                   to={buildStorefrontPath(storeSlug, `/catalog?collection=${encodeURIComponent(collection.slug)}`)}
                   onClick={onClose}
-                  className="flex items-center gap-3 px-5 py-3 text-sm transition-opacity hover:opacity-70"
+                  className={`flex items-center gap-3 px-5 py-3 transition-opacity hover:opacity-70 ${menuTextClass}`}
                   style={{ color: theme.mode === 'dark' ? theme.text : '#374151' }}
                 >
                   <Sparkles className="h-4 w-4 shrink-0" style={{ color: theme.primary }} />

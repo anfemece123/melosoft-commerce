@@ -8,7 +8,7 @@ import { buildStorefrontPath, isUsingStorefrontHostname } from '@/lib/storefront
 import { ordersService } from '@/features/orders/ordersService';
 import { paymentsService } from '@/features/payments/paymentsService';
 import { notify } from '@/lib/notifications';
-import { checkoutSchema, type CheckoutFormValues } from '@/schemas/order.schema';
+import { createCheckoutSchema, type CheckoutFormValues } from '@/schemas/order.schema';
 import {
   getAvailableFulfillmentMethods,
   getLocalDeliveryLocations,
@@ -34,6 +34,7 @@ interface UseCartCheckoutParams {
   nationalShippingFreeFrom?: number | null;
   cashOnDeliveryEnabled?: boolean | null;
   onlineCheckoutEnabled?: boolean | null;
+  whatsappOrderUpdatesRequired?: boolean;
 }
 
 export function useCartCheckout({
@@ -47,6 +48,7 @@ export function useCartCheckout({
   nationalShippingFreeFrom,
   cashOnDeliveryEnabled,
   onlineCheckoutEnabled,
+  whatsappOrderUpdatesRequired = false,
 }: UseCartCheckoutParams) {
   const { items, totalItems, totalPrice, updateQuantity, removeItem, clearCart } = useCart();
   const { locations, selectedLocation, setSelectedLocation } = useSelectedLocation();
@@ -69,6 +71,10 @@ export function useCartCheckout({
   });
   const defaultFulfillment = availableFulfillmentMethods[0] ?? 'pickup';
   const hasFulfillmentChoice = availableFulfillmentMethods.length > 1;
+  const validationSchema = useMemo(
+    () => createCheckoutSchema(whatsappOrderUpdatesRequired),
+    [whatsappOrderUpdatesRequired],
+  );
 
   const formik = useFormik<CheckoutFormValues>({
     initialValues: {
@@ -87,7 +93,7 @@ export function useCartCheckout({
       notes: '',
       whatsappConsent: false,
     },
-    validationSchema: checkoutSchema,
+    validationSchema,
     enableReinitialize: false,
     onSubmit: async (values) => {
       try {

@@ -61,6 +61,19 @@ export const checkoutSchema = Yup.object({
   whatsappConsent: Yup.boolean().optional(),
 });
 
+export const WHATSAPP_CONSENT_REQUIRED_MESSAGE =
+  'Debes aceptar las actualizaciones del pedido por WhatsApp para confirmar la compra';
+
+export function createCheckoutSchema(whatsappOrderUpdatesRequired: boolean) {
+  if (!whatsappOrderUpdatesRequired) return checkoutSchema;
+
+  return checkoutSchema.shape({
+    whatsappConsent: Yup.boolean()
+      .oneOf([true], WHATSAPP_CONSENT_REQUIRED_MESSAGE)
+      .required(WHATSAPP_CONSENT_REQUIRED_MESSAGE),
+  });
+}
+
 export interface CheckoutFormValues {
   customerName: string;
   customerPhone: string;

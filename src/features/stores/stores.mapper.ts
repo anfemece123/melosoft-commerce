@@ -184,6 +184,7 @@ export function mapPublicStorePageRowToPublicStorePage(row: PublicStorePageRow):
     allowsLocalDelivery: row.allows_local_delivery ?? null,
     allowsNationalShipping: row.allows_national_shipping ?? null,
     whatsappCheckoutEnabled: row.whatsapp_checkout_enabled ?? null,
+    whatsappOrderUpdatesRequired: row.whatsapp_order_updates_required ?? false,
     webOrderEnabled: row.web_order_enabled ?? null,
     cashOnDeliveryEnabled: row.cash_on_delivery_enabled ?? null,
     onlineCheckoutEnabled: row.online_checkout_enabled ?? null,

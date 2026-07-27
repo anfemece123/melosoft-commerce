@@ -81,12 +81,19 @@ function parseCollections(raw: unknown): ProductCollectionAssignment[] {
 
 function parsePublicVariantImages(raw: unknown): PublicProductImage[] {
   if (!Array.isArray(raw)) return [];
-  return (raw as Array<Record<string, unknown>>).map((item) => ({
-    imageUrl: String(item.imageUrl ?? ''),
-    altText: (item.altText as string | null) ?? null,
-    sortOrder: Number(item.sortOrder ?? 0),
-    isPrimary: item.isPrimary === true,
-  }));
+  return (raw as Array<Record<string, unknown>>)
+    .map((item) => ({
+      imageUrl: String(item.imageUrl ?? ''),
+      altText: (item.altText as string | null) ?? null,
+      sortOrder: Number(item.sortOrder ?? 0),
+      isPrimary: item.isPrimary === true,
+    }))
+    // A value can be aggregated from a SQL left join with no matching image
+    // row, which lands here as `imageUrl: null` and gets coerced to `''`
+    // above — never treat that as "this value has its own photo" (callers
+    // check `.length > 0` to decide whether to use it over the product's
+    // fallback gallery, so a phantom empty entry would wrongly win).
+    .filter((image) => image.imageUrl.trim().length > 0);
 }
 
 function parseVariantOptions(raw: unknown): PublicVariantOption[] {

@@ -36,11 +36,14 @@ export function StorefrontPageLoader({
 
   return (
     <div
+      role="status"
+      aria-busy="true"
+      aria-live="polite"
       className="flex min-h-screen items-center justify-center px-6"
       style={{ backgroundColor: theme.background, color: theme.text, ...theme.cssVars }}
     >
       <div className="flex w-full max-w-sm flex-col items-center text-center">
-        <div className="animate-pulse">
+        <div className="animate-pulse motion-reduce:animate-none">
           <PublicStoreLogo
             logoUrl={branding?.logoUrl ?? null}
             storeName={storeName}

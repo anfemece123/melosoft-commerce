@@ -51,6 +51,7 @@ export function StoreCheckoutPage() {
     nationalShippingFreeFrom: branding?.nationalShippingFreeFrom,
     cashOnDeliveryEnabled: branding?.cashOnDeliveryEnabled,
     onlineCheckoutEnabled: branding?.onlineCheckoutEnabled,
+    whatsappOrderUpdatesRequired: branding?.whatsappOrderUpdatesRequired ?? false,
   });
 
   useEffect(() => {
@@ -149,9 +150,15 @@ export function StoreCheckoutPage() {
           />
         </section>
       ) : checkout.step === 'redirecting_to_wompi' ? (
-        <section className="mx-auto flex max-w-3xl flex-col items-center justify-center gap-5 border-y px-6 py-16 text-center" style={{ borderColor: theme.border, backgroundColor: theme.surface }}>
+        <section
+          role="status"
+          aria-busy="true"
+          aria-live="polite"
+          className="mx-auto flex max-w-3xl flex-col items-center justify-center gap-5 border-y px-6 py-16 text-center"
+          style={{ borderColor: theme.border, backgroundColor: theme.surface }}
+        >
           <div
-            className="h-16 w-16 rounded-full border-4 animate-spin"
+            className="h-16 w-16 rounded-full border-4 animate-spin motion-reduce:animate-none"
             style={{ borderColor: withAlpha(theme.primary, 0.18), borderTopColor: theme.primary }}
           />
           <div>
@@ -228,6 +235,7 @@ export function StoreCheckoutPage() {
                       nationalShippingFreeFrom={branding.nationalShippingFreeFrom}
                       localDeliveryNotes={branding.localDeliveryNotes}
                       nationalShippingNotes={branding.shippingNotes}
+                      whatsappOrderUpdatesRequired={branding.whatsappOrderUpdatesRequired}
                       onSelectSuggestedLocation={requestLocationChange}
                     />
                   </div>
