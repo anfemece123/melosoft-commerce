@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import {
   X, User, Phone, MapPin, Home, Store, Clock, CreditCard,
-  StickyNote, ChevronRight, Loader2, ShoppingBag,
+  StickyNote, ChevronRight, Loader2, ShoppingBag, Check, Copy,
+  ExternalLink, PackageCheck, Truck,
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { getFulfillmentMethodLabel, normalizeFulfillmentMethod } from '@/lib/orders/fulfillmentLabels';
 import { normalizePhoneForWhatsApp } from '@/lib/whatsapp/orderWhatsappMessage';
-import type { Order } from '@/features/orders/orders.types';
+import type { DispatchOrderPayload, Order } from '@/features/orders/orders.types';
 import type { OrderStatus } from '@/types/common.types';
 import { OrderStatusBadge, PaymentStatusBadge, getStatusConfig, type OrderViewContext } from './OrderStatusBadge';
 import { OrderConfirmDialog } from './OrderConfirmDialog';
+import { OrderShipmentDialog } from './OrderShipmentDialog';
 
 interface NextAction {
   label: string;
@@ -34,12 +36,12 @@ function getNextActions(
         }
       : {
           pending:    { status: 'confirmed',  label: useManualWhatsappFallback ? 'Confirmar y abrir WhatsApp' : 'Confirmar pedido' },
-          confirmed:  { status: 'processing', label: 'Procesar pedido' },
+          confirmed:  { status: 'processing', label: isPickup ? 'Preparar para recoger' : 'Preparar despacho' },
           processing: {
             status: 'shipped',
-            label: isPickup ? 'Marcar listo para recoger' : 'Marcar como enviado',
+            label: isPickup ? 'Marcar listo para recoger' : 'Registrar envío',
           },
-          shipped:    { status: 'delivered',  label: 'Marcar entregado' },
+          shipped:    { status: 'delivered',  label: isPickup ? 'Marcar como recogido' : 'Marcar entregado' },
         };
 
   const actions: NextAction[] = [];
@@ -64,6 +66,62 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+function FulfillmentTimeline({ order }: { order: Order }) {
+  const method = normalizeFulfillmentMethod(order.fulfillmentMethod);
+  const currentIndex: Record<OrderStatus, number> = {
+    pending: 0,
+    confirmed: 1,
+    processing: 2,
+    shipped: 3,
+    delivered: 4,
+    cancelled: -1,
+  };
+  const steps = [
+    'Recibido',
+    'Confirmado',
+    method === 'pickup' ? 'Preparando' : 'Preparando despacho',
+    method === 'pickup' ? 'Listo para recoger' : method === 'local_delivery' ? 'En camino' : 'Despachado',
+    method === 'pickup' ? 'Recogido' : 'Entregado',
+  ];
+
+  if (order.status === 'cancelled') {
+    return (
+      <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700">
+        Este pedido fue cancelado.
+      </div>
+    );
+  }
+
+  const activeIndex = currentIndex[order.status];
+  return (
+    <ol className="space-y-0" aria-label="Progreso del pedido">
+      {steps.map((label, index) => {
+        const complete = index <= activeIndex;
+        const current = index === activeIndex;
+        return (
+          <li key={label} className="flex gap-3">
+            <div className="flex flex-col items-center">
+              <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] ${
+                complete ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-gray-200 bg-white text-transparent'
+              }`}>
+                {complete && <Check className="h-3 w-3" />}
+              </span>
+              {index < steps.length - 1 && (
+                <span className={`h-5 w-px ${index < activeIndex ? 'bg-indigo-300' : 'bg-gray-200'}`} />
+              )}
+            </div>
+            <span className={`-mt-0.5 text-xs leading-5 ${
+              current ? 'font-bold text-indigo-700' : complete ? 'font-medium text-gray-700' : 'text-gray-400'
+            }`}>
+              {label}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 interface OrderDetailDrawerProps {
   order: Order | null;
   context: OrderViewContext;
@@ -72,6 +130,7 @@ interface OrderDetailDrawerProps {
   locationMap: Record<string, string>;
   onClose: () => void;
   onStatusChange: (orderId: string, status: OrderStatus) => Promise<void>;
+  onDispatchOrder?: (orderId: string, payload: DispatchOrderPayload) => Promise<Order>;
 }
 
 export function OrderDetailDrawer({
@@ -82,13 +141,16 @@ export function OrderDetailDrawer({
   locationMap,
   onClose,
   onStatusChange,
+  onDispatchOrder,
 }: OrderDetailDrawerProps) {
   const [updating, setUpdating] = useState<OrderStatus | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showShipmentDialog, setShowShipmentDialog] = useState(false);
+  const [trackingCopied, setTrackingCopied] = useState(false);
 
   if (!order) return null;
 
-  const cfg = getStatusConfig(order.status, context);
+  const cfg = getStatusConfig(order.status, context, order.fulfillmentMethod);
   const locationName = order.storeLocationId ? (locationMap[order.storeLocationId] ?? null) : null;
   const hasWhatsappPhone = Boolean(order.customerPhone && normalizePhoneForWhatsApp(order.customerPhone));
   const actions = getNextActions(
@@ -99,6 +161,10 @@ export function OrderDetailDrawer({
   );
 
   async function handleAction(status: OrderStatus) {
+    if (status === 'shipped' && context === 'retail' && onDispatchOrder) {
+      setShowShipmentDialog(true);
+      return;
+    }
     setUpdating(status);
     try {
       await onStatusChange(order!.id, status);
@@ -123,7 +189,11 @@ export function OrderDetailDrawer({
               </p>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: cfg.color }} />
-                <OrderStatusBadge status={order.status} context={context} />
+                <OrderStatusBadge
+                  status={order.status}
+                  context={context}
+                  fulfillmentMethod={order.fulfillmentMethod}
+                />
               </div>
             </div>
             <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-gray-100 transition-colors">
@@ -146,6 +216,12 @@ export function OrderDetailDrawer({
                 </span>
               )}
             </div>
+
+            {context === 'retail' && (
+              <Section title="Progreso del pedido">
+                <FulfillmentTimeline order={order} />
+              </Section>
+            )}
 
             {/* Customer */}
             <Section title="Cliente">
@@ -192,6 +268,81 @@ export function OrderDetailDrawer({
                 </div>
               )}
             </Section>
+
+            {context === 'retail' && normalizeFulfillmentMethod(order.fulfillmentMethod) !== 'pickup' && (
+              order.shippingCarrier || order.trackingNumber || order.trackingUrl || order.estimatedDeliveryAt || order.status === 'shipped'
+            ) && (
+              <Section title="Rastreo del envío">
+                <div className="rounded-xl border border-sky-100 bg-sky-50 px-3.5 py-3">
+                  <div className="flex items-start gap-2.5">
+                    <Truck className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
+                    <div className="min-w-0 flex-1 space-y-1.5 text-sm">
+                      {order.shippingCarrier && (
+                        <p className="text-gray-700"><span className="text-gray-500">Transportadora:</span> <strong>{order.shippingCarrier}</strong></p>
+                      )}
+                      {order.trackingNumber && (
+                        <div className="flex items-center gap-2">
+                          <p className="min-w-0 text-gray-700">
+                            <span className="text-gray-500">Guía:</span>{' '}
+                            <strong className="font-mono break-all">{order.trackingNumber}</strong>
+                          </p>
+                          <button
+                            type="button"
+                            title="Copiar número de guía"
+                            onClick={() => {
+                              void navigator.clipboard.writeText(order.trackingNumber ?? '');
+                              setTrackingCopied(true);
+                              window.setTimeout(() => setTrackingCopied(false), 1500);
+                            }}
+                            className="rounded-md p-1 text-sky-700 hover:bg-sky-100"
+                          >
+                            {trackingCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                          </button>
+                        </div>
+                      )}
+                      {order.estimatedDeliveryAt && (
+                        <p className="text-gray-700">
+                          <span className="text-gray-500">Entrega estimada:</span>{' '}
+                          <strong>{new Date(`${order.estimatedDeliveryAt}T12:00:00`).toLocaleDateString('es-CO', { dateStyle: 'long' })}</strong>
+                        </p>
+                      )}
+                      <div className="flex flex-wrap items-center gap-3 pt-1">
+                        {order.trackingUrl && (
+                          <a
+                            href={order.trackingUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-sky-700 hover:text-sky-900"
+                          >
+                            Rastrear envío <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
+                        {order.status === 'shipped' && onDispatchOrder && (
+                          <button
+                            type="button"
+                            onClick={() => setShowShipmentDialog(true)}
+                            className="text-xs font-semibold text-indigo-600 hover:text-indigo-800"
+                          >
+                            Editar datos
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Section>
+            )}
+
+            {context === 'retail' && order.status === 'shipped' && normalizeFulfillmentMethod(order.fulfillmentMethod) === 'pickup' && (
+              <Section title="Recogida">
+                <div className="flex items-start gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
+                  <PackageCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                  {order.customerEmail
+                    ? 'El cliente recibirá por correo la notificación para recoger su pedido.'
+                    : 'El pedido está listo para entregar cuando llegue el cliente.'}
+                </div>
+              </Section>
+            )}
 
             {/* Items */}
             {order.items && order.items.length > 0 && (
@@ -349,6 +500,15 @@ export function OrderDetailDrawer({
           automaticWhatsappReady={automaticWhatsappReady}
           onStatusChange={onStatusChange}
           onClose={() => setShowConfirmDialog(false)}
+        />
+      )}
+      {showShipmentDialog && onDispatchOrder && (
+        <OrderShipmentDialog
+          order={order}
+          onConfirm={async payload => {
+            await onDispatchOrder(order.id, payload);
+          }}
+          onClose={() => setShowShipmentDialog(false)}
         />
       )}
     </>

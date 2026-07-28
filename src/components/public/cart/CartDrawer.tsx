@@ -279,13 +279,14 @@ export function CartDrawer({
         {/* ── STEP: confirmed ── */}
         {step === 'confirmed' && orderResult && (
           <>
-            <CartDrawerHeader theme={theme} title="¡Pedido confirmado!" onClose={onClose} />
+            <CartDrawerHeader theme={theme} title="¡Pedido recibido!" onClose={onClose} />
             <CheckoutResultMessage
               theme={theme}
               currency={currency}
               orderResult={orderResult}
               storeName={storeName}
               whatsappNumber={whatsappNumber}
+              customerEmail={formik.values.customerEmail.trim() || null}
               onClose={onClose}
             />
           </>

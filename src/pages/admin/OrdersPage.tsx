@@ -19,6 +19,7 @@ import type { OrderStatus } from '@/types/common.types';
 import type { StoreCommerceSettings } from '@/features/stores/storeCommerce.types';
 import type { StoreLocation } from '@/features/locations/locations.types';
 import type { StoreWhatsappConnection, StoreWhatsappSettings } from '@/features/whatsapp/whatsapp.types';
+import type { DispatchOrderPayload, Order } from '@/features/orders/orders.types';
 import { RestaurantOrdersBoard } from './orders/RestaurantOrdersBoard';
 import { RetailOrdersTable } from './orders/RetailOrdersTable';
 
@@ -164,14 +165,6 @@ export function OrdersPage() {
     };
   }, [storeId]);
 
-  // Set default view only when there is no saved preference
-  useEffect(() => {
-    if (!bootstrapped || viewMode !== null || !storeId) return;
-    const defaultMode: ViewMode = getOrderFlowType(commerceSettings) === 'restaurant' ? 'board' : 'table';
-    setViewMode(defaultMode);
-    localStorage.setItem(viewStorageKey(storeId), defaultMode);
-  }, [bootstrapped, viewMode, commerceSettings, storeId]);
-
   function changeViewMode(mode: ViewMode) {
     setViewMode(mode);
     if (storeId) localStorage.setItem(viewStorageKey(storeId), mode);
@@ -245,6 +238,21 @@ export function OrdersPage() {
     }
   }
 
+  async function handleDispatchOrder(orderId: string, payload: DispatchOrderPayload): Promise<Order> {
+    try {
+      const updated = await ordersService.dispatchOrder(orderId, payload);
+      dispatch(updateOrder(updated));
+      const emailSuffix = updated.customerEmail ? '; notificaremos al cliente por correo' : '';
+      notify.success(updated.fulfillmentMethod === 'pickup'
+        ? `Pedido listo para recoger${emailSuffix}`
+        : `Envío registrado${emailSuffix}`);
+      return updated;
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'No se pudo registrar el envío');
+      throw error;
+    }
+  }
+
   function applyCustomRange() {
     if (pendingFrom && pendingTo && pendingFrom <= pendingTo) {
       setAppliedFrom(pendingFrom);
@@ -262,6 +270,11 @@ export function OrdersPage() {
 
   const restaurant = getOrderFlowType(commerceSettings) === 'restaurant';
   const context = restaurant ? 'restaurant' as const : 'retail' as const;
+  const effectiveViewMode: ViewMode | null = !bootstrapped
+    ? viewMode
+    : restaurant
+      ? (viewMode ?? 'board')
+      : 'table';
   const dateLabel = getDateLabel(dateRangeKey, appliedFrom, appliedTo);
   const isLoading = status === 'loading';
   const isFailed = status === 'failed';
@@ -287,6 +300,7 @@ export function OrdersPage() {
     locationMap,
     locationOptions,
     onStatusChange: handleStatusChange,
+    onDispatchOrder: handleDispatchOrder,
     context,
     search: sharedSearch,
     locationId: sharedLocationId,
@@ -386,14 +400,14 @@ export function OrdersPage() {
         )}
 
         {/* View mode toggle — right-aligned */}
-        {viewMode && (
+        {effectiveViewMode && restaurant && (
           <div className="ml-auto flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1">
             <button
               type="button"
               onClick={() => changeViewMode('board')}
               title="Vista tablero"
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                viewMode === 'board'
+                effectiveViewMode === 'board'
                   ? 'bg-white text-indigo-700 shadow-sm border border-gray-200'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
@@ -406,7 +420,7 @@ export function OrdersPage() {
               onClick={() => changeViewMode('table')}
               title="Vista lista"
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                viewMode === 'table'
+                effectiveViewMode === 'table'
                   ? 'bg-white text-indigo-700 shadow-sm border border-gray-200'
                   : 'text-gray-500 hover:text-gray-700'
               }`}
@@ -437,7 +451,7 @@ export function OrdersPage() {
       )}
 
       {/* Content */}
-      {!isFailed && bootstrapped && viewMode && (
+      {!isFailed && bootstrapped && effectiveViewMode && (
         isLoading && items.length === 0 ? (
           <PanelLoadingState label="Cargando pedidos…" />
         ) : items.length === 0 ? (
@@ -446,7 +460,7 @@ export function OrdersPage() {
             title="Sin pedidos"
             description={`No hay pedidos de ${dateLabel}. Prueba cambiando el rango de fechas.`}
           />
-        ) : viewMode === 'board' ? (
+        ) : effectiveViewMode === 'board' && restaurant ? (
           <RestaurantOrdersBoard {...sharedProps} />
         ) : (
           <RetailOrdersTable {...sharedProps} />

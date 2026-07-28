@@ -5,7 +5,7 @@ import {
   ChevronLeft, ChevronRight as ChevronRightIcon, Hash,
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatCurrency';
-import type { Order } from '@/features/orders/orders.types';
+import type { DispatchOrderPayload, Order } from '@/features/orders/orders.types';
 import type { OrderStatus } from '@/types/common.types';
 import { getFulfillmentBadgeLabel, normalizeFulfillmentMethod } from '@/lib/orders/fulfillmentLabels';
 import { OrderDetailDrawer } from './OrderDetailDrawer';
@@ -41,6 +41,7 @@ interface RetailOrdersTableProps {
   locationMap: Record<string, string>;
   locationOptions: Array<{ id: string; name: string }>;
   onStatusChange: (orderId: string, status: OrderStatus) => Promise<void>;
+  onDispatchOrder: (orderId: string, payload: DispatchOrderPayload) => Promise<Order>;
   context: OrderViewContext;
   // Shared with parent — persist across board↔table switches
   search: string;
@@ -57,6 +58,7 @@ export function RetailOrdersTable({
   locationMap,
   locationOptions,
   onStatusChange,
+  onDispatchOrder,
   context,
   search,
   locationId,
@@ -257,13 +259,14 @@ export function RetailOrdersTable({
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Total</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Estado</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Guía</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {pageOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-sm text-gray-400">
+                  <td colSpan={11} className="px-4 py-12 text-center text-sm text-gray-400">
                     No hay pedidos con estos filtros
                   </td>
                 </tr>
@@ -324,7 +327,25 @@ export function RetailOrdersTable({
                         {formatCurrency(order.totalAmount, 'es-CO', 'COP')}
                       </td>
                       <td className="px-4 py-3">
-                        <OrderStatusBadge status={order.status} context={context} />
+                        <OrderStatusBadge
+                          status={order.status}
+                          context={context}
+                          fulfillmentMethod={order.fulfillmentMethod}
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        {order.trackingNumber ? (
+                          <div className="max-w-[130px]">
+                            <p className="truncate font-mono text-xs font-semibold text-gray-700" title={order.trackingNumber}>
+                              {order.trackingNumber}
+                            </p>
+                            {order.shippingCarrier && (
+                              <p className="mt-0.5 truncate text-[11px] text-gray-400">{order.shippingCarrier}</p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <button
@@ -408,6 +429,11 @@ export function RetailOrdersTable({
           onStatusChange={async (id, status) => {
             await onStatusChange(id, status);
             setSelectedOrder(prev => prev?.id === id ? { ...prev, status } : prev);
+          }}
+          onDispatchOrder={async (id, payload) => {
+            const updated = await onDispatchOrder(id, payload);
+            setSelectedOrder(updated);
+            return updated;
           }}
         />
       )}

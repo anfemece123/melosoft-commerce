@@ -24,6 +24,7 @@ import { locationsService } from '@/features/locations/locationsService';
 export type DrawerStep = 'cart' | 'form' | 'submitting' | 'confirmed' | 'redirecting_to_wompi';
 
 interface UseCartCheckoutParams {
+  initialStep?: DrawerStep;
   storeSlug: string;
   allowsPickup: boolean | null;
   allowsLocalDelivery: boolean | null;
@@ -38,6 +39,7 @@ interface UseCartCheckoutParams {
 }
 
 export function useCartCheckout({
+  initialStep = 'cart',
   storeSlug,
   allowsPickup,
   allowsLocalDelivery,
@@ -53,7 +55,7 @@ export function useCartCheckout({
   const { items, totalItems, totalPrice, updateQuantity, removeItem, clearCart } = useCart();
   const { locations, selectedLocation, setSelectedLocation } = useSelectedLocation();
 
-  const [step, setStep] = useState<DrawerStep>('cart');
+  const [step, setStep] = useState<DrawerStep>(initialStep);
   const [orderResult, setOrderResult] = useState<WebOrderResult | null>(null);
 
   // Payment method selection

@@ -508,14 +508,19 @@ export function CheckoutCustomerForm({
           placeholder="3001234567"
           type="tel"
         />
-        <CheckoutField
-          formik={formik}
-          theme={theme}
-          name="customerEmail"
-          label="Email (opcional)"
-          placeholder="correo@ejemplo.com"
-          type="email"
-        />
+        <div className="space-y-1">
+          <CheckoutField
+            formik={formik}
+            theme={theme}
+            name="customerEmail"
+            label="Correo electrónico (opcional)"
+            placeholder="correo@ejemplo.com"
+            type="email"
+          />
+          <p className="text-[11px] leading-4" style={{ color: theme.mutedText }}>
+            Si lo agregas, recibirás la confirmación y los hitos importantes de entrega.
+          </p>
+        </div>
       </div>
 
       <div className="space-y-1">

@@ -1323,6 +1323,93 @@ export interface Database {
         };
         Relationships: [];
       };
+      email_notifications: {
+        Row: {
+          id: string;
+          store_id: string;
+          order_id: string;
+          channel: string;
+          event_type: string;
+          recipient_type: string;
+          recipient_email: string;
+          recipient_name: string | null;
+          status: string;
+          provider: string;
+          provider_message_id: string | null;
+          attempts: number;
+          max_attempts: number;
+          next_attempt_at: string;
+          locked_at: string | null;
+          locked_by: string | null;
+          is_permanent_failure: boolean;
+          last_error_category: string | null;
+          last_error_code: string | null;
+          last_error_message: string | null;
+          queued_at: string;
+          sent_at: string | null;
+          delivered_at: string | null;
+          failed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          order_id: string;
+          channel?: string;
+          event_type: string;
+          recipient_type: string;
+          recipient_email: string;
+          recipient_name?: string | null;
+          status?: string;
+          provider?: string;
+          provider_message_id?: string | null;
+          attempts?: number;
+          max_attempts?: number;
+          next_attempt_at?: string;
+          locked_at?: string | null;
+          locked_by?: string | null;
+          is_permanent_failure?: boolean;
+          last_error_category?: string | null;
+          last_error_code?: string | null;
+          last_error_message?: string | null;
+          queued_at?: string;
+          sent_at?: string | null;
+          delivered_at?: string | null;
+          failed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          order_id?: string;
+          channel?: string;
+          event_type?: string;
+          recipient_type?: string;
+          recipient_email?: string;
+          recipient_name?: string | null;
+          status?: string;
+          provider?: string;
+          provider_message_id?: string | null;
+          attempts?: number;
+          max_attempts?: number;
+          next_attempt_at?: string;
+          locked_at?: string | null;
+          locked_by?: string | null;
+          is_permanent_failure?: boolean;
+          last_error_category?: string | null;
+          last_error_code?: string | null;
+          last_error_message?: string | null;
+          queued_at?: string;
+          sent_at?: string | null;
+          delivered_at?: string | null;
+          failed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       orders: {
         Row: {
           id: string;
@@ -1348,6 +1435,12 @@ export interface Database {
           payment_status: string;
           payment_method: string;
           fulfillment_method: string;
+          shipping_carrier: string | null;
+          tracking_number: string | null;
+          tracking_url: string | null;
+          estimated_delivery_at: string | null;
+          shipped_at: string | null;
+          delivered_at: string | null;
           notes: string | null;
           metadata: Json;
           whatsapp_consent: boolean;
@@ -1381,6 +1474,12 @@ export interface Database {
           payment_status?: string;
           payment_method?: string;
           fulfillment_method?: string;
+          shipping_carrier?: string | null;
+          tracking_number?: string | null;
+          tracking_url?: string | null;
+          estimated_delivery_at?: string | null;
+          shipped_at?: string | null;
+          delivered_at?: string | null;
           notes?: string | null;
           metadata?: Json;
           whatsapp_consent?: boolean;
@@ -1414,6 +1513,12 @@ export interface Database {
           payment_status?: string;
           payment_method?: string;
           fulfillment_method?: string;
+          shipping_carrier?: string | null;
+          tracking_number?: string | null;
+          tracking_url?: string | null;
+          estimated_delivery_at?: string | null;
+          shipped_at?: string | null;
+          delivered_at?: string | null;
           notes?: string | null;
           metadata?: Json;
           whatsapp_consent?: boolean;
@@ -2954,6 +3059,13 @@ export interface Database {
       };
     };
     Functions: {
+      claim_pending_email_notifications: {
+        Args: {
+          p_limit?: number;
+          p_worker_id?: string;
+        };
+        Returns: Array<Database['public']['Tables']['email_notifications']['Row']>;
+      };
       get_location_schedule_status: {
         Args: {
           p_location_id: string;
@@ -3047,6 +3159,16 @@ export interface Database {
           p_whatsapp_consent_source?: string;
         };
         Returns: Json;
+      };
+      dispatch_store_order: {
+        Args: {
+          p_order_id: string;
+          p_shipping_carrier?: string | null;
+          p_tracking_number?: string | null;
+          p_tracking_url?: string | null;
+          p_estimated_delivery_at?: string | null;
+        };
+        Returns: Database['public']['Tables']['orders']['Row'];
       };
       enqueue_test_whatsapp_notification: {
         Args: {

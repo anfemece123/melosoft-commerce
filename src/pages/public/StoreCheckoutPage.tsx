@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ShoppingBag } from 'lucide-react';
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
@@ -29,7 +28,6 @@ export function StoreCheckoutPage() {
   const { locations, orderStatus, scheduleLoading } = useSelectedLocation();
   const { requestLocationChange, confirmLocationChange, cancelLocationChange, pendingChange, checking } =
     useLocationChangeWithCheck();
-  const [ready, setReady] = useState(false);
 
   // useCartCheckout/useEffect must run on every render, in the same order,
   // regardless of whether storeSlug/branding have resolved yet — the
@@ -41,6 +39,7 @@ export function StoreCheckoutPage() {
   // below prevents the form/JSX that could ever trigger onSubmit from
   // rendering in the first place.
   const checkout = useCartCheckout({
+    initialStep: 'form',
     storeSlug: storeSlug ?? '',
     allowsPickup: branding?.allowsPickup ?? null,
     allowsLocalDelivery: branding?.allowsLocalDelivery ?? null,
@@ -53,13 +52,6 @@ export function StoreCheckoutPage() {
     onlineCheckoutEnabled: branding?.onlineCheckoutEnabled,
     whatsappOrderUpdatesRequired: branding?.whatsappOrderUpdatesRequired ?? false,
   });
-
-  useEffect(() => {
-    if (!ready) {
-      setReady(true);
-      checkout.setStep('form');
-    }
-  }, [checkout, ready]);
 
   if (!storeSlug || !branding) return null;
 
@@ -124,7 +116,7 @@ export function StoreCheckoutPage() {
         <section className="mx-auto max-w-3xl border-y" style={{ borderColor: theme.border, backgroundColor: theme.surface }}>
           <div className="border-b px-6 py-5" style={{ borderColor: theme.border }}>
             <p className="text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: theme.mutedText }}>
-              Pedido confirmado
+              Pedido recibido
             </p>
             <h1 className="mt-2 text-3xl font-semibold" style={{ color: theme.text }}>
               Todo quedó listo
@@ -136,6 +128,7 @@ export function StoreCheckoutPage() {
             orderResult={checkout.orderResult}
             storeName={branding.storeName}
             whatsappNumber={branding.whatsappNumber}
+            customerEmail={checkout.formik.values.customerEmail.trim() || null}
             onClose={() => void navigate(buildStorefrontPath(storeSlug))}
             fulfillmentMethod={checkout.formik.values.fulfillmentMethod}
             operationalLocationName={checkout.operationalLocation?.name ?? null}

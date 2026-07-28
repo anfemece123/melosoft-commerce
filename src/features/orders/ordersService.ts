@@ -1,5 +1,12 @@
 import { supabase } from '@/lib/supabase';
-import type { Order, OrderInsert, OrderItemInsert, CreateWebOrderPayload, WebOrderResult } from './orders.types';
+import type {
+  Order,
+  OrderInsert,
+  OrderItemInsert,
+  CreateWebOrderPayload,
+  WebOrderResult,
+  DispatchOrderPayload,
+} from './orders.types';
 import type { OrderStatus, PaymentStatus } from '@/types/common.types';
 
 export interface OrdersDateParams {
@@ -121,6 +128,30 @@ export const ordersService = {
       .single();
     if (error) throw new Error(error.message);
     if (!data) throw new Error('No data returned after update');
+    return mapOrderRowToOrder(data);
+  },
+
+  async dispatchOrder(id: string, payload: DispatchOrderPayload): Promise<Order> {
+    const { data, error } = await supabase.rpc('dispatch_store_order', {
+      p_order_id: id,
+      p_shipping_carrier: payload.shippingCarrier,
+      p_tracking_number: payload.trackingNumber,
+      p_tracking_url: payload.trackingUrl,
+      p_estimated_delivery_at: payload.estimatedDeliveryAt,
+    });
+    if (error) {
+      if (error.message.includes('NATIONAL_SHIPMENT_REQUIRES_TRACKING')) {
+        throw new Error('Los envíos nacionales requieren transportadora y número de guía.');
+      }
+      if (error.message.includes('INVALID_TRACKING_URL')) {
+        throw new Error('El enlace de rastreo no es válido.');
+      }
+      if (error.message.includes('ORDER_NOT_READY_FOR_DISPATCH')) {
+        throw new Error('El pedido debe estar en preparación antes de despacharlo.');
+      }
+      throw new Error(error.message);
+    }
+    if (!data) throw new Error('No data returned after dispatch');
     return mapOrderRowToOrder(data);
   },
 

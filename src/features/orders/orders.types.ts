@@ -66,6 +66,12 @@ export interface Order {
   paymentStatus: PaymentStatus;
   paymentMethod: OrderPaymentMethod;
   fulfillmentMethod: FulfillmentMethod;
+  shippingCarrier: string | null;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+  estimatedDeliveryAt: string | null;
+  shippedAt: string | null;
+  deliveredAt: string | null;
   notes: string | null;
   items?: OrderItem[];
   createdAt: string;
@@ -126,4 +132,11 @@ export interface WebOrderResult {
   totalAmount: number;
   paymentMethod: 'cash_on_delivery' | 'online';
   status: string;
+}
+
+export interface DispatchOrderPayload {
+  shippingCarrier: string | null;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+  estimatedDeliveryAt: string | null;
 }

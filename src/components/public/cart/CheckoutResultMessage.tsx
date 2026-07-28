@@ -10,6 +10,7 @@ interface CheckoutResultMessageProps {
   orderResult: WebOrderResult;
   storeName: string;
   whatsappNumber: string | null;
+  customerEmail?: string | null;
   onClose: () => void;
   /** The rest are all optional and purely additive — when omitted, the
    * WhatsApp message falls back to exactly today's short summary (order
@@ -35,6 +36,7 @@ export function CheckoutResultMessage({
   orderResult,
   storeName,
   whatsappNumber,
+  customerEmail,
   onClose,
   fulfillmentMethod,
   operationalLocationName,
@@ -97,12 +99,14 @@ export function CheckoutResultMessage({
           </div>
           <div className="flex justify-between">
             <span className="opacity-60">Estado</span>
-            <span className="font-semibold text-amber-600">Pendiente</span>
+            <span className="font-semibold text-amber-600">Recibido · por confirmar</span>
           </div>
         </div>
 
         <p className="text-sm opacity-50 leading-relaxed">
-          El negocio recibirá tu pedido y te contactará para confirmar la entrega.
+          {customerEmail
+            ? <>Enviaremos la confirmación y las novedades de entrega a <strong>{customerEmail}</strong>.</>
+            : 'El negocio recibió tu pedido y te contactará para confirmar la entrega.'}
         </p>
       </div>
 

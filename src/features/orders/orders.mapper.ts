@@ -35,6 +35,12 @@ export function mapOrderRowToOrder(row: OrderRowWithItems): Order {
     paymentStatus: row.payment_status as PaymentStatus,
     paymentMethod: (row.payment_method as OrderPaymentMethod) ?? 'cash_on_delivery',
     fulfillmentMethod: (row.fulfillment_method as FulfillmentMethod) ?? 'local_delivery',
+    shippingCarrier: row.shipping_carrier ?? null,
+    trackingNumber: row.tracking_number ?? null,
+    trackingUrl: row.tracking_url ?? null,
+    estimatedDeliveryAt: row.estimated_delivery_at ?? null,
+    shippedAt: row.shipped_at ?? null,
+    deliveredAt: row.delivered_at ?? null,
     notes: row.notes,
     items: row.order_items ? row.order_items.map(mapOrderItemRowToOrderItem) : undefined,
     createdAt: row.created_at,
@@ -104,6 +110,12 @@ export function mapOrderInsertToRow(data: OrderInsert): OrderRowInsert {
     payment_status: data.paymentStatus,
     payment_method: data.paymentMethod,
     fulfillment_method: data.fulfillmentMethod,
+    shipping_carrier: data.shippingCarrier ?? null,
+    tracking_number: data.trackingNumber ?? null,
+    tracking_url: data.trackingUrl ?? null,
+    estimated_delivery_at: data.estimatedDeliveryAt ?? null,
+    shipped_at: data.shippedAt ?? null,
+    delivered_at: data.deliveredAt ?? null,
     notes: data.notes ?? null,
   };
 }
@@ -128,6 +140,12 @@ export function mapOrderUpdateToRow(data: OrderUpdate): OrderRowUpdate {
   if (data.paymentStatus !== undefined) row.payment_status = data.paymentStatus;
   if (data.paymentMethod !== undefined) row.payment_method = data.paymentMethod;
   if (data.fulfillmentMethod !== undefined) row.fulfillment_method = data.fulfillmentMethod;
+  if (data.shippingCarrier !== undefined) row.shipping_carrier = data.shippingCarrier ?? null;
+  if (data.trackingNumber !== undefined) row.tracking_number = data.trackingNumber ?? null;
+  if (data.trackingUrl !== undefined) row.tracking_url = data.trackingUrl ?? null;
+  if (data.estimatedDeliveryAt !== undefined) row.estimated_delivery_at = data.estimatedDeliveryAt ?? null;
+  if (data.shippedAt !== undefined) row.shipped_at = data.shippedAt ?? null;
+  if (data.deliveredAt !== undefined) row.delivered_at = data.deliveredAt ?? null;
   if (data.notes !== undefined) row.notes = data.notes ?? null;
   return row;
 }

@@ -373,6 +373,9 @@ verify_jwt = false
 [functions.send-whatsapp-notification]
 verify_jwt = true
 
+[functions.send-order-email]
+verify_jwt = true
+
 [functions.whatsapp-phone-register]
 verify_jwt = true
 
