@@ -47,9 +47,15 @@ import {
   WHATSAPP_TEST_ORDER_TEMPLATE_PARAMS,
 } from '../_shared/whatsappTemplateSelection.ts';
 import {
+  getWhatsappLocalDeliveryDetail,
   getWhatsappOrderStatusContent,
   isWhatsappOrderStatusEvent,
 } from '../_shared/whatsappOrderStatus.ts';
+import {
+  formatWhatsappEstimatedDelivery,
+  isWhatsappOrderShipmentEvent,
+  resolveWhatsappShipmentTracking,
+} from '../_shared/whatsappShipment.ts';
 import { readVerifiedJwtRole } from '../_shared/verifiedServiceRoleJwt.ts';
 
 const CORS_HEADERS = {
@@ -96,6 +102,9 @@ type SendContext =
       status_template_name: string;
       status_template_language: string;
       status_template_status: string;
+      shipment_template_name: string;
+      shipment_template_language: string;
+      shipment_template_status: string;
     };
 
 // 'ambiguous' is distinct from 'recoverable': it means we genuinely do
@@ -424,7 +433,7 @@ serve(async (req: Request) => {
   ): Promise<string[] | { error: string }> {
     const { data: order, error: orderErr } = await supabase
       .from('orders')
-      .select('id, order_number, customer_name')
+      .select('id, order_number, customer_name, fulfillment_method, shipping_carrier, tracking_number, tracking_url, estimated_delivery_at')
       .eq('id', notification.order_id)
       .single();
     if (orderErr || !order) return { error: 'ORDER_NOT_FOUND' };
@@ -439,13 +448,60 @@ serve(async (req: Request) => {
       return { error: 'UNSUPPORTED_EVENT' };
     }
     const milestone = getWhatsappOrderStatusContent(notification.event_type);
+    const detail = notification.event_type === 'order_out_for_delivery'
+      ? getWhatsappLocalDeliveryDetail({
+        shippingCarrier: order.shipping_carrier,
+        trackingNumber: order.tracking_number,
+        trackingUrl: order.tracking_url,
+        estimatedDelivery: order.estimated_delivery_at
+          ? formatWhatsappEstimatedDelivery(order.estimated_delivery_at)
+          : null,
+      })
+      : milestone.detail;
 
     return [
       sanitizeTemplateParam(order.customer_name, 60),
       sanitizeTemplateParam(order.order_number ?? order.id.slice(0, 8).toUpperCase(), 30),
       sanitizeTemplateParam(store?.name ?? 'la tienda', 60),
       milestone.status,
-      milestone.detail,
+      sanitizeTemplateParam(detail, 500),
+    ];
+  }
+
+  async function buildOrderShipmentParams(
+    notification: WhatsappNotificationRow,
+  ): Promise<string[] | { error: string }> {
+    const { data: order, error: orderErr } = await supabase
+      .from('orders')
+      .select('id, order_number, customer_name, fulfillment_method, shipping_carrier, tracking_number, tracking_url, estimated_delivery_at')
+      .eq('id', notification.order_id)
+      .single();
+    if (orderErr || !order) return { error: 'ORDER_NOT_FOUND' };
+
+    const { data: store } = await supabase
+      .from('stores')
+      .select('name')
+      .eq('id', notification.store_id)
+      .single();
+
+    if (order.fulfillment_method === 'national_shipping' && (
+      !order.shipping_carrier || !order.tracking_number
+    )) {
+      return { error: 'SHIPMENT_DETAILS_MISSING' };
+    }
+
+    const carrier = order.shipping_carrier?.trim() || 'Entrega propia de la empresa';
+    const trackingNumber = order.tracking_number?.trim() || 'No aplica';
+    const tracking = resolveWhatsappShipmentTracking(order.tracking_url, order.fulfillment_method);
+
+    return [
+      sanitizeTemplateParam(order.customer_name, 60),
+      sanitizeTemplateParam(order.order_number ?? order.id.slice(0, 8).toUpperCase(), 30),
+      sanitizeTemplateParam(store?.name ?? 'la tienda', 60),
+      sanitizeTemplateParam(carrier, 120),
+      sanitizeTemplateParam(trackingNumber, 160),
+      sanitizeTemplateParam(formatWhatsappEstimatedDelivery(order.estimated_delivery_at), 60),
+      sanitizeTemplateParam(tracking, 500),
     ];
   }
 
@@ -511,10 +567,13 @@ serve(async (req: Request) => {
       continue;
     }
 
+    const isShipmentUpdate = isWhatsappOrderShipmentEvent(notification.event_type);
     const isStatusUpdate = isWhatsappOrderStatusEvent(notification.event_type);
-    const requiredTemplateStatus = isStatusUpdate
-      ? context.status_template_status
-      : context.template_status;
+    const requiredTemplateStatus = isShipmentUpdate
+      ? context.shipment_template_status
+      : isStatusUpdate
+        ? context.status_template_status
+        : context.template_status;
 
     if (requiredTemplateStatus !== 'approved') {
       await supabase.from('whatsapp_notifications').update({
@@ -538,6 +597,23 @@ serve(async (req: Request) => {
       // avoids requiring every merchant to wait for and track a second Meta
       // template just for the settings-page test button.
       bodyParams = [...WHATSAPP_TEST_ORDER_TEMPLATE_PARAMS];
+    } else if (isShipmentUpdate) {
+      const result = await buildOrderShipmentParams(notification);
+      if ('error' in result) {
+        await supabase.from('whatsapp_notifications').update({
+          status: 'failed',
+          is_permanent_failure: true,
+          last_error_category: 'permanent',
+          last_error_code: result.error,
+          last_error_message: result.error === 'SHIPMENT_DETAILS_MISSING'
+            ? 'El despacho nacional no tiene transportadora y guía completas.'
+            : 'No se pudo construir la información de despacho del pedido.',
+          failed_at: nowIso,
+        }).eq('id', notification.id);
+        failed++;
+        continue;
+      }
+      bodyParams = result;
     } else if (isStatusUpdate) {
       const result = await buildOrderStatusParams(notification);
       if ('error' in result) {
@@ -578,6 +654,8 @@ serve(async (req: Request) => {
       context.template_language,
       context.status_template_name,
       context.status_template_language,
+      context.shipment_template_name,
+      context.shipment_template_language,
     );
 
     const sendResult = await sendTemplateMessage({

@@ -3,6 +3,7 @@ import {
   RESERVED_STOREFRONT_SUBDOMAINS,
   STOREFRONT_SUBDOMAIN_PATTERN,
 } from '@/lib/storefront/storefrontSubdomains';
+import { colombianMobilePhoneSchema } from './phone.schema';
 
 export const storeSchema = Yup.object({
   name: Yup.string().trim().min(2, 'Mínimo 2 caracteres').max(100).required('El nombre es requerido'),
@@ -22,7 +23,7 @@ export const storeSchema = Yup.object({
     .max(60)
     .required('El slug es requerido'),
   description: Yup.string().trim().max(500).nullable(),
-  whatsappNumber: Yup.string().trim().max(20).nullable(),
+  whatsappNumber: colombianMobilePhoneSchema.nullable(),
   supportEmail: Yup.string().trim().email('Email inválido').nullable(),
   instagramUrl: Yup.string().trim().url('URL inválida').nullable(),
   facebookUrl: Yup.string().trim().url('URL inválida').nullable(),

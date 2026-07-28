@@ -111,6 +111,14 @@ interface RequestBody {
   whatsapp_consent?: boolean;
 }
 
+function normalizeColombianMobilePhone(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const candidate = value.trim();
+  if (/^3\d{9}$/.test(candidate)) return candidate;
+  if (/^573\d{9}$/.test(candidate)) return candidate.slice(2);
+  return null;
+}
+
 function calculateShippingAmount(
   subtotal: number,
   fulfillmentMethod: string,
@@ -167,6 +175,13 @@ serve(async (req: Request) => {
   if (!store_slug)    return json({ error: 'store_slug is required' }, 400);
   if (!customer_name) return json({ error: 'customer_name is required' }, 400);
   if (!customer_phone) return json({ error: 'customer_phone is required' }, 400);
+  const normalizedCustomerPhone = normalizeColombianMobilePhone(customer_phone);
+  if (!normalizedCustomerPhone) {
+    return json({
+      error: 'customer_phone must be a valid 10-digit Colombian mobile number',
+      code: 'INVALID_CUSTOMER_PHONE',
+    }, 400);
+  }
   if (!redirect_url)  return json({ error: 'redirect_url is required' }, 400);
   if (!Array.isArray(items) || items.length === 0) {
     return json({ error: 'items must be a non-empty array' }, 400);
@@ -574,7 +589,7 @@ serve(async (req: Request) => {
       currency:              'COP',
       status:                'created',
       customer_name:         customer_name,
-      customer_phone:        customer_phone,
+      customer_phone:        normalizedCustomerPhone,
       customer_email:        customer_email ?? null,
       fulfillment_method:    fulfillment_method,
       shipping_address:      shipping_address ?? null,

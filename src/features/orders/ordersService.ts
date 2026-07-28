@@ -141,7 +141,7 @@ export const ordersService = {
     });
     if (error) {
       if (error.message.includes('NATIONAL_SHIPMENT_REQUIRES_TRACKING')) {
-        throw new Error('Los envíos nacionales requieren transportadora y número de guía.');
+        throw new Error('Los envíos nacionales requieren transportadora y número de guía. El enlace de rastreo es opcional.');
       }
       if (error.message.includes('INVALID_TRACKING_URL')) {
         throw new Error('El enlace de rastreo no es válido.');
@@ -191,6 +191,9 @@ export const ordersService = {
     if (error) {
       if (error.message.includes('WHATSAPP_CONSENT_REQUIRED')) {
         throw new Error('Debes aceptar las actualizaciones del pedido por WhatsApp para confirmar la compra.');
+      }
+      if (error.message.includes('INVALID_CUSTOMER_PHONE')) {
+        throw new Error('Ingresa un celular colombiano válido de 10 dígitos.');
       }
       throw new Error(error.message);
     }

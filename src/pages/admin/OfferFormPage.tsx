@@ -7,6 +7,7 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { MoneyInput } from '@/components/forms/MoneyInput';
 import { IntegerInput } from '@/components/forms/IntegerInput';
+import { PhoneInput } from '@/components/forms/PhoneInput';
 import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
@@ -27,6 +28,7 @@ import type { OfferFormValues } from '@/schemas/offer.schema';
 import type { Product } from '@/features/products/products.types';
 import type { Offer } from '@/features/offers/offers.types';
 import type { CountdownMode } from '@/types/common.types';
+import { sanitizePhoneInput } from '@/lib/phone/phoneValidation';
 
 function toISOOrNull(dtLocal: string): string | null {
   if (!dtLocal) return null;
@@ -113,7 +115,7 @@ export function OfferFormPage() {
           sortOrder: offer.sortOrder,
           status: offer.status === 'active' ? 'active' : 'draft',
           ctaLabel: offer.ctaLabel,
-          whatsappNumber: offer.whatsappNumber ?? '',
+          whatsappNumber: sanitizePhoneInput(offer.whatsappNumber ?? ''),
           whatsappMessage: offer.whatsappMessage ?? '',
           termsAndConditions: offer.termsAndConditions ?? '',
         });
@@ -503,14 +505,15 @@ export function OfferFormPage() {
               <CardBody>
                 <h3 className="font-semibold text-gray-900 mb-4">WhatsApp</h3>
                 <div className="space-y-4">
-                  <Input
+                  <PhoneInput
                     id="whatsappNumber"
                     name="whatsappNumber"
                     label="Número de WhatsApp (opcional)"
-                    placeholder="+573001234567"
+                    placeholder="3001234567"
                     value={values.whatsappNumber}
-                    onChange={handleChange}
+                    onValueChange={(value) => void setFieldValue('whatsappNumber', value)}
                     onBlur={handleBlur}
+                    error={touched.whatsappNumber ? errors.whatsappNumber : undefined}
                     hint="Si está vacío, se usa el número de la tienda."
                   />
                   <Textarea

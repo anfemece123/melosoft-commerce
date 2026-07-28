@@ -48,6 +48,7 @@ export function OrderShipmentDialog({ order, onConfirm, onClose }: OrderShipment
     if (trackingUrl.trim() && !isValidTrackingUrl(trackingUrl.trim())) {
       return 'El enlace de rastreo debe comenzar con http:// o https://.';
     }
+    if (trackingUrl.trim().length > 500) return 'El enlace de rastreo es demasiado largo.';
     return null;
   }, [isNational, shippingCarrier, trackingNumber, trackingUrl]);
 
@@ -113,7 +114,9 @@ export function OrderShipmentDialog({ order, onConfirm, onClose }: OrderShipment
             <>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="space-y-1.5 text-sm font-medium text-gray-700">
-                  Transportadora {isNational && <span className="text-red-500">*</span>}
+                  Transportadora {isNational
+                    ? <span className="text-red-500">*</span>
+                    : <span className="font-normal text-gray-400">(opcional)</span>}
                   <input
                     list="shipment-carriers"
                     value={shippingCarrier}
@@ -127,7 +130,9 @@ export function OrderShipmentDialog({ order, onConfirm, onClose }: OrderShipment
                   </datalist>
                 </label>
                 <label className="space-y-1.5 text-sm font-medium text-gray-700">
-                  Número de guía {isNational && <span className="text-red-500">*</span>}
+                  Número de guía {isNational
+                    ? <span className="text-red-500">*</span>
+                    : <span className="font-normal text-gray-400">(opcional)</span>}
                   <input
                     value={trackingNumber}
                     onChange={event => setTrackingNumber(event.target.value)}
@@ -147,13 +152,13 @@ export function OrderShipmentDialog({ order, onConfirm, onClose }: OrderShipment
                     type="url"
                     value={trackingUrl}
                     onChange={event => setTrackingUrl(event.target.value)}
-                    maxLength={2048}
+                    maxLength={500}
                     placeholder="https://transportadora.com/rastrear/..."
                     className="w-full rounded-xl border border-gray-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
                   />
                 </div>
                 <span className="block text-xs font-normal leading-5 text-gray-400">
-                  Si lo agregas, el correo incluirá un botón directo para rastrear el paquete.
+                  Se incluirá en WhatsApp y como botón directo en el correo del cliente.
                 </span>
               </label>
 
@@ -171,7 +176,9 @@ export function OrderShipmentDialog({ order, onConfirm, onClose }: OrderShipment
               </label>
 
               <div className="rounded-xl border border-sky-100 bg-sky-50 px-4 py-3 text-xs leading-5 text-sky-800">
-                El cliente recibirá automáticamente la transportadora, la guía, la fecha estimada y el enlace de rastreo por correo.
+                {isNational
+                  ? 'El cliente recibirá la transportadora y la guía por WhatsApp y correo. La fecha estimada y el enlace se incluirán únicamente si los registras.'
+                  : 'Puedes registrar transportadora, guía, fecha estimada o enlace para esta entrega local. Solo se comunicarán los datos que completes.'}
               </div>
             </>
           )}

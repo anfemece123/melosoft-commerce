@@ -16,6 +16,12 @@ import { whatsappService } from '@/features/whatsapp/whatsappService';
 import { EmbeddedSignupError, launchWhatsAppEmbeddedSignup } from '@/lib/whatsapp/embeddedSignup';
 import { isStorefrontHostnameMode, useStorefrontDomain } from '@/lib/storefront/storefrontDomainContext';
 import { whatsappSettingsSchema, type WhatsappSettingsFormValues } from '@/schemas/whatsappSettings.schema';
+import {
+  COLOMBIAN_MOBILE_MESSAGE,
+  isValidColombianMobile,
+  normalizeColombianMobile,
+  sanitizePhoneInput,
+} from '@/lib/phone/phoneValidation';
 import type {
   StoreWhatsappSettings,
   WhatsappNotification,
@@ -115,6 +121,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   payment_declined: 'Pago rechazado',
   order_preparing: 'En preparación',
   order_ready_for_pickup: 'Listo para recoger',
+  order_out_for_delivery: 'En camino',
   order_shipped: 'Enviado',
   order_delivered: 'Entregado',
   order_cancelled: 'Cancelado',
@@ -137,9 +144,11 @@ export function WhatsappSettingsPage() {
   const [registrationPin, setRegistrationPin] = useState('');
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
   const [testPhone, setTestPhone] = useState('');
+  const [testPhoneTouched, setTestPhoneTouched] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
   const templateSyncStoreRef = useRef<string | null>(null);
   const automaticRegistrationStoreRef = useRef<string | null>(null);
+  const allowsNationalShipping = connection?.nationalShipmentTemplateRequired ?? false;
 
   const loading = loadedStoreId !== storeId;
 
@@ -176,7 +185,12 @@ export function WhatsappSettingsPage() {
 
   useEffect(() => {
     if (!storeId) return;
-    return whatsappService.subscribeToConnection(storeId, setConnection);
+    return whatsappService.subscribeToConnection(storeId, (latestConnection) => {
+      setConnection((currentConnection) => ({
+        ...latestConnection,
+        nationalShipmentTemplateRequired: currentConnection?.nationalShipmentTemplateRequired ?? false,
+      }));
+    });
   }, [storeId]);
 
   // Create a missing template after a new WABA is connected, and recover a
@@ -186,7 +200,11 @@ export function WhatsappSettingsPage() {
     const templateNeedsSync = connection?.templateStatus === 'not_created' ||
       connection?.templateStatus === 'pending' ||
       connection?.statusTemplateStatus === 'not_created' ||
-      connection?.statusTemplateStatus === 'pending';
+      connection?.statusTemplateStatus === 'pending' ||
+      (allowsNationalShipping && (
+        connection?.shipmentTemplateStatus === 'not_created' ||
+        connection?.shipmentTemplateStatus === 'pending'
+      ));
     if (
       !storeId ||
       connection?.connectionStatus !== 'connected' ||
@@ -211,7 +229,14 @@ export function WhatsappSettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [storeId, connection?.connectionStatus, connection?.templateStatus, connection?.statusTemplateStatus]);
+  }, [
+    storeId,
+    connection?.connectionStatus,
+    connection?.templateStatus,
+    connection?.statusTemplateStatus,
+    connection?.shipmentTemplateStatus,
+    allowsNationalShipping,
+  ]);
 
   // Repair only genuinely pending pre-registration connections once
   // when their owner opens the page. A failed coexistence connection
@@ -419,12 +444,18 @@ export function WhatsappSettingsPage() {
   }
 
   async function handleSendTest() {
-    if (!storeId || !testPhone.trim()) return;
+    setTestPhoneTouched(true);
+    const normalizedPhone = normalizeColombianMobile(testPhone);
+    if (!storeId || !normalizedPhone) {
+      notify.error(COLOMBIAN_MOBILE_MESSAGE);
+      return;
+    }
     setSendingTest(true);
     try {
-      await whatsappService.sendTestMessage(storeId, testPhone.trim());
+      await whatsappService.sendTestMessage(storeId, normalizedPhone);
       notify.success('Mensaje de prueba en cola. Puede tardar hasta un minuto en llegar.');
       setTestPhone('');
+      setTestPhoneTouched(false);
       loadHistory(storeId);
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
@@ -453,8 +484,12 @@ export function WhatsappSettingsPage() {
   const statusInfo = CONNECTION_STATUS_LABELS[connection?.connectionStatus ?? 'not_connected'];
   const templateInfo = TEMPLATE_STATUS_LABELS[connection?.templateStatus ?? 'not_created'];
   const statusTemplateInfo = TEMPLATE_STATUS_LABELS[connection?.statusTemplateStatus ?? 'not_created'];
+  const shipmentTemplateInfo = TEMPLATE_STATUS_LABELS[connection?.shipmentTemplateStatus ?? 'not_created'];
   const registrationInfo = REGISTRATION_STATUS_LABELS[connection?.registrationStatus ?? 'pending'];
   const statusUpdatesReady = isConnected && connection?.statusTemplateStatus === 'approved';
+  const fulfillmentUpdatesReady = statusUpdatesReady && (
+    !allowsNationalShipping || connection?.shipmentTemplateStatus === 'approved'
+  );
 
   return (
     <AdminPanelShell
@@ -511,6 +546,14 @@ export function WhatsappSettingsPage() {
                       {statusTemplateInfo.label}
                     </span>
                   </div>
+                  {allowsNationalShipping && (
+                    <div className="flex justify-between text-sm items-center">
+                      <span className="text-gray-500 flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> Despacho nacional y rastreo</span>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${shipmentTemplateInfo.className}`}>
+                        {shipmentTemplateInfo.label}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-sm items-center">
                     <span className="text-gray-500">Envíos desde el número</span>
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${registrationInfo.className}`}>
@@ -522,6 +565,9 @@ export function WhatsappSettingsPage() {
                   )}
                   {connection?.statusTemplateRejectedReason && (
                     <p className="text-xs text-red-600 pt-1">{connection.statusTemplateRejectedReason}</p>
+                  )}
+                  {allowsNationalShipping && connection?.shipmentTemplateRejectedReason && (
+                    <p className="text-xs text-red-600 pt-1">{connection.shipmentTemplateRejectedReason}</p>
                   )}
                 </div>
 
@@ -730,20 +776,20 @@ export function WhatsappSettingsPage() {
               </div>
 
               <label className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${
-                statusUpdatesReady ? 'border-gray-200 cursor-pointer' : 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
+                fulfillmentUpdatesReady ? 'border-gray-200 cursor-pointer' : 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
               }`}>
                 <input
                   type="checkbox"
                   name="fulfillmentUpdateEnabled"
                   checked={formik.values.fulfillmentUpdateEnabled ?? false}
                   onChange={formik.handleChange}
-                  disabled={!statusUpdatesReady}
+                  disabled={!fulfillmentUpdatesReady}
                   className="mt-0.5 h-4 w-4 rounded"
                 />
                 <div>
-                  <p className="text-sm font-medium text-gray-800">Pedido listo para recoger o enviado</p>
+                  <p className="text-sm font-medium text-gray-800">Pedido listo, en camino o enviado</p>
                   <p className="text-xs text-gray-500 mt-0.5">
-                    Usa el texto correcto según el método de entrega del pedido.
+                    Recogida y domicilio local usan una actualización breve. Solo el envío nacional incluye transportadora, guía, fecha y rastreo.
                   </p>
                 </div>
               </label>
@@ -782,9 +828,9 @@ export function WhatsappSettingsPage() {
                 </div>
               </label>
 
-              {!statusUpdatesReady && (
+              {(!statusUpdatesReady || !fulfillmentUpdatesReady) && (
                 <p className="text-xs text-amber-600">
-                  Verifica las plantillas y espera la aprobación de Meta para activar estas actualizaciones.
+                  Verifica {allowsNationalShipping ? 'las tres plantillas' : 'las plantillas'} y espera la aprobación de Meta para activar todas las actualizaciones.
                 </p>
               )}
 
@@ -831,21 +877,36 @@ export function WhatsappSettingsPage() {
             <div className="flex gap-2">
               <input
                 type="tel"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={12}
+                autoComplete="tel"
                 value={testPhone}
-                onChange={(e) => setTestPhone(e.target.value)}
+                onChange={(e) => setTestPhone(sanitizePhoneInput(e.target.value))}
+                onBlur={() => setTestPhoneTouched(true)}
                 placeholder="3001234567"
+                aria-invalid={testPhoneTouched && !isValidColombianMobile(testPhone)}
+                aria-describedby="test-phone-help"
                 className="flex-1 rounded-lg border border-gray-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
               />
               <button
                 type="button"
                 onClick={() => void handleSendTest()}
-                disabled={sendingTest || !testPhone.trim() || !canSendTest}
+                disabled={sendingTest || !isValidColombianMobile(testPhone) || !canSendTest}
                 className="flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50 transition-colors"
               >
                 {sendingTest ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 Enviar
               </button>
             </div>
+            <p
+              id="test-phone-help"
+              className={`mt-2 text-xs ${testPhoneTouched && !isValidColombianMobile(testPhone) ? 'text-red-600' : 'text-gray-400'}`}
+            >
+              {testPhoneTouched && !isValidColombianMobile(testPhone)
+                ? COLOMBIAN_MOBILE_MESSAGE
+                : 'Celular colombiano de 10 dígitos; solo números.'}
+            </p>
             {!isConnected && (
               <p className="text-xs text-amber-600 mt-2">Conecta tu WhatsApp Business para poder enviar una prueba.</p>
             )}

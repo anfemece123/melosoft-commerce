@@ -45,36 +45,19 @@ La función mantiene `verify_jwt = true`. Además del gateway, valida internamen
 
 ## 4. Programar el worker
 
-El secreto de `service_role` nunca se incluye en una migración. Configura el cron una sola vez desde el SQL Editor de Supabase:
+La migración `109_schedule_order_email_worker.sql` programa automáticamente el worker cada minuto. Para no incluir la credencial `service_role` en git ni en el historial SQL, copia dentro de Vault la credencial que ya utiliza el worker de WhatsApp (`whatsapp_queue_dispatch_key`) y crea una entrada independiente llamada `email_queue_dispatch_key`.
+
+Si se instala el módulo de correos en un proyecto que todavía no tiene configurado WhatsApp, crea primero `email_queue_dispatch_key` desde el SQL Editor con la `service_role` legacy del proyecto y después vuelve a ejecutar `supabase db push`:
 
 ```sql
-create extension if not exists pg_cron with schema extensions;
-create extension if not exists pg_net with schema extensions;
-
 select vault.create_secret(
-  '<TU_SERVICE_ROLE_KEY>',
-  'email_queue_dispatch_key'
-);
-
-select cron.schedule(
-  'process-order-email-queue',
-  '* * * * *',
-  $$
-  select net.http_post(
-    url := 'https://omgkiynnpaygxulugxmc.supabase.co/functions/v1/send-order-email',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || (
-        select decrypted_secret
-        from vault.decrypted_secrets
-        where name = 'email_queue_dispatch_key'
-      )
-    ),
-    body := '{"limit": 20}'::jsonb
-  );
-  $$
+  '<TU_SERVICE_ROLE_KEY_LEGACY>',
+  'email_queue_dispatch_key',
+  'Legacy service-role JWT used only by the scheduled order email worker.'
 );
 ```
+
+Nunca incluyas el valor real en una migración, archivo `.env` versionado o captura de pantalla.
 
 Verificación:
 

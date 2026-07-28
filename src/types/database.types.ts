@@ -2553,6 +2553,10 @@ export interface Database {
           status_template_language: string;
           status_template_status: string;
           status_template_rejected_reason: string | null;
+          shipment_template_name: string;
+          shipment_template_language: string;
+          shipment_template_status: string;
+          shipment_template_rejected_reason: string | null;
           token_secret_reference: string | null;
           registration_status: string;
           registration_pin_secret_reference: string | null;
@@ -2587,6 +2591,10 @@ export interface Database {
           status_template_language?: string;
           status_template_status?: string;
           status_template_rejected_reason?: string | null;
+          shipment_template_name?: string;
+          shipment_template_language?: string;
+          shipment_template_status?: string;
+          shipment_template_rejected_reason?: string | null;
           token_secret_reference?: string | null;
           registration_status?: string;
           registration_pin_secret_reference?: string | null;
@@ -2621,6 +2629,10 @@ export interface Database {
           status_template_language?: string;
           status_template_status?: string;
           status_template_rejected_reason?: string | null;
+          shipment_template_name?: string;
+          shipment_template_language?: string;
+          shipment_template_status?: string;
+          shipment_template_rejected_reason?: string | null;
           token_secret_reference?: string | null;
           registration_status?: string;
           registration_pin_secret_reference?: string | null;

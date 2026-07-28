@@ -180,7 +180,13 @@ export const paymentsService = {
         redirect_url: redirectUrl,
       },
     });
-    if (error) throw new Error(await extractFunctionError(error));
+    if (error) {
+      const message = await extractFunctionError(error);
+      if (message.includes('INVALID_CUSTOMER_PHONE')) {
+        throw new Error('Ingresa un celular colombiano válido de 10 dígitos.');
+      }
+      throw new Error(message);
+    }
     if (!data?.checkoutUrl) throw new Error('Invalid response from payment service');
     return data as WompiCheckoutInitResult;
   },

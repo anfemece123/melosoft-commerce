@@ -1,6 +1,6 @@
 # Plantillas de WhatsApp — Melosoft Commerce
 
-Plantillas transaccionales para pedidos (migraciones `094`, `096` y `107`).
+Plantillas transaccionales para pedidos (migraciones `094`, `096`, `107` y `111`).
 **Modelo B**: las plantillas viven dentro de la WABA de cada empresa
 (no en una cuenta central), así que cada tienda necesita su propia
 copia aprobada. Melosoft no le pide a cada empresa que entre a Meta
@@ -107,8 +107,9 @@ Para agregarlo en el futuro:
 
 ## 2. `melosoft_order_status_v1`
 
-Una sola plantilla genérica cubre los hitos posteriores al pedido. No se crean
-plantillas distintas para cada estado.
+Una sola plantilla genérica cubre los hitos breves posteriores al pedido. El
+despacho usa una plantilla logística separada porque contiene información de
+rastreo accionable.
 
 | Campo | Valor |
 |---|---|
@@ -137,7 +138,7 @@ Este es un mensaje transaccional sobre tu compra.
 | `{{1}}` | Nombre del cliente | `María García` |
 | `{{2}}` | Número de pedido | `ORD-20260720-A1B2C3` |
 | `{{3}}` | Nombre de la tienda | `Panadería Dulce Hogar` |
-| `{{4}}` | Hito visible | `Listo para recoger`, `Enviado`, `Entregado` o `Cancelado` |
+| `{{4}}` | Hito visible | `Listo para recoger`, `En camino`, `Entregado` o `Cancelado` |
 | `{{5}}` | Indicación breve correspondiente al hito | `Ya puedes acercarte al punto de entrega seleccionado.` |
 
 ### Flujo profesional de mensajes
@@ -148,6 +149,58 @@ Este es un mensaje transaccional sobre tu compra.
   se evitan avisos repetidos que no aportan una acción nueva al cliente.
 - Para pedidos de restaurante, el flujo puede pasar de preparación a entregado,
   por lo que normalmente se envían solo recibido y entregado.
+
+---
+
+## 3. `melosoft_order_shipment_v1`
+
+Plantilla exclusiva para pedidos con **envío nacional**. El panel exige
+transportadora y número de guía antes de permitir el cambio de estado; la URL
+de rastreo es opcional. Las recogidas y los domicilios locales —incluidos los
+restaurantes— no usan esta plantilla: reciben la actualización `En camino` de
+`melosoft_order_status_v1`, complementada con los datos logísticos opcionales
+que haya registrado el negocio.
+
+| Campo | Valor |
+|---|---|
+| Nombre exacto | `melosoft_order_shipment_v1` |
+| Categoría | **Utility** |
+| Idioma | `es_CO` |
+| Header / Footer / Botones | Ninguno; la URL enviada en el cuerpo queda enlazable por WhatsApp. |
+
+### Cuerpo (body)
+
+```
+Hola {{1}} 👋
+
+Tu pedido *{{2}}* de *{{3}}* ya fue despachado.
+
+Transportadora: *{{4}}*
+Número de guía: *{{5}}*
+Entrega estimada: {{6}}
+Seguimiento: {{7}}
+
+Conserva este mensaje para hacer seguimiento a tu envío.
+```
+
+### Variables
+
+| # | Nombre lógico | Origen / valor alterno | Ejemplo |
+|---|---|---|---|
+| `{{1}}` | Nombre del cliente | `orders.customer_name` | `María García` |
+| `{{2}}` | Número de pedido | `orders.order_number` | `ORD-20260720-A1B2C3` |
+| `{{3}}` | Nombre de la tienda | `stores.name` | `Panadería Dulce Hogar` |
+| `{{4}}` | Transportadora | `orders.shipping_carrier` | `Servientrega` |
+| `{{5}}` | Número de guía | `orders.tracking_number` | `1234567890` |
+| `{{6}}` | Entrega estimada | `orders.estimated_delivery_at`; `Por confirmar` si está vacía | `3 de agosto de 2026` |
+| `{{7}}` | Seguimiento | `orders.tracking_url`; si está vacío, instrucción para consultar con transportadora y guía | `https://transportadora.example/rastrear/1234567890` |
+
+La transportadora y la guía son obligatorias para un envío nacional. El
+enlace de seguimiento es siempre opcional: cuando no existe, el mensaje indica
+al cliente que consulte el despacho con la transportadora usando su guía.
+En una entrega local todos estos datos son opcionales; si se registra una guía,
+transportadora, fecha o enlace, se agregan al mensaje **En camino** y los campos
+vacíos simplemente se omiten.
 
 ---
 
@@ -169,13 +222,13 @@ Después de que una tienda completa Embedded Signup
 owner hace clic en **"Verificar plantilla"**. Eso llama a la Edge
 Function `whatsapp-template-sync`, que:
 
-1. Busca `melosoft_order_confirmation_v1` y `melosoft_order_status_v1` en la
-   WABA de esa tienda (`GET /{waba_id}/message_templates?name=...`).
+1. Busca `melosoft_order_confirmation_v1` y `melosoft_order_status_v1`; si la
+   tienda ofrece envío nacional, también busca `melosoft_order_shipment_v1` en
+   su WABA (`GET /{waba_id}/message_templates?name=...`).
 2. Crea automáticamente cualquiera que falte (`POST
    /{waba_id}/message_templates`) con los textos de este documento.
-3. Guarda ambos estados devueltos por Meta (`pending`/`approved`/`rejected`/
-   `paused`/`disabled`) en `store_whatsapp_connections.template_status` y
-   `status_template_status`.
+3. Guarda los tres estados devueltos por Meta (`pending`/`approved`/
+   `rejected`/`paused`/`disabled`) en `store_whatsapp_connections`.
 
 Después, el webhook `message_template_status_update` mantiene ese estado
 sincronizado automáticamente cuando Meta termina la revisión. Si el webhook
@@ -184,8 +237,9 @@ se habilitó después de que Meta ya había aprobado la plantilla, el botón
 búsqueda selecciona el idioma exacto (`es_CO`), incluso si la WABA conserva
 otra variante del mismo nombre (por ejemplo, una versión anterior `es_MX`).
 
-La confirmación inicial y las pruebas usan la primera plantilla; los hitos
-posteriores usan la segunda. El sistema **no envía nada** con una plantilla
+La confirmación inicial y las pruebas usan la primera plantilla; la recogida,
+el domicilio local, la entrega y la cancelación usan la segunda; solamente el
+envío nacional usa la tercera. El sistema **no envía nada** con una plantilla
 hasta que su estado sea `approved` — un
 envío contra una plantilla pendiente o rechazada respondería
 `132001`/`132000`, así que `send-whatsapp-notification` ni siquiera

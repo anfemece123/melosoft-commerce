@@ -81,6 +81,26 @@ const ORDER_STATUS_TEMPLATE = {
   ],
 } satisfies WhatsappTemplateDefinition;
 
+// National shipping deserves its own copy: unlike local delivery milestones,
+// dispatch has carrier data that the customer should not need to request from
+// the merchant in a separate conversation.
+const ORDER_SHIPMENT_TEMPLATE = {
+  name: 'melosoft_order_shipment_v1',
+  category: 'utility',
+  language: 'es_CO',
+  bodyText:
+    'Hola {{1}} 👋\n\nTu pedido *{{2}}* de *{{3}}* ya fue despachado.\n\nTransportadora: *{{4}}*\nNúmero de guía: *{{5}}*\nEntrega estimada: {{6}}\nSeguimiento: {{7}}\n\nConserva este mensaje para hacer seguimiento a tu envío.',
+  bodyExample: [
+    'María García',
+    'ORD-20260720-A1B2C3',
+    'Panadería Dulce Hogar',
+    'Servientrega',
+    '1234567890',
+    '3 de agosto de 2026',
+    'https://transportadora.example/rastrear/1234567890',
+  ],
+} satisfies WhatsappTemplateDefinition;
+
 interface MetaErrorShape {
   error?: MetaOAuthError;
 }
@@ -271,6 +291,17 @@ Deno.serve(async (req: Request) => {
     return json({ error: 'Forbidden' }, 403, cors);
   }
 
+  const { data: commerceSettings, error: commerceSettingsErr } = await adminClient
+    .from('store_commerce_settings')
+    .select('allows_national_shipping')
+    .eq('store_id', storeId)
+    .maybeSingle();
+  if (commerceSettingsErr) {
+    console.error('[whatsapp-template-sync] commerce settings lookup failed:', commerceSettingsErr.message);
+    return json({ error: 'Internal error' }, 500, cors);
+  }
+  const requiresShipmentTemplate = commerceSettings?.allows_national_shipping === true;
+
   // service_role-only RPC — safe to call here because this whole
   // function always runs as service_role internally, regardless of who
   // the calling user is (already authorized above).
@@ -320,7 +351,7 @@ Deno.serve(async (req: Request) => {
     }, 502, cors);
   }
 
-  const [orderTemplateResult, statusTemplateResult] = await Promise.all([
+  const [orderTemplateResult, statusTemplateResult, shipmentTemplateResult] = await Promise.all([
     syncOneTemplate(
       graphApiVersion,
       wabaId,
@@ -333,6 +364,18 @@ Deno.serve(async (req: Request) => {
       accessToken,
       ORDER_STATUS_TEMPLATE,
     ),
+    requiresShipmentTemplate
+      ? syncOneTemplate(
+        graphApiVersion,
+        wabaId,
+        accessToken,
+        ORDER_SHIPMENT_TEMPLATE,
+      )
+      : Promise.resolve<TemplateSyncResult>({
+        status: 'not_created',
+        rejectedReason: null,
+        diagnostic: null,
+      }),
   ]);
 
   const { error: updateErr } = await adminClient.rpc('store_whatsapp_connection_update_template_statuses', {
@@ -341,6 +384,8 @@ Deno.serve(async (req: Request) => {
     p_order_rejected_reason: orderTemplateResult.rejectedReason,
     p_status_template_status: statusTemplateResult.status,
     p_status_rejected_reason: statusTemplateResult.rejectedReason,
+    p_shipment_template_status: shipmentTemplateResult.status,
+    p_shipment_rejected_reason: shipmentTemplateResult.rejectedReason,
   });
   if (updateErr) {
     console.error('[whatsapp-template-sync] failed to persist template status:', updateErr.message);
@@ -352,10 +397,14 @@ Deno.serve(async (req: Request) => {
       ? 'template_status_changed'
       : 'template_created',
     actor_user_id: callerUser.id,
-    detail: `order_template=${orderTemplateResult.status} status_template=${statusTemplateResult.status}`,
+    detail: `order_template=${orderTemplateResult.status} status_template=${statusTemplateResult.status} shipment_template=${shipmentTemplateResult.status}`,
   });
 
-  const diagnostics = [orderTemplateResult.diagnostic, statusTemplateResult.diagnostic]
+  const diagnostics = [
+    orderTemplateResult.diagnostic,
+    statusTemplateResult.diagnostic,
+    shipmentTemplateResult.diagnostic,
+  ]
     .filter((item): item is MetaTemplateSyncDiagnostic => item !== null);
   if (diagnostics.length > 0) {
     const permissionDenied = diagnostics.some((diagnostic) =>
@@ -384,6 +433,12 @@ Deno.serve(async (req: Request) => {
     ok: true,
     orderConfirmationTemplate: { name: ORDER_CONFIRMATION_TEMPLATE.name, status: orderTemplateResult.status, rejectedReason: orderTemplateResult.rejectedReason },
     orderStatusTemplate: { name: ORDER_STATUS_TEMPLATE.name, status: statusTemplateResult.status, rejectedReason: statusTemplateResult.rejectedReason },
+    orderShipmentTemplate: {
+      name: ORDER_SHIPMENT_TEMPLATE.name,
+      status: shipmentTemplateResult.status,
+      rejectedReason: shipmentTemplateResult.rejectedReason,
+      required: requiresShipmentTemplate,
+    },
     // Backward-compatible response field for already deployed frontends.
     // Test sends now use the same single approved order template.
     testTemplate: { name: ORDER_CONFIRMATION_TEMPLATE.name, status: orderTemplateResult.status },

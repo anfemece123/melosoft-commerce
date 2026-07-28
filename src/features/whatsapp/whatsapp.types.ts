@@ -31,6 +31,7 @@ export type WhatsappNotificationEventType =
   | 'payment_declined'
   | 'order_preparing'
   | 'order_ready_for_pickup'
+  | 'order_out_for_delivery'
   | 'order_shipped'
   | 'order_delivered'
   | 'order_cancelled'
@@ -99,6 +100,12 @@ export interface StoreWhatsappConnection {
   statusTemplateLanguage: string;
   statusTemplateStatus: WhatsappTemplateStatus;
   statusTemplateRejectedReason: string | null;
+  shipmentTemplateName: string;
+  shipmentTemplateLanguage: string;
+  shipmentTemplateStatus: WhatsappTemplateStatus;
+  shipmentTemplateRejectedReason: string | null;
+  /** Whether this store currently offers national shipping. */
+  nationalShipmentTemplateRequired?: boolean;
   registrationStatus: WhatsappRegistrationStatus;
   registeredAt: string | null;
   registrationLastErrorCode: string | null;

@@ -1,9 +1,10 @@
 import * as Yup from 'yup';
+import { colombianMobilePhoneSchema } from './phone.schema';
 
 export const orderSchema = Yup.object({
   customerName: Yup.string().trim().min(2).max(200).required('El nombre es requerido'),
   customerEmail: Yup.string().trim().email('Email inválido').nullable(),
-  customerPhone: Yup.string().trim().min(7).max(20).required('El teléfono es requerido'),
+  customerPhone: colombianMobilePhoneSchema.required('El celular es requerido'),
   customerDocument: Yup.string().trim().max(30).nullable(),
   shippingAddress: Yup.string().trim().max(300).nullable(),
   city: Yup.string().trim().max(100).nullable(),
@@ -17,11 +18,7 @@ export const checkoutSchema = Yup.object({
     .min(2, 'Mínimo 2 caracteres')
     .max(200)
     .required('El nombre es requerido'),
-  customerPhone: Yup.string()
-    .trim()
-    .min(7, 'Mínimo 7 dígitos')
-    .max(20, 'Máximo 20 caracteres')
-    .required('El teléfono es requerido'),
+  customerPhone: colombianMobilePhoneSchema.required('El celular es requerido'),
   customerEmail: Yup.string().trim().email('Email inválido').optional(),
   fulfillmentMethod: Yup.string()
     .oneOf(['pickup', 'local_delivery', 'national_shipping'] as const)

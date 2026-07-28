@@ -11,6 +11,7 @@ import type { BusinessVertical } from '@/types/common.types';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { PhoneInput } from '@/components/forms/PhoneInput';
 import { Textarea } from '@/components/ui/Textarea';
 import { Select } from '@/components/ui/Select';
 import { Button } from '@/components/ui/Button';
@@ -611,15 +612,16 @@ export function StoreFormPage() {
                   error={fieldError('ownerEmail')}
                   required
                 />
-                <Input
-                  label="Teléfono"
+                <PhoneInput
+                  label="Celular"
                   id="ownerPhone"
                   name="ownerPhone"
-                  placeholder="+57 300 000 0000"
+                  placeholder="3001234567"
                   value={formik.values.ownerPhone}
-                  onChange={formik.handleChange}
+                  onValueChange={(value) => void formik.setFieldValue('ownerPhone', value)}
                   onBlur={formik.handleBlur}
                   error={fieldError('ownerPhone')}
+                  hint="10 dígitos, sin espacios ni letras."
                   required
                 />
               </div>
@@ -1033,15 +1035,16 @@ export function StoreFormPage() {
                 required
               />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input
+                <PhoneInput
                   label="WhatsApp de contacto"
                   id="whatsappNumber"
                   name="whatsappNumber"
-                  placeholder="+57 300 000 0000"
+                  placeholder="3001234567"
                   value={formik.values.whatsappNumber}
-                  onChange={formik.handleChange}
+                  onValueChange={(value) => void formik.setFieldValue('whatsappNumber', value)}
                   onBlur={formik.handleBlur}
                   error={fieldError('whatsappNumber')}
+                  hint="Celular colombiano de 10 dígitos."
                   required
                 />
                 <Input

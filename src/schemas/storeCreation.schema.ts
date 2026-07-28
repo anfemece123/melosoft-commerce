@@ -8,6 +8,7 @@ import {
   isAllNumericStorefrontSubdomain,
 } from '@/lib/storefront/storefrontSubdomains';
 import { getOwnerPasswordValidationError } from '@/lib/auth/ownerPassword';
+import { colombianMobilePhoneSchema } from './phone.schema';
 
 const businessHourSchema = Yup.object({
   dayOfWeek: Yup.number().min(0).max(6).required(),
@@ -34,7 +35,7 @@ export const storeCreationSchema = Yup.object({
   // Section 1 — Owner
   ownerFullName: Yup.string().trim().min(2, 'Mínimo 2 caracteres').max(120).required('Nombre del propietario requerido'),
   ownerEmail: Yup.string().trim().email('Email inválido').required('Email del propietario requerido'),
-  ownerPhone: Yup.string().trim().max(20).required('Teléfono del propietario requerido'),
+  ownerPhone: colombianMobilePhoneSchema.required('Celular del propietario requerido'),
   ownerDocumentType: Yup.string().trim().max(20).nullable(),
   ownerDocumentNumber: Yup.string().trim().max(30).nullable(),
   ownerAccessMode: Yup.string()
@@ -100,7 +101,7 @@ export const storeCreationSchema = Yup.object({
   description: Yup.string().trim().min(10, 'Mínimo 10 caracteres').max(1000).required('Descripción requerida'),
   logoUrl: Yup.string().trim().url('Logo inválido').nullable(),
   supportEmail: Yup.string().trim().email('Email inválido').nullable(),
-  whatsappNumber: Yup.string().trim().max(20).required('Número de WhatsApp requerido'),
+  whatsappNumber: colombianMobilePhoneSchema.required('Número de WhatsApp requerido'),
   country: Yup.string().trim().length(2, 'Código de 2 letras').required('País requerido'),
   city: Yup.string().trim().max(100).required('Ciudad requerida'),
   currency: Yup.string().trim().length(3, 'Código de 3 letras').required('Moneda requerida'),

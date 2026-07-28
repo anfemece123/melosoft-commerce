@@ -1,4 +1,5 @@
 import * as Yup from 'yup';
+import { colombianMobilePhoneSchema } from './phone.schema';
 
 export const whatsappSettingsSchema = Yup.object({
   enabled: Yup.boolean().default(false),
@@ -12,7 +13,7 @@ export const whatsappSettingsSchema = Yup.object({
 export type WhatsappSettingsFormValues = Yup.InferType<typeof whatsappSettingsSchema>;
 
 export const whatsappTestSendSchema = Yup.object({
-  phone: Yup.string().trim().min(7, 'Mínimo 7 dígitos').max(20).required('El teléfono es requerido'),
+  phone: colombianMobilePhoneSchema.required('El celular es requerido'),
 });
 
 export type WhatsappTestSendFormValues = Yup.InferType<typeof whatsappTestSendSchema>;

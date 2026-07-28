@@ -94,6 +94,7 @@ interface TemplateSyncResponse {
   ok: true;
   orderConfirmationTemplate: { name: string; status: string; rejectedReason: string | null };
   orderStatusTemplate: { name: string; status: string; rejectedReason: string | null };
+  orderShipmentTemplate: { name: string; status: string; rejectedReason: string | null; required?: boolean };
   testTemplate: { name: string; status: string };
 }
 
@@ -166,14 +167,25 @@ export const whatsappService = {
   // ── Modelo B — per-store connection ──────────────────────────────
 
   async getConnection(storeId: string): Promise<StoreWhatsappConnection | null> {
-    const { data, error } = await supabase
-      .from('store_whatsapp_connections')
-      .select('*')
-      .eq('store_id', storeId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!data) return null;
-    return mapStoreWhatsappConnectionRowToStoreWhatsappConnection(data);
+    const [connectionResult, commerceResult] = await Promise.all([
+      supabase
+        .from('store_whatsapp_connections')
+        .select('*')
+        .eq('store_id', storeId)
+        .maybeSingle(),
+      supabase
+        .from('store_commerce_settings')
+        .select('allows_national_shipping')
+        .eq('store_id', storeId)
+        .maybeSingle(),
+    ]);
+    if (connectionResult.error) throw new Error(connectionResult.error.message);
+    if (commerceResult.error) throw new Error(commerceResult.error.message);
+    if (!connectionResult.data) return null;
+    return {
+      ...mapStoreWhatsappConnectionRowToStoreWhatsappConnection(connectionResult.data),
+      nationalShipmentTemplateRequired: commerceResult.data?.allows_national_shipping ?? false,
+    };
   },
 
   subscribeToConnection(

@@ -20,6 +20,7 @@ import { calculateShippingAmount } from '@/lib/commerce/shippingRules';
 import type { WebOrderResult } from '@/features/orders/orders.types';
 import type { PaymentChoice } from './CheckoutPaymentSelector';
 import { locationsService } from '@/features/locations/locationsService';
+import { COLOMBIAN_MOBILE_MESSAGE, normalizeColombianMobile } from '@/lib/phone/phoneValidation';
 
 export type DrawerStep = 'cart' | 'form' | 'submitting' | 'confirmed' | 'redirecting_to_wompi';
 
@@ -97,8 +98,14 @@ export function useCartCheckout({
     },
     validationSchema,
     enableReinitialize: false,
-    onSubmit: async (values) => {
+    onSubmit: async (values, helpers) => {
       try {
+        const customerPhone = normalizeColombianMobile(values.customerPhone);
+        if (!customerPhone) {
+          helpers.setFieldTouched('customerPhone', true, false);
+          helpers.setFieldError('customerPhone', COLOMBIAN_MOBILE_MESSAGE);
+          return;
+        }
         const fulfillmentMethod = normalizeFulfillmentMethod(values.fulfillmentMethod);
         const operationalLocation = resolveOperationalLocation({
           fulfillmentMethod,
@@ -172,7 +179,7 @@ export function useCartCheckout({
             {
               storeSlug,
               customerName:         values.customerName.trim(),
-              customerPhone:        values.customerPhone.trim(),
+              customerPhone,
               customerEmail:        values.customerEmail.trim() || null,
               fulfillmentMethod,
               shippingAddress,
@@ -209,7 +216,7 @@ export function useCartCheckout({
           const result = await ordersService.createWebOrder({
             storeSlug,
             customerName:         values.customerName.trim(),
-            customerPhone:        values.customerPhone.trim(),
+            customerPhone,
             customerEmail:        values.customerEmail.trim() || null,
             fulfillmentMethod,
             shippingAddress,

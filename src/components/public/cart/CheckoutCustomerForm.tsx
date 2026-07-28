@@ -10,6 +10,7 @@ import type { CheckoutFulfillmentMethod, LocationCityOption } from '@/lib/orders
 import { getPickupLocations } from '@/lib/orders/fulfillment';
 import { getFulfillmentMethodLabel, getFulfillmentMethodDescription } from '@/lib/orders/fulfillmentLabels';
 import { formatCurrency } from '@/utils/formatCurrency';
+import { sanitizePhoneInput } from '@/lib/phone/phoneValidation';
 
 interface CheckoutFieldProps {
   formik: FormikProps<CheckoutFormValues>;
@@ -19,24 +20,36 @@ interface CheckoutFieldProps {
   required?: boolean;
   placeholder?: string;
   type?: string;
+  hint?: string;
 }
 
-function CheckoutField({ formik, theme, name, label, required, placeholder, type = 'text' }: CheckoutFieldProps) {
+function CheckoutField({ formik, theme, name, label, required, placeholder, type = 'text', hint }: CheckoutFieldProps) {
   const touched = formik.touched[name];
   const error = formik.errors[name];
+  const hasError = Boolean(touched && error);
+  const isPhone = name === 'customerPhone';
+  const helpId = `${name}-${hasError ? 'error' : 'hint'}`;
   return (
     <div className="space-y-1">
-      <label className="block text-xs font-medium" style={{ color: theme.mutedText }}>
+      <label htmlFor={name} className="block text-xs font-medium" style={{ color: theme.mutedText }}>
         {label}{required && <span className="ml-0.5" style={{ color: theme.primary }}>*</span>}
       </label>
       <input
         id={name}
         name={name}
         type={type}
+        inputMode={isPhone ? 'numeric' : undefined}
+        pattern={isPhone ? '[0-9]*' : undefined}
+        maxLength={isPhone ? 12 : undefined}
+        autoComplete={isPhone ? 'tel' : undefined}
         value={formik.values[name] as string}
-        onChange={formik.handleChange}
+        onChange={isPhone
+          ? (event) => void formik.setFieldValue(name, sanitizePhoneInput(event.target.value))
+          : formik.handleChange}
         onBlur={formik.handleBlur}
         placeholder={placeholder}
+        aria-invalid={hasError}
+        aria-describedby={(hasError || hint) ? helpId : undefined}
         className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none transition-colors focus:ring-2"
         style={{
           backgroundColor: theme.surface,
@@ -44,9 +57,12 @@ function CheckoutField({ formik, theme, name, label, required, placeholder, type
           borderColor: touched && error ? theme.primary : theme.border,
         }}
       />
-      {touched && error && (
-        <p className="text-xs" style={{ color: theme.primary }}>{error as string}</p>
+      {hasError && (
+        <p id={helpId} className="text-xs" style={{ color: theme.primary }}>{error as string}</p>
       )}
+      {!hasError && hint ? (
+        <p id={helpId} className="text-[11px] leading-4" style={{ color: theme.mutedText }}>{hint}</p>
+      ) : null}
     </div>
   );
 }
@@ -503,10 +519,11 @@ export function CheckoutCustomerForm({
           formik={formik}
           theme={theme}
           name="customerPhone"
-          label="Teléfono"
+          label="Celular / WhatsApp"
           required
           placeholder="3001234567"
           type="tel"
+          hint="Escribe los 10 dígitos completos. Solo se permiten números."
         />
         <div className="space-y-1">
           <CheckoutField

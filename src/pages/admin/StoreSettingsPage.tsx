@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/Input';
 import { SwitchField } from '@/components/ui/SwitchField';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { MoneyInput } from '@/components/forms/MoneyInput';
+import { PhoneInput } from '@/components/forms/PhoneInput';
 import { StoreLogoField } from '@/components/admin/StoreLogoField';
 import { StoreFaviconField } from '@/components/admin/StoreFaviconField';
 import { StoreDomainSettings } from '@/components/admin/StoreDomainSettings';
@@ -48,6 +49,7 @@ import { buildStorefrontTheme } from '@/components/public/storefront/storefrontT
 import { AdminPanelTabs } from '@/components/admin/AdminPanelTabs';
 import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { isPlatformAdmin } from '@/utils/permissions';
+import { sanitizePhoneInput } from '@/lib/phone/phoneValidation';
 import { clearCachedPublicStoreBranding } from '@/lib/storefront/publicStoreBrandingCache';
 
 
@@ -472,7 +474,7 @@ export function StoreSettingsPage() {
       name: currentStore?.name ?? '',
       slogan: currentStore?.slogan ?? '',
       description: currentStore?.description ?? '',
-      whatsappNumber: currentStore?.whatsappNumber ?? '',
+      whatsappNumber: sanitizePhoneInput(currentStore?.whatsappNumber ?? ''),
       supportEmail: currentStore?.supportEmail ?? '',
       city: currentStore?.city ?? '',
       heroTitle: '',
@@ -1109,11 +1111,16 @@ export function StoreSettingsPage() {
               />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Input
+                <PhoneInput
                   id="whatsappNumber"
+                  name="whatsappNumber"
                   label="WhatsApp de contacto"
-                  {...generalFormik.getFieldProps('whatsappNumber')}
+                  value={generalFormik.values.whatsappNumber}
+                  onValueChange={(value) => void generalFormik.setFieldValue('whatsappNumber', value)}
+                  onBlur={generalFormik.handleBlur}
                   error={generalFormik.touched.whatsappNumber ? generalFormik.errors.whatsappNumber : undefined}
+                  placeholder="3001234567"
+                  hint="Celular colombiano de 10 dígitos."
                 />
                 <Input
                   id="supportEmail"

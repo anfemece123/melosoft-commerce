@@ -8,6 +8,7 @@ import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { PhoneInput } from '@/components/forms/PhoneInput';
 import { Select } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -18,6 +19,8 @@ import type { GeoDepartment, GeoCity } from '@/features/geo/geo.types';
 import type { StoreLocation } from '@/features/locations/locations.types';
 import { notify } from '@/lib/notifications';
 import { LocationScheduleEditor } from '@/components/admin/LocationScheduleEditor';
+import { colombianContactPhoneSchema, colombianMobilePhoneSchema } from '@/schemas/phone.schema';
+import { sanitizePhoneInput } from '@/lib/phone/phoneValidation';
 
 const locationSchema = Yup.object({
   name: Yup.string().required('Nombre requerido').max(80),
@@ -25,8 +28,8 @@ const locationSchema = Yup.object({
   neighborhood: Yup.string().nullable().default(null),
   department: Yup.string().trim().min(1, 'Departamento requerido').max(100).required('Departamento requerido'),
   city: Yup.string().trim().min(1, 'Ciudad requerida').max(100).required('Ciudad requerida'),
-  phone: Yup.string().nullable().default(null),
-  whatsappNumber: Yup.string().nullable().default(null),
+  phone: colombianContactPhoneSchema.nullable().default(null),
+  whatsappNumber: colombianMobilePhoneSchema.nullable().default(null),
   allowsPickup: Yup.boolean().default(true),
   allowsLocalDelivery: Yup.boolean().default(false),
   deliveryNotes: Yup.string().nullable().default(null),
@@ -173,8 +176,8 @@ export function LocationsPage() {
       neighborhood: loc.neighborhood ?? null,
       department: loc.department ?? '',
       city: loc.city ?? '',
-      phone: loc.phone ?? null,
-      whatsappNumber: loc.whatsappNumber ?? null,
+      phone: sanitizePhoneInput(loc.phone ?? '') || null,
+      whatsappNumber: sanitizePhoneInput(loc.whatsappNumber ?? '') || null,
       allowsPickup: loc.allowsPickup,
       allowsLocalDelivery: loc.allowsLocalDelivery,
       deliveryNotes: loc.deliveryNotes ?? null,
@@ -265,10 +268,16 @@ export function LocationsPage() {
                 {...formik.getFieldProps('name')}
                 error={formik.touched.name ? formik.errors.name : undefined}
               />
-              <Input
+              <PhoneInput
+                id="phone"
+                name="phone"
                 label="Teléfono"
-                placeholder="+57 601 000 0000"
-                {...formik.getFieldProps('phone')}
+                placeholder="6011234567"
+                value={formik.values.phone}
+                onValueChange={(value) => void formik.setFieldValue('phone', value || null)}
+                onBlur={formik.handleBlur}
+                error={formik.touched.phone ? formik.errors.phone ?? undefined : undefined}
+                hint="Celular o teléfono fijo de 10 dígitos."
               />
             </div>
 
@@ -326,10 +335,16 @@ export function LocationsPage() {
 
             {/* Row: whatsapp */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
+              <PhoneInput
+                id="whatsappNumber"
+                name="whatsappNumber"
                 label="WhatsApp"
-                placeholder="+57 300 000 0000"
-                {...formik.getFieldProps('whatsappNumber')}
+                placeholder="3001234567"
+                value={formik.values.whatsappNumber}
+                onValueChange={(value) => void formik.setFieldValue('whatsappNumber', value || null)}
+                onBlur={formik.handleBlur}
+                error={formik.touched.whatsappNumber ? formik.errors.whatsappNumber ?? undefined : undefined}
+                hint="Celular colombiano de 10 dígitos."
               />
             </div>
 

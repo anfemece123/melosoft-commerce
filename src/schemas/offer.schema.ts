@@ -1,5 +1,6 @@
 import * as Yup from 'yup';
 import type { CountdownMode } from '@/types/common.types';
+import { colombianMobilePhoneSchema } from './phone.schema';
 
 export interface OfferFormValues {
   title: string;
@@ -80,7 +81,7 @@ export const offerSchema = Yup.object({
     .required('El orden de visualización es requerido'),
   status: Yup.string().oneOf(['draft', 'active'] as const).required(),
   ctaLabel: Yup.string().required('El texto del botón es requerido'),
-  whatsappNumber: Yup.string(),
+  whatsappNumber: colombianMobilePhoneSchema,
   whatsappMessage: Yup.string(),
   termsAndConditions: Yup.string(),
 });

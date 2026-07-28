@@ -1,4 +1,5 @@
 import { isWhatsappOrderStatusEvent } from './whatsappOrderStatus.ts';
+import { isWhatsappOrderShipmentEvent } from './whatsappShipment.ts';
 
 export interface WhatsappTemplateSelection {
   name: string;
@@ -20,7 +21,16 @@ export function resolveWhatsappTemplateSelection(
   contextTemplateLanguage: string | null | undefined,
   contextStatusTemplateName?: string | null,
   contextStatusTemplateLanguage?: string | null,
+  contextShipmentTemplateName?: string | null,
+  contextShipmentTemplateLanguage?: string | null,
 ): WhatsappTemplateSelection {
+  if (isWhatsappOrderShipmentEvent(eventType)) {
+    return {
+      name: contextShipmentTemplateName || notificationTemplateName,
+      language: contextShipmentTemplateLanguage || notificationTemplateLanguage,
+    };
+  }
+
   const isStatusUpdate = isWhatsappOrderStatusEvent(eventType);
 
   if (isStatusUpdate) {
