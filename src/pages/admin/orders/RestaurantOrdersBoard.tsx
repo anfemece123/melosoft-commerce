@@ -289,7 +289,6 @@ function DroppableColumn({
 
 interface RestaurantOrdersBoardProps {
   orders: Order[];
-  storeName: string;
   automaticWhatsappReady: boolean;
   dateLabel: string;
   locationMap: Record<string, string>;
@@ -305,7 +304,6 @@ interface RestaurantOrdersBoardProps {
 
 export function RestaurantOrdersBoard({
   orders,
-  storeName,
   automaticWhatsappReady,
   dateLabel: _dateLabel,
   locationMap,
@@ -506,9 +504,6 @@ export function RestaurantOrdersBoard({
       {pendingConfirm && (
         <OrderConfirmDialog
           order={pendingConfirm}
-          storeName={storeName}
-          locationName={pendingConfirm.storeLocationId ? (locationMap[pendingConfirm.storeLocationId] ?? null) : null}
-          context={context}
           automaticWhatsappReady={automaticWhatsappReady}
           onStatusChange={onStatusChange}
           onClose={() => setPendingConfirm(null)}
@@ -519,7 +514,6 @@ export function RestaurantOrdersBoard({
         <OrderDetailDrawer
           order={selectedOrder}
           context={context}
-          storeName={storeName}
           automaticWhatsappReady={automaticWhatsappReady}
           locationMap={locationMap}
           onClose={() => setSelectedOrder(null)}

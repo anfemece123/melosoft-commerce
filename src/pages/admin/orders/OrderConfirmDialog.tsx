@@ -1,20 +1,10 @@
 import { useState } from 'react';
 import { X, CheckCircle, Loader2 } from 'lucide-react';
-import { notify } from '@/lib/notifications';
-import {
-  buildOrderConfirmationMessage,
-  buildWhatsAppUrl,
-  normalizePhoneForWhatsApp,
-} from '@/lib/whatsapp/orderWhatsappMessage';
 import type { Order } from '@/features/orders/orders.types';
 import type { OrderStatus } from '@/types/common.types';
-import type { OrderViewContext } from './OrderStatusBadge';
 
 interface OrderConfirmDialogProps {
   order: Order;
-  storeName: string;
-  locationName: string | null;
-  context: OrderViewContext;
   automaticWhatsappReady: boolean;
   onStatusChange: (orderId: string, status: OrderStatus) => Promise<void>;
   onClose: () => void;
@@ -22,34 +12,21 @@ interface OrderConfirmDialogProps {
 
 export function OrderConfirmDialog({
   order,
-  storeName,
-  locationName,
-  context,
   automaticWhatsappReady,
   onStatusChange,
   onClose,
 }: OrderConfirmDialogProps) {
   const [loading, setLoading] = useState(false);
-  const hasPhone = Boolean(order.customerPhone && normalizePhoneForWhatsApp(order.customerPhone));
 
   function handleConfirm() {
-    const shouldOpenManualWhatsapp = !automaticWhatsappReady && hasPhone;
-    const message = shouldOpenManualWhatsapp
-      ? buildOrderConfirmationMessage(order, storeName, locationName, context)
-      : null;
-    const url = message ? buildWhatsAppUrl(order.customerPhone, message) : null;
-    if (url) window.open(url, '_blank', 'noopener,noreferrer');
-
     setLoading(true);
     void (async () => {
       try {
         await onStatusChange(order.id, 'confirmed');
-        notify.success(url
-          ? 'Pedido confirmado. Abrimos WhatsApp como alternativa manual.'
-          : 'Pedido confirmado');
         onClose();
       } catch {
-        notify.error('No se pudo confirmar el pedido. Intenta de nuevo.');
+        // The orders controller owns the user-facing error so every status
+        // transition reports failures consistently and only once.
       } finally {
         setLoading(false);
       }
@@ -80,9 +57,7 @@ export function OrderConfirmDialog({
             Confirmaremos el pedido de <strong className="text-gray-800">{order.customerName}</strong>.{' '}
             {automaticWhatsappReady
               ? 'Melosoft gestionará los avisos automáticos activados, sin abrir otra ventana de WhatsApp.'
-              : hasPhone
-                ? 'Como la integración automática no está activa, abriremos WhatsApp como alternativa manual.'
-                : 'La integración automática no está activa y el pedido no tiene un teléfono válido para el aviso manual.'}
+              : 'El pedido se confirmará normalmente. Las notificaciones por WhatsApp están pausadas hasta que vuelvas a conectar el canal.'}
           </p>
 
           <div className="rounded-xl bg-gray-50 border border-gray-100 px-3 py-2.5">

@@ -6,7 +6,6 @@ import {
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { getFulfillmentMethodLabel, normalizeFulfillmentMethod } from '@/lib/orders/fulfillmentLabels';
-import { normalizePhoneForWhatsApp } from '@/lib/whatsapp/orderWhatsappMessage';
 import type { DispatchOrderPayload, Order } from '@/features/orders/orders.types';
 import type { OrderStatus } from '@/types/common.types';
 import { OrderStatusBadge, PaymentStatusBadge, getStatusConfig, type OrderViewContext } from './OrderStatusBadge';
@@ -23,19 +22,18 @@ function getNextActions(
   status: OrderStatus,
   context: OrderViewContext,
   fulfillmentMethod: Order['fulfillmentMethod'],
-  useManualWhatsappFallback: boolean,
 ): NextAction[] {
   const isPickup = normalizeFulfillmentMethod(fulfillmentMethod) === 'pickup';
   const ADVANCE: Partial<Record<OrderStatus, { status: OrderStatus; label: string }>> =
     context === 'restaurant'
       ? {
-          pending:    { status: 'confirmed',  label: useManualWhatsappFallback ? 'Confirmar y abrir WhatsApp' : 'Confirmar pedido' },
+          pending:    { status: 'confirmed',  label: 'Confirmar pedido' },
           confirmed:  { status: 'processing', label: 'Iniciar preparación' },
           processing: { status: 'delivered',  label: 'Marcar entregado' },
           shipped:    { status: 'delivered',  label: 'Marcar entregado' },
         }
       : {
-          pending:    { status: 'confirmed',  label: useManualWhatsappFallback ? 'Confirmar y abrir WhatsApp' : 'Confirmar pedido' },
+          pending:    { status: 'confirmed',  label: 'Confirmar pedido' },
           confirmed:  { status: 'processing', label: isPickup ? 'Preparar para recoger' : 'Preparar despacho' },
           processing: {
             status: 'shipped',
@@ -125,7 +123,6 @@ function FulfillmentTimeline({ order }: { order: Order }) {
 interface OrderDetailDrawerProps {
   order: Order | null;
   context: OrderViewContext;
-  storeName: string;
   automaticWhatsappReady: boolean;
   locationMap: Record<string, string>;
   onClose: () => void;
@@ -136,7 +133,6 @@ interface OrderDetailDrawerProps {
 export function OrderDetailDrawer({
   order,
   context,
-  storeName,
   automaticWhatsappReady,
   locationMap,
   onClose,
@@ -152,12 +148,10 @@ export function OrderDetailDrawer({
 
   const cfg = getStatusConfig(order.status, context, order.fulfillmentMethod);
   const locationName = order.storeLocationId ? (locationMap[order.storeLocationId] ?? null) : null;
-  const hasWhatsappPhone = Boolean(order.customerPhone && normalizePhoneForWhatsApp(order.customerPhone));
   const actions = getNextActions(
     order.status as OrderStatus,
     context,
     order.fulfillmentMethod,
-    !automaticWhatsappReady && hasWhatsappPhone,
   );
 
   async function handleAction(status: OrderStatus) {
@@ -494,9 +488,6 @@ export function OrderDetailDrawer({
       {showConfirmDialog && (
         <OrderConfirmDialog
           order={order}
-          storeName={storeName}
-          locationName={locationName}
-          context={context}
           automaticWhatsappReady={automaticWhatsappReady}
           onStatusChange={onStatusChange}
           onClose={() => setShowConfirmDialog(false)}

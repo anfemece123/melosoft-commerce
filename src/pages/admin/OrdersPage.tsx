@@ -102,7 +102,6 @@ export function OrdersPage() {
   const { storeId } = useParams<{ storeId: string }>();
   const dispatch = useAppDispatch();
   const { items, status, error } = useAppSelector(s => s.orders);
-  const storeName = useAppSelector(s => s.stores.current?.name ?? '');
   const reduxCommerceSettings = useAppSelector(s => s.stores.currentCommerceSettings);
 
   const [commerceSettings, setCommerceSettings] = useState<StoreCommerceSettings | null>(reduxCommerceSettings);
@@ -288,7 +287,6 @@ export function OrdersPage() {
 
   const sharedProps = {
     orders: items,
-    storeName,
     automaticWhatsappReady: Boolean(
       whatsappSettings?.enabled &&
       whatsappSettings.customerOrderConfirmationEnabled &&

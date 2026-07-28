@@ -35,7 +35,6 @@ function StatCard({ icon, label, value, sub }: { icon: React.ReactNode; label: s
 
 interface RetailOrdersTableProps {
   orders: Order[];
-  storeName: string;
   automaticWhatsappReady: boolean;
   dateLabel: string;
   locationMap: Record<string, string>;
@@ -52,7 +51,6 @@ interface RetailOrdersTableProps {
 
 export function RetailOrdersTable({
   orders,
-  storeName,
   automaticWhatsappReady,
   dateLabel,
   locationMap,
@@ -422,7 +420,6 @@ export function RetailOrdersTable({
         <OrderDetailDrawer
           order={selectedOrder}
           context={context}
-          storeName={storeName}
           automaticWhatsappReady={automaticWhatsappReady}
           locationMap={locationMap}
           onClose={() => setSelectedOrder(null)}
