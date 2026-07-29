@@ -259,7 +259,7 @@ export function LocationsPage() {
           <h3 className="text-base font-semibold text-gray-900 mb-4">
             {editingId ? 'Editar sucursal' : 'Nueva sucursal'}
           </h3>
-          <form onSubmit={formik.handleSubmit} className="space-y-4">
+          <form onSubmit={formik.handleSubmit} noValidate className="space-y-4">
             {/* Row: name + phone */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input

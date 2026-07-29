@@ -53,7 +53,7 @@ export function CheckoutLocationSelector({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-field-name="storeLocation" tabIndex={-1}>
       {title ? (
         <p className="text-xs font-medium" style={{ color: theme.mutedText }}>
           {title}

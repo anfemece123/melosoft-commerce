@@ -47,6 +47,10 @@ export function MoneyInput({
   disabled = false,
   className,
 }: MoneyInputProps) {
+  const fieldId = id ?? name;
+  const fieldName = name ?? id;
+  const errorId = error && fieldId ? `${fieldId}-error` : undefined;
+  const hintId = hint && !error && fieldId ? `${fieldId}-hint` : undefined;
   const [display, setDisplay] = useState(() => formatThousands(value));
   const isFocused = useRef(false);
 
@@ -95,9 +99,9 @@ export function MoneyInput({
   }
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1" data-field-name={fieldName}>
       {label && (
-        <label htmlFor={id} className="mb-1 flex items-center gap-1.5 text-sm font-medium text-gray-700">
+        <label htmlFor={fieldId} className="mb-1 flex items-center gap-1.5 text-sm font-medium text-gray-700">
           <span>{label}</span>
           {labelAdornment}
         </label>
@@ -107,7 +111,7 @@ export function MoneyInput({
           $
         </span>
         <input
-          id={id}
+          id={fieldId}
           name={name}
           type="text"
           inputMode="numeric"
@@ -120,6 +124,8 @@ export function MoneyInput({
           placeholder={placeholder}
           disabled={disabled}
           autoComplete="off"
+          aria-invalid={Boolean(error)}
+          aria-describedby={errorId ?? hintId}
           className={cn(
             'block w-full rounded-lg border py-2 pl-7 pr-14 text-sm shadow-sm',
             'focus:outline-none focus:ring-2 focus:ring-inset focus:ring-indigo-500',
@@ -135,8 +141,8 @@ export function MoneyInput({
           {currency}
         </span>
       </div>
-      {error && <p className="text-xs text-red-600">{error}</p>}
-      {hint && !error && <p className="text-xs text-gray-500">{hint}</p>}
+      {error && <p id={errorId} data-error-for={fieldName} role="alert" className="text-xs text-red-600">{error}</p>}
+      {hint && !error && <p id={hintId} className="text-xs text-gray-500">{hint}</p>}
     </div>
   );
 }

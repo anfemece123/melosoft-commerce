@@ -9,6 +9,7 @@ import { PanelLoadingState } from '@/components/ui/LoadingScreen';
 import { collectionsService } from '@/features/collections/collectionsService';
 import type { PublicStoreCollection } from '@/types/common.types';
 import { notify } from '@/lib/notifications';
+import { scrollToFirstError } from '@/hooks/useScrollToFirstFormikError';
 
 interface CollectionForm {
   name: string;
@@ -27,6 +28,7 @@ export function ProductCollectionsPage() {
   const [form, setForm] = useState<CollectionForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | undefined>();
 
   async function load() {
     if (!storeId) return;
@@ -47,12 +49,14 @@ export function ProductCollectionsPage() {
   function openCreate() {
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setNameError(undefined);
     setShowForm(true);
   }
 
   function openEdit(collection: PublicStoreCollection) {
     setEditingId(collection.id);
     setForm({ name: collection.name, showOnHome: collection.showOnHome, showInMenu: collection.showInMenu });
+    setNameError(undefined);
     setShowForm(true);
   }
 
@@ -60,10 +64,16 @@ export function ProductCollectionsPage() {
     setShowForm(false);
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setNameError(undefined);
   }
 
   async function save() {
-    if (!form.name.trim()) { notify.error('El nombre es requerido'); return; }
+    if (!form.name.trim()) {
+      setNameError('El nombre es requerido.');
+      scrollToFirstError({ fieldName: 'collection-name' });
+      return;
+    }
+    setNameError(undefined);
     setSaving(true);
     try {
       const payload = {
@@ -123,9 +133,15 @@ export function ProductCollectionsPage() {
               {editingId ? 'Editar colección' : 'Nueva colección'}
             </h3>
             <Input
+              id="collection-name"
+              name="collection-name"
               label="Nombre"
               value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, name: e.target.value }));
+                setNameError(undefined);
+              }}
+              error={nameError}
               placeholder="Ej: Ofertas, Black Friday, Más vendidos"
             />
             <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">

@@ -25,7 +25,7 @@ export function CheckoutActions({
     <div className="border-t px-5 py-4" style={{ borderColor: theme.border, backgroundColor: theme.surface }}>
       <button
         type="button"
-        disabled={isSubmitting || !hasSelectedLocation || !isAcceptingOrders || orderingStatusLoading}
+        disabled={isSubmitting || !isAcceptingOrders || orderingStatusLoading}
         aria-busy={isSubmitting}
         onClick={onSubmit}
         className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"

@@ -51,6 +51,10 @@ export function IntegerInput({
   className,
   suffix,
 }: IntegerInputProps) {
+  const fieldId = id ?? name;
+  const fieldName = name ?? id;
+  const errorId = error && fieldId ? `${fieldId}-error` : undefined;
+  const hintId = hint && !error && fieldId ? `${fieldId}-hint` : undefined;
   const [display, setDisplay] = useState(() => (value === '' ? '' : String(value)));
   const isFocused = useRef(false);
 
@@ -96,15 +100,15 @@ export function IntegerInput({
   }
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-1" data-field-name={fieldName}>
       {label && (
-        <label htmlFor={id} className="block text-sm font-medium text-gray-700">
+        <label htmlFor={fieldId} className="block text-sm font-medium text-gray-700">
           {label}
         </label>
       )}
       <div className="relative">
         <input
-          id={id}
+          id={fieldId}
           name={name}
           type="text"
           inputMode="numeric"
@@ -120,6 +124,8 @@ export function IntegerInput({
           placeholder={placeholder}
           disabled={disabled}
           autoComplete="off"
+          aria-invalid={Boolean(error)}
+          aria-describedby={errorId ?? hintId}
           className={cn(
             'block w-full rounded-lg border py-2 px-3 text-sm shadow-sm',
             suffix && 'pr-12',
@@ -138,8 +144,8 @@ export function IntegerInput({
           </span>
         )}
       </div>
-      {error && <p className="text-xs text-red-600">{error}</p>}
-      {hint && !error && <p className="text-xs text-gray-500">{hint}</p>}
+      {error && <p id={errorId} data-error-for={fieldName} role="alert" className="text-xs text-red-600">{error}</p>}
+      {hint && !error && <p id={hintId} className="text-xs text-gray-500">{hint}</p>}
     </div>
   );
 }

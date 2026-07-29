@@ -6,6 +6,7 @@ import { Select } from '@/components/ui/Select';
 import { categoriesService } from '@/features/categories/categoriesService';
 import type { PublicStoreCategory } from '@/types/common.types';
 import { notify } from '@/lib/notifications';
+import { scrollToFirstError } from '@/hooks/useScrollToFirstFormikError';
 
 interface ProductCategorySelectProps {
   storeId: string;
@@ -88,6 +89,7 @@ export function ProductCategorySelect({
   const [createMode, setCreateMode] = useState<CreateMode>('root');
   const [createForm, setCreateForm] = useState<CreateCategoryFormState>(EMPTY_CREATE_FORM);
   const [creating, setCreating] = useState(false);
+  const [createNameError, setCreateNameError] = useState<string | undefined>();
 
   const categoriesById = useMemo(
     () => new Map(categories.map((category) => [category.id, category])),
@@ -129,13 +131,20 @@ export function ProductCategorySelect({
       name: '',
       parentId: suggestedParentId,
     });
+    setCreateNameError(undefined);
     setShowCreateForm(true);
   }
 
   async function handleCreateCategory() {
     const name = createForm.name.trim();
-    if (!name || creating) return;
+    if (creating) return;
+    if (!name) {
+      setCreateNameError('Escribe el nombre de la categoría.');
+      scrollToFirstError({ fieldName: 'new-product-category-name' });
+      return;
+    }
 
+    setCreateNameError(undefined);
     setCreating(true);
     try {
       const created = await categoriesService.createCategory(storeId, {
@@ -274,10 +283,15 @@ export function ProductCategorySelect({
 
           <Input
             id="new-product-category-name"
+            name="new-product-category-name"
             label={createMode === 'child' ? 'Nombre de la subcategoría' : 'Nombre de la categoría'}
             placeholder={createMode === 'child' ? 'Ej: Palas de control' : 'Ej: Palas'}
             value={createForm.name}
-            onChange={(event) => setCreateForm((current) => ({ ...current, name: event.target.value }))}
+            onChange={(event) => {
+              setCreateForm((current) => ({ ...current, name: event.target.value }));
+              setCreateNameError(undefined);
+            }}
+            error={createNameError}
           />
 
           <Select
@@ -301,6 +315,7 @@ export function ProductCategorySelect({
               onClick={() => {
                 setShowCreateForm(false);
                 setCreateForm(EMPTY_CREATE_FORM);
+                setCreateNameError(undefined);
               }}
             >
               Cancelar

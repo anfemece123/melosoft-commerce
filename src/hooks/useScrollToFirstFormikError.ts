@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useFormikContext } from 'formik';
 
 function getFirstErrorFieldName(
   errors: Record<string, unknown>,
@@ -27,28 +28,63 @@ function getFirstErrorFieldName(
   return null;
 }
 
-function findFieldElement(fieldName: string): HTMLElement | null {
+function findFieldElement(fieldName: string, root: ParentNode = document): HTMLElement | null {
   // 1. Standard input/select/textarea with name attribute
-  const byName = document.querySelector<HTMLElement>(`[name="${CSS.escape(fieldName)}"]`);
+  const escapedFieldName = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+    ? CSS.escape(fieldName)
+    : fieldName.replace(/["\\]/g, '\\$&');
+  const byName = root.querySelector<HTMLElement>(`[name="${escapedFieldName}"]`);
   if (byName) return byName;
 
   // 2. Element with matching id
-  const byId = document.querySelector<HTMLElement>(`#${CSS.escape(fieldName)}`);
+  const byId = root.querySelector<HTMLElement>(`#${escapedFieldName}`);
   if (byId) return byId;
 
   // 3. Container tagged with data-field-name (custom chip/card selectors)
-  const byDataName = document.querySelector<HTMLElement>(
-    `[data-field-name="${CSS.escape(fieldName)}"]`
+  const byDataName = root.querySelector<HTMLElement>(
+    `[data-field-name="${escapedFieldName}"]`
   );
   if (byDataName) return byDataName;
 
   // 4. Error paragraph tagged with data-error-for
-  const byErrorFor = document.querySelector<HTMLElement>(
-    `[data-error-for="${CSS.escape(fieldName)}"]`
+  const byErrorFor = root.querySelector<HTMLElement>(
+    `[data-error-for="${escapedFieldName}"]`
   );
   if (byErrorFor) return byErrorFor;
 
   return null;
+}
+
+export interface ScrollToFirstErrorOptions {
+  fieldName?: string | null;
+  root?: ParentNode | null;
+}
+
+/**
+ * Imperative counterpart used by forms that do not use Formik. It waits
+ * until React has painted the validation messages, then moves the viewport
+ * and keyboard focus to the first actionable error.
+ */
+export function scrollToFirstError({
+  fieldName,
+  root,
+}: ScrollToFirstErrorOptions = {}): number {
+  return window.setTimeout(() => {
+    const searchRoot = root ?? document;
+    const byField = fieldName ? findFieldElement(fieldName, searchRoot) : null;
+    const firstInvalid = searchRoot.querySelector<HTMLElement>('[aria-invalid="true"]');
+    const firstError = searchRoot.querySelector<HTMLElement>('[data-error-for]');
+    const summary = searchRoot.querySelector<HTMLElement>('[data-error-summary="true"]');
+    const element = byField ?? firstInvalid ?? firstError ?? summary;
+    if (!element) return;
+
+    if (typeof element.scrollIntoView === 'function') {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    if (typeof element.focus === 'function') {
+      element.focus({ preventScroll: true });
+    }
+  }, 80);
 }
 
 interface Options {
@@ -82,30 +118,20 @@ export function useScrollToFirstFormikError({
 
     lastScrolledCount.current = submitCount;
 
-    // Small delay so error messages have rendered into the DOM before we search
-    const timer = window.setTimeout(() => {
-      const firstKey = getFirstErrorFieldName(errors as Record<string, unknown>);
-
-      // Try to find the specific errored field element
-      const byField = firstKey ? findFieldElement(firstKey) : null;
-
-      // Fallback: first visible error paragraph
-      const byErrorMsg = document.querySelector<HTMLElement>(
-        '[data-error-for], p.text-red-600, span.text-red-600'
-      );
-
-      // Last resort: scroll to the validation summary banner
-      const byErrorSummary = document.querySelector<HTMLElement>('[data-error-summary="true"]');
-
-      const el = byField ?? byErrorMsg ?? byErrorSummary;
-      if (!el) return;
-
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      if (typeof (el as HTMLInputElement).focus === 'function') {
-        (el as HTMLInputElement).focus({ preventScroll: true });
-      }
-    }, 80);
+    const firstKey = getFirstErrorFieldName(errors as Record<string, unknown>);
+    const timer = scrollToFirstError({ fieldName: firstKey });
 
     return () => window.clearTimeout(timer);
   }, [errors, submitCount, isSubmitting]);
+}
+
+/** Drop-in component for render-prop based Formik forms. */
+export function FormikErrorFocus(): null {
+  const formik = useFormikContext<Record<string, unknown>>();
+  useScrollToFirstFormikError({
+    errors: formik.errors,
+    submitCount: formik.submitCount,
+    isSubmitting: formik.isSubmitting,
+  });
+  return null;
 }

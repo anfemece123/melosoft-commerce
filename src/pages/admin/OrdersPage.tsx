@@ -27,6 +27,7 @@ import type {
 } from '@/features/orders/orders.types';
 import { RestaurantOrdersBoard } from './orders/RestaurantOrdersBoard';
 import { RetailOrdersTable } from './orders/RetailOrdersTable';
+import { scrollToFirstError } from '@/hooks/useScrollToFirstFormikError';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -132,6 +133,7 @@ export function OrdersPage() {
   const [pendingTo, setPendingTo] = useState('');
   const [appliedFrom, setAppliedFrom] = useState('');
   const [appliedTo, setAppliedTo] = useState('');
+  const [dateRangeError, setDateRangeError] = useState<string | null>(null);
 
   // One-time: load commerce settings + locations
   useEffect(() => {
@@ -282,10 +284,24 @@ export function OrdersPage() {
   }
 
   function applyCustomRange() {
-    if (pendingFrom && pendingTo && pendingFrom <= pendingTo) {
-      setAppliedFrom(pendingFrom);
-      setAppliedTo(pendingTo);
+    if (!pendingFrom) {
+      setDateRangeError('Selecciona la fecha inicial.');
+      scrollToFirstError({ fieldName: 'orders-date-from' });
+      return;
     }
+    if (!pendingTo) {
+      setDateRangeError('Selecciona la fecha final.');
+      scrollToFirstError({ fieldName: 'orders-date-to' });
+      return;
+    }
+    if (pendingFrom > pendingTo) {
+      setDateRangeError('La fecha inicial no puede ser posterior a la fecha final.');
+      scrollToFirstError({ fieldName: 'orders-date-from' });
+      return;
+    }
+    setDateRangeError(null);
+    setAppliedFrom(pendingFrom);
+    setAppliedTo(pendingTo);
   }
 
   function selectDateRange(key: DateRangeKey) {
@@ -394,9 +410,12 @@ export function OrdersPage() {
             <div className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5">
               <Calendar className="w-3.5 h-3.5 text-gray-400" />
               <input
+                id="orders-date-from"
+                name="orders-date-from"
                 type="date"
                 value={pendingFrom}
-                onChange={e => setPendingFrom(e.target.value)}
+                onChange={e => { setPendingFrom(e.target.value); setDateRangeError(null); }}
+                aria-invalid={Boolean(dateRangeError)}
                 className="text-xs text-gray-700 outline-none"
               />
             </div>
@@ -404,21 +423,29 @@ export function OrdersPage() {
             <div className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5">
               <Calendar className="w-3.5 h-3.5 text-gray-400" />
               <input
+                id="orders-date-to"
+                name="orders-date-to"
                 type="date"
                 value={pendingTo}
-                onChange={e => setPendingTo(e.target.value)}
+                onChange={e => { setPendingTo(e.target.value); setDateRangeError(null); }}
+                aria-invalid={Boolean(dateRangeError)}
                 className="text-xs text-gray-700 outline-none"
               />
             </div>
             <button
               type="button"
               onClick={applyCustomRange}
-              disabled={!pendingFrom || !pendingTo || pendingFrom > pendingTo}
               className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-40 transition-colors"
             >
               Buscar
             </button>
           </div>
+        )}
+
+        {dateRangeKey === 'custom' && dateRangeError && (
+          <p data-error-for={dateRangeError.includes('final') ? 'orders-date-to' : 'orders-date-from'} role="alert" className="text-xs text-red-600">
+            {dateRangeError}
+          </p>
         )}
 
         {!isLoading && !isFailed && (

@@ -10,7 +10,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody } from '@/components/ui/Card';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { PanelLoadingState } from '@/components/ui/LoadingScreen';
-import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
+import { scrollToFirstError, useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
 import { notify } from '@/lib/notifications';
 import { whatsappService } from '@/features/whatsapp/whatsappService';
 import { EmbeddedSignupError, launchWhatsAppEmbeddedSignup } from '@/lib/whatsapp/embeddedSignup';
@@ -142,6 +142,7 @@ export function WhatsappSettingsPage() {
   const [disconnecting, setDisconnecting] = useState(false);
   const [registeringPhone, setRegisteringPhone] = useState(false);
   const [registrationPin, setRegistrationPin] = useState('');
+  const [registrationPinTouched, setRegistrationPinTouched] = useState(false);
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
   const [testPhone, setTestPhone] = useState('');
   const [testPhoneTouched, setTestPhoneTouched] = useState(false);
@@ -387,7 +388,9 @@ export function WhatsappSettingsPage() {
     const requiresPin = connection?.registrationStatus === 'requires_pin';
     const pin = registrationPin.trim();
     if (requiresPin && !/^\d{6}$/.test(pin)) {
+      setRegistrationPinTouched(true);
       notify.error('Escribe el PIN actual de seis números.');
+      scrollToFirstError({ fieldName: 'registrationPin' });
       return;
     }
 
@@ -395,6 +398,7 @@ export function WhatsappSettingsPage() {
     try {
       await whatsappService.registerPhone(storeId, requiresPin ? pin : undefined);
       setRegistrationPin('');
+      setRegistrationPinTouched(false);
       notify.success('Número habilitado para enviar mensajes');
       await reloadAll(storeId);
     } catch (error) {
@@ -448,6 +452,7 @@ export function WhatsappSettingsPage() {
     const normalizedPhone = normalizeColombianMobile(testPhone);
     if (!storeId || !normalizedPhone) {
       notify.error(COLOMBIAN_MOBILE_MESSAGE);
+      scrollToFirstError({ fieldName: 'testPhone' });
       return;
     }
     setSendingTest(true);
@@ -582,26 +587,41 @@ export function WhatsappSettingsPage() {
                     </div>
                     <div className="flex gap-2">
                       <input
+                        id="registrationPin"
+                        name="registrationPin"
                         type="password"
                         inputMode="numeric"
                         autoComplete="one-time-code"
                         maxLength={6}
                         value={registrationPin}
                         onChange={(event) => setRegistrationPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                        onBlur={() => setRegistrationPinTouched(true)}
                         placeholder="PIN de 6 números"
                         aria-label="PIN de verificación en dos pasos"
+                        aria-invalid={registrationPinTouched && registrationPin.length !== 6}
+                        aria-describedby="registration-pin-help"
                         className="min-w-0 flex-1 rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-amber-500"
                       />
                       <button
                         type="button"
                         onClick={() => void handleRegisterPhone()}
-                        disabled={registeringPhone || registrationPin.length !== 6}
+                        disabled={registeringPhone}
                         className="flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
                       >
                         {registeringPhone && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                         Habilitar
                       </button>
                     </div>
+                    <p
+                      id="registration-pin-help"
+                      data-error-for={registrationPinTouched && registrationPin.length !== 6 ? 'registrationPin' : undefined}
+                      role={registrationPinTouched && registrationPin.length !== 6 ? 'alert' : undefined}
+                      className={`text-xs ${registrationPinTouched && registrationPin.length !== 6 ? 'text-red-600' : 'text-amber-700'}`}
+                    >
+                      {registrationPinTouched && registrationPin.length !== 6
+                        ? 'Escribe exactamente los 6 números del PIN actual.'
+                        : 'El PIN se envía de forma segura directamente a Meta.'}
+                    </p>
                   </div>
                 )}
 
@@ -733,7 +753,7 @@ export function WhatsappSettingsPage() {
               )}
             </div>
 
-            <form onSubmit={formik.handleSubmit} className="space-y-5">
+            <form onSubmit={formik.handleSubmit} noValidate className="space-y-5">
               <label className="flex items-start gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -853,7 +873,7 @@ export function WhatsappSettingsPage() {
               <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={formik.isSubmitting || !hasChanges}
+                  disabled={formik.isSubmitting}
                   className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
                 >
                   {formik.isSubmitting ? (
@@ -876,6 +896,8 @@ export function WhatsappSettingsPage() {
             </p>
             <div className="flex gap-2">
               <input
+                id="testPhone"
+                name="testPhone"
                 type="tel"
                 inputMode="numeric"
                 pattern="[0-9]*"
@@ -892,7 +914,7 @@ export function WhatsappSettingsPage() {
               <button
                 type="button"
                 onClick={() => void handleSendTest()}
-                disabled={sendingTest || !isValidColombianMobile(testPhone) || !canSendTest}
+                disabled={sendingTest || !canSendTest}
                 className="flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50 transition-colors"
               >
                 {sendingTest ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -901,6 +923,8 @@ export function WhatsappSettingsPage() {
             </div>
             <p
               id="test-phone-help"
+              data-error-for={testPhoneTouched && !isValidColombianMobile(testPhone) ? 'testPhone' : undefined}
+              role={testPhoneTouched && !isValidColombianMobile(testPhone) ? 'alert' : undefined}
               className={`mt-2 text-xs ${testPhoneTouched && !isValidColombianMobile(testPhone) ? 'text-red-600' : 'text-gray-400'}`}
             >
               {testPhoneTouched && !isValidColombianMobile(testPhone)

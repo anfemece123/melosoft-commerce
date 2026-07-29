@@ -29,6 +29,7 @@ import type {
   PublicStoreCollection,
 } from '@/types/common.types';
 import { MAX_CUSTOM_HEADER_ITEMS } from '@/lib/storefront/headerSettings';
+import { scrollToFirstError } from '@/hooks/useScrollToFirstFormikError';
 
 interface HeaderNavigationEditorProps {
   storeId: string;
@@ -87,6 +88,7 @@ export function HeaderNavigationEditor({
   const [collections, setCollections] = useState<PublicStoreCollection[]>([]);
   const [facets, setFacets] = useState<StoreFacet[]>([]);
   const [selectedTargetKey, setSelectedTargetKey] = useState('');
+  const [selectionError, setSelectionError] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -193,7 +195,13 @@ export function HeaderNavigationEditor({
 
   function addTarget() {
     const target = targetsByKey.get(selectedTargetKey);
-    if (!target || settings.navigationItems.length >= MAX_CUSTOM_HEADER_ITEMS) return;
+    if (!target) {
+      setSelectionError('Selecciona un destino para agregarlo.');
+      scrollToFirstError({ fieldName: 'header-navigation-target' });
+      return;
+    }
+    if (settings.navigationItems.length >= MAX_CUSTOM_HEADER_ITEMS) return;
+    setSelectionError(undefined);
     updateItems([
       ...settings.navigationItems,
       {
@@ -264,7 +272,12 @@ export function HeaderNavigationEditor({
             <select
               id="header-navigation-target"
               value={selectedTargetKey}
-              onChange={(event) => setSelectedTargetKey(event.target.value)}
+              onChange={(event) => {
+                setSelectedTargetKey(event.target.value);
+                setSelectionError(undefined);
+              }}
+              aria-invalid={Boolean(selectionError)}
+              aria-describedby={selectionError ? 'header-navigation-target-error' : undefined}
               className="h-11 min-w-0 flex-1 rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               disabled={availableTargets.length === 0}
             >
@@ -287,11 +300,17 @@ export function HeaderNavigationEditor({
               type="button"
               leftIcon={<Plus className="h-4 w-4" />}
               onClick={addTarget}
-              disabled={!selectedTargetKey || settings.navigationItems.length >= MAX_CUSTOM_HEADER_ITEMS}
+              disabled={settings.navigationItems.length >= MAX_CUSTOM_HEADER_ITEMS}
             >
               Agregar
             </Button>
           </div>
+
+          {selectionError && (
+            <p id="header-navigation-target-error" data-error-for="header-navigation-target" role="alert" className="text-xs text-red-600">
+              {selectionError}
+            </p>
+          )}
 
           <p className="text-xs text-gray-500">
             Hasta {MAX_CUSTOM_HEADER_ITEMS} enlaces. En pantallas pequeñas se mostrarán dentro del menú lateral.

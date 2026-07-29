@@ -110,8 +110,8 @@ function SecretField({
   const isEmpty = !value;
 
   return (
-    <div className="space-y-1">
-      <label className="block text-sm font-medium text-gray-700">{label}</label>
+    <div className="space-y-1" data-field-name={name}>
+      <label htmlFor={name} className="block text-sm font-medium text-gray-700">{label}</label>
       {savedMasked && isEmpty && (
         <div className="flex items-center gap-2 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-sm">
           <Shield className="w-3.5 h-3.5 text-gray-400 shrink-0" />
@@ -129,6 +129,8 @@ function SecretField({
           onBlur={onBlur}
           placeholder={placeholder ?? (savedMasked ? 'Escribe para reemplazar...' : '')}
           autoComplete="new-password"
+          aria-invalid={Boolean(touched && error)}
+          aria-describedby={touched && error ? `${name}-error` : undefined}
           className="w-full rounded-lg border border-gray-200 px-3 py-2.5 pr-10 text-sm font-mono outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
         />
         <button
@@ -141,7 +143,7 @@ function SecretField({
         </button>
       </div>
       {hint && !error && <p className="text-xs text-gray-400">{hint}</p>}
-      {touched && error && <p className="text-xs text-red-500">{error}</p>}
+      {touched && error && <p id={`${name}-error`} data-error-for={name} role="alert" className="text-xs text-red-500">{error}</p>}
     </div>
   );
 }
@@ -405,7 +407,7 @@ export function PaymentsPage() {
               )}
             </div>
 
-            <form onSubmit={formik.handleSubmit} className="space-y-5">
+            <form onSubmit={formik.handleSubmit} noValidate className="space-y-5">
 
               {/* Environment */}
               <div className="space-y-1">
@@ -511,7 +513,7 @@ export function PaymentsPage() {
               <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={formik.isSubmitting || (!hasChanges && !!settings)}
+                  disabled={formik.isSubmitting}
                   className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
                 >
                   {formik.isSubmitting ? (

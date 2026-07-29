@@ -86,10 +86,15 @@ describe('order edit dialogs', () => {
     render(<OrderItemsAmendDialog order={order} onConfirm={onConfirm} onClose={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /restar uno/i }));
-    expect((screen.getByRole('button', { name: /guardar modificación/i }) as HTMLButtonElement).disabled).toBe(true);
+    const saveButton = screen.getByRole('button', { name: /guardar modificación/i });
+    expect((saveButton as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(saveButton);
+
+    expect(await screen.findByText(/explica el motivo con al menos 5 caracteres/i)).toBeTruthy();
+    expect(onConfirm).not.toHaveBeenCalled();
 
     fireEvent.change(screen.getByLabelText(/motivo del cambio/i), { target: { value: 'Cliente pidió una unidad' } });
-    fireEvent.click(screen.getByRole('button', { name: /guardar modificación/i }));
+    fireEvent.click(saveButton);
 
     await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1));
     expect(onConfirm).toHaveBeenCalledWith({

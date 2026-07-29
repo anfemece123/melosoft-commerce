@@ -20,6 +20,7 @@ import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { MelosoftBrand } from '@/components/ui/MelosoftBrand';
+import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
 
 export function LoginPage() {
   const dispatch = useAppDispatch();
@@ -65,6 +66,12 @@ export function LoginPage() {
         dispatch(setBootstrapping(false));
       }
     },
+  });
+
+  useScrollToFirstFormikError({
+    errors: formik.errors,
+    submitCount: formik.submitCount,
+    isSubmitting: formik.isSubmitting,
   });
 
   if (isBootstrapping) return <LoadingScreen />;

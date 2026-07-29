@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/Input';
 import { collectionsService } from '@/features/collections/collectionsService';
 import type { PublicStoreCollection } from '@/types/common.types';
 import { notify } from '@/lib/notifications';
+import { scrollToFirstError } from '@/hooks/useScrollToFirstFormikError';
 
 interface ProductCollectionsMultiSelectProps {
   storeId: string;
@@ -25,6 +26,7 @@ export function ProductCollectionsMultiSelect({
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [newCollectionError, setNewCollectionError] = useState<string | undefined>();
 
   const collectionsById = useMemo(
     () => new Map(collections.map((collection) => [collection.id, collection])),
@@ -59,8 +61,14 @@ export function ProductCollectionsMultiSelect({
 
   async function handleCreateCollection() {
     const name = newCollectionName.trim();
-    if (!name || creating) return;
+    if (creating) return;
+    if (!name) {
+      setNewCollectionError('Escribe el nombre de la colección.');
+      scrollToFirstError({ fieldName: 'new-collection-name' });
+      return;
+    }
 
+    setNewCollectionError(undefined);
     setCreating(true);
     try {
       const created = await collectionsService.createCollection(storeId, { name });
@@ -177,10 +185,15 @@ export function ProductCollectionsMultiSelect({
           </div>
           <Input
             id="new-collection-name"
+            name="new-collection-name"
             label="Nombre de la colección"
             placeholder="Ej: Ofertas, Black Friday, Más vendidos"
             value={newCollectionName}
-            onChange={(event) => setNewCollectionName(event.target.value)}
+            onChange={(event) => {
+              setNewCollectionName(event.target.value);
+              setNewCollectionError(undefined);
+            }}
+            error={newCollectionError}
           />
           <div className="flex flex-wrap gap-2">
             <Button type="button" isLoading={creating} onClick={() => void handleCreateCollection()}>
@@ -192,6 +205,7 @@ export function ProductCollectionsMultiSelect({
               onClick={() => {
                 setShowCreateForm(false);
                 setNewCollectionName('');
+                setNewCollectionError(undefined);
               }}
             >
               Cancelar

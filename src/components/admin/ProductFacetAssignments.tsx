@@ -7,6 +7,7 @@ import { facetsService } from '@/features/facets/facetsService';
 import type { FacetCategoryAssignment, FacetInputType, StoreFacet } from '@/features/facets/facets.types';
 import type { PublicStoreCategory } from '@/types/common.types';
 import { notify } from '@/lib/notifications';
+import { scrollToFirstError } from '@/hooks/useScrollToFirstFormikError';
 
 interface ProductFacetAssignmentsProps {
   storeId: string;
@@ -66,6 +67,8 @@ export function ProductFacetAssignments({
   const [creatingFacet, setCreatingFacet] = useState(false);
   const [newValueByFacetId, setNewValueByFacetId] = useState<Record<string, string>>({});
   const [creatingValueFacetId, setCreatingValueFacetId] = useState<string | null>(null);
+  const [createFacetError, setCreateFacetError] = useState<string | undefined>();
+  const [valueErrors, setValueErrors] = useState<Record<string, string | undefined>>({});
 
   useEffect(() => {
     if (!showCreateFacet) {
@@ -110,8 +113,14 @@ export function ProductFacetAssignments({
 
   async function handleCreateFacet() {
     const name = createFacetForm.name.trim();
-    if (!name || creatingFacet) return;
+    if (creatingFacet) return;
+    if (!name) {
+      setCreateFacetError('Escribe el nombre de la característica.');
+      scrollToFirstError({ fieldName: 'new-facet-name' });
+      return;
+    }
 
+    setCreateFacetError(undefined);
     const appliesToAllCategories = createFacetForm.scope === 'all';
     let applicableCategories: FacetCategoryAssignment[] = [];
     if (createFacetForm.scope === 'current' && selectedCategory) {
@@ -150,8 +159,14 @@ export function ProductFacetAssignments({
 
   async function handleCreateValue(facet: StoreFacet) {
     const draft = newValueByFacetId[facet.id]?.trim() ?? '';
-    if (!draft || creatingValueFacetId === facet.id) return;
+    if (creatingValueFacetId === facet.id) return;
+    if (!draft) {
+      setValueErrors((current) => ({ ...current, [facet.id]: 'Escribe el nuevo valor.' }));
+      scrollToFirstError({ fieldName: `facet-value-${facet.id}` });
+      return;
+    }
 
+    setValueErrors((current) => ({ ...current, [facet.id]: undefined }));
     setCreatingValueFacetId(facet.id);
     try {
       const created = await facetsService.findOrCreateFacetValue(storeId, facet.id, draft);
@@ -232,9 +247,14 @@ export function ProductFacetAssignments({
           </div>
           <Input
             id="new-facet-name"
+            name="new-facet-name"
             label="Nombre de la característica"
             value={createFacetForm.name}
-            onChange={(event) => setCreateFacetForm((current) => ({ ...current, name: event.target.value }))}
+            onChange={(event) => {
+              setCreateFacetForm((current) => ({ ...current, name: event.target.value }));
+              setCreateFacetError(undefined);
+            }}
+            error={createFacetError}
             placeholder="Ej: Marca, Talla, Color, Nivel, Material"
           />
           <Select
@@ -354,6 +374,7 @@ export function ProductFacetAssignments({
               onClick={() => {
                 setShowCreateFacet(false);
                 setCreateFacetForm(emptyCreateFacetForm(selectedCategory ? 'current' : 'all'));
+                setCreateFacetError(undefined);
               }}
             >
               Cancelar
@@ -440,10 +461,15 @@ export function ProductFacetAssignments({
                 <div className="mt-4 flex flex-col gap-2 md:flex-row">
                   <Input
                     id={`facet-value-${facet.id}`}
+                    name={`facet-value-${facet.id}`}
                     label="Crear nuevo valor"
                     placeholder={`Ej: ${facet.name === 'Marca' ? 'Bullpadel' : 'Nuevo valor'}`}
                     value={draftValue}
-                    onChange={(event) => setNewValueByFacetId((current) => ({ ...current, [facet.id]: event.target.value }))}
+                    onChange={(event) => {
+                      setNewValueByFacetId((current) => ({ ...current, [facet.id]: event.target.value }));
+                      setValueErrors((current) => ({ ...current, [facet.id]: undefined }));
+                    }}
+                    error={valueErrors[facet.id]}
                     className="flex-1"
                   />
                   <div className="md:self-end">

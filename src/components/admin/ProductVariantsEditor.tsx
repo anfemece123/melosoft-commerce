@@ -15,6 +15,7 @@ import type {
   ProductVariantOptionValueDraft,
 } from '@/features/products/productVariants.types';
 import { notify } from '@/lib/notifications';
+import { scrollToFirstError } from '@/hooks/useScrollToFirstFormikError';
 
 const OPTION_TYPE_LABELS: Record<ProductVariantOptionType, string> = {
   size: 'Talla',
@@ -118,7 +119,19 @@ interface AddCombinationFormProps {
 // matrix (see applyCombinationActive).
 function AddCombinationForm({ activeOptions, onAdd }: AddCombinationFormProps) {
   const [draft, setDraft] = useState<Record<string, string>>({});
-  const canAdd = activeOptions.every((option) => draft[option.name]);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+
+  function handleAdd() {
+    const missing = activeOptions.find((option) => !draft[option.name]);
+    if (missing) {
+      setSubmitAttempted(true);
+      scrollToFirstError({ fieldName: `add-combo-${missing.clientKey}` });
+      return;
+    }
+    onAdd(draft);
+    setDraft({});
+    setSubmitAttempted(false);
+  }
 
   return (
     <div className="flex flex-wrap items-end gap-2 rounded-xl border border-gray-200 p-3">
@@ -126,9 +139,11 @@ function AddCombinationForm({ activeOptions, onAdd }: AddCombinationFormProps) {
         <Select
           key={option.clientKey}
           id={`add-combo-${option.clientKey}`}
+          name={`add-combo-${option.clientKey}`}
           label={option.name}
           value={draft[option.name] ?? ''}
           onChange={(e) => setDraft((current) => ({ ...current, [option.name]: e.target.value }))}
+          error={submitAttempted && !draft[option.name] ? `Selecciona ${option.name.toLowerCase()}.` : undefined}
           options={[
             { value: '', label: 'Elegir…' },
             ...option.values.filter((v) => v.isActive).map((v) => ({ value: v.value, label: v.value })),
@@ -140,11 +155,7 @@ function AddCombinationForm({ activeOptions, onAdd }: AddCombinationFormProps) {
         type="button"
         variant="secondary"
         leftIcon={<Plus className="h-4 w-4" />}
-        disabled={!canAdd}
-        onClick={() => {
-          onAdd(draft);
-          setDraft({});
-        }}
+        onClick={handleAdd}
       >
         Agregar combinación
       </Button>
@@ -187,6 +198,7 @@ export function ProductVariantsEditor({
   const [uploadingVariantIndex, setUploadingVariantIndex] = useState<number | null>(null);
   const [stockModalIndex, setStockModalIndex] = useState<number | null>(null);
   const [skuErrors, setSkuErrors] = useState<Record<number, string>>({});
+  const [draftValueErrors, setDraftValueErrors] = useState<Record<number, string | undefined>>({});
   const [valueUploadTarget, setValueUploadTarget] = useState<{ optionIndex: number; valueIndex: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const valueFileInputRef = useRef<HTMLInputElement>(null);
@@ -213,12 +225,18 @@ export function ProductVariantsEditor({
 
   function addValue(optionIndex: number) {
     const raw = (draftValueByOption[optionIndex] ?? '').trim();
-    if (!raw) return;
-    const option = options[optionIndex];
-    if (option.values.some((v) => v.value.toLowerCase() === raw.toLowerCase())) {
-      setDraftValueByOption((current) => ({ ...current, [optionIndex]: '' }));
+    if (!raw) {
+      setDraftValueErrors((current) => ({ ...current, [optionIndex]: 'Escribe el valor que quieres agregar.' }));
+      scrollToFirstError({ fieldName: `variant-option-value-${optionIndex}` });
       return;
     }
+    const option = options[optionIndex];
+    if (option.values.some((v) => v.value.toLowerCase() === raw.toLowerCase())) {
+      setDraftValueErrors((current) => ({ ...current, [optionIndex]: 'Este valor ya existe en la opción.' }));
+      scrollToFirstError({ fieldName: `variant-option-value-${optionIndex}` });
+      return;
+    }
+    setDraftValueErrors((current) => ({ ...current, [optionIndex]: undefined }));
     updateOption(optionIndex, {
       values: [...option.values, { clientKey: crypto.randomUUID(), value: raw, isActive: true, colorHex: null }],
     });
@@ -653,10 +671,15 @@ export function ProductVariantsEditor({
                 <div className="mt-3 flex flex-col gap-2 md:flex-row">
                   <Input
                     id={`variant-option-value-${optionIndex}`}
+                    name={`variant-option-value-${optionIndex}`}
                     label="Agregar valor"
                     placeholder={option.type === 'size' ? 'Ej: 38, M, XL' : 'Ej: Rojo, Negro'}
                     value={draftValueByOption[optionIndex] ?? ''}
-                    onChange={(e) => setDraftValueByOption((current) => ({ ...current, [optionIndex]: e.target.value }))}
+                    onChange={(e) => {
+                      setDraftValueByOption((current) => ({ ...current, [optionIndex]: e.target.value }));
+                      setDraftValueErrors((current) => ({ ...current, [optionIndex]: undefined }));
+                    }}
+                    error={draftValueErrors[optionIndex]}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();

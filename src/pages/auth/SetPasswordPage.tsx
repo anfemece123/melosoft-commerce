@@ -12,6 +12,7 @@ import { storesService } from '@/features/stores/storesService';
 import { getPostLoginRedirect } from '@/utils/authRedirect';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
 
 const setPasswordSchema = Yup.object({
   password: Yup.string()
@@ -76,6 +77,12 @@ export function SetPasswordPage() {
         setStatus(err instanceof Error ? err.message : 'Error al guardar la contraseña');
       }
     },
+  });
+
+  useScrollToFirstFormikError({
+    errors: formik.errors,
+    submitCount: formik.submitCount,
+    isSubmitting: formik.isSubmitting,
   });
 
   if (sessionState === 'checking') {

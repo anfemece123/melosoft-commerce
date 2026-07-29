@@ -12,6 +12,7 @@ import { categoriesService } from '@/features/categories/categoriesService';
 import type { StoreFacet, StoreFacetValue, FacetInputType, FacetCategoryAssignment } from '@/features/facets/facets.types';
 import type { PublicStoreCategory } from '@/types/common.types';
 import { notify } from '@/lib/notifications';
+import { scrollToFirstError } from '@/hooks/useScrollToFirstFormikError';
 
 type FacetScope = 'all' | 'manual';
 
@@ -180,10 +181,17 @@ function FacetCard({
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState<FacetForm>(facetToForm(facet));
   const [saving, setSaving] = useState(false);
+  const [newValueError, setNewValueError] = useState<string | undefined>();
+  const [editNameError, setEditNameError] = useState<string | undefined>();
 
   async function addValue() {
     const trimmed = newValue.trim();
-    if (!trimmed) return;
+    if (!trimmed) {
+      setNewValueError('Escribe un valor.');
+      scrollToFirstError({ fieldName: `new-facet-value-${facet.id}` });
+      return;
+    }
+    setNewValueError(undefined);
     setAddingValue(true);
     try {
       const created = await facetsService.createFacetValue({
@@ -203,7 +211,12 @@ function FacetCard({
   }
 
   async function saveEdit() {
-    if (!editForm.name.trim()) { notify.error('El nombre es requerido'); return; }
+    if (!editForm.name.trim()) {
+      setEditNameError('El nombre es obligatorio.');
+      scrollToFirstError({ fieldName: `edit-facet-name-${facet.id}` });
+      return;
+    }
+    setEditNameError(undefined);
     setSaving(true);
     try {
       const { appliesToAllCategories, applicableCategories } = facetFormToApplicability(editForm);
@@ -242,9 +255,15 @@ function FacetCard({
         {editing ? (
           <div className="space-y-3">
             <Input
+              id={`edit-facet-name-${facet.id}`}
+              name={`edit-facet-name-${facet.id}`}
               label="Nombre"
               value={editForm.name}
-              onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+              onChange={(e) => {
+                setEditForm((f) => ({ ...f, name: e.target.value }));
+                setEditNameError(undefined);
+              }}
+              error={editNameError}
             />
             <Select
               label="Tipo de selección"
@@ -323,25 +342,33 @@ function FacetCard({
             ))}
             <div className="flex items-center gap-1">
               <input
+                id={`new-facet-value-${facet.id}`}
+                name={`new-facet-value-${facet.id}`}
                 type="text"
                 value={newValue}
-                onChange={(e) => setNewValue(e.target.value)}
+                onChange={(e) => {
+                  setNewValue(e.target.value);
+                  setNewValueError(undefined);
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') { e.preventDefault(); void addValue(); }
                 }}
                 placeholder="Nuevo valor…"
+                aria-invalid={Boolean(newValueError)}
+                aria-describedby={newValueError ? `new-facet-value-${facet.id}-error` : undefined}
                 className="h-7 rounded-full border border-dashed border-gray-300 px-2.5 text-xs text-gray-700 placeholder-gray-400 focus:outline-none focus:border-indigo-400"
               />
               <button
                 type="button"
                 onClick={() => void addValue()}
-                disabled={addingValue || !newValue.trim()}
+                disabled={addingValue}
                 className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 transition-colors hover:bg-indigo-100 disabled:opacity-40"
                 aria-label="Agregar valor"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
+            {newValueError && <p id={`new-facet-value-${facet.id}-error`} data-error-for={`new-facet-value-${facet.id}`} role="alert" className="w-full text-xs text-red-600">{newValueError}</p>}
           </div>
         </div>
       </div>
@@ -357,6 +384,7 @@ export function ProductFiltersPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<FacetForm>(EMPTY_FACET_FORM);
   const [saving, setSaving] = useState(false);
+  const [formNameError, setFormNameError] = useState<string | undefined>();
 
   async function load() {
     if (!storeId) return;
@@ -379,7 +407,12 @@ export function ProductFiltersPage() {
   if (!storeId) return null;
 
   async function create() {
-    if (!form.name.trim()) { notify.error('El nombre es requerido'); return; }
+    if (!form.name.trim()) {
+      setFormNameError('El nombre es obligatorio.');
+      scrollToFirstError({ fieldName: 'new-facet-name' });
+      return;
+    }
+    setFormNameError(undefined);
     setSaving(true);
     try {
       const { appliesToAllCategories, applicableCategories } = facetFormToApplicability(form);
@@ -432,9 +465,15 @@ export function ProductFiltersPage() {
           <div className="p-4 space-y-3">
             <h3 className="font-semibold text-gray-900 text-sm">Nueva característica filtrable</h3>
             <Input
+              id="new-facet-name"
+              name="new-facet-name"
               label="Nombre"
               value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, name: e.target.value }));
+                setFormNameError(undefined);
+              }}
+              error={formNameError}
               placeholder="Ej: Talla, Color, Material"
             />
             <Select

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { notify } from '@/lib/notifications';
 import { productCategoriesService } from '@/features/products/productCategoriesService';
 import type { StoreProductCategory } from '@/features/products/productCategories.types';
+import { scrollToFirstError } from '@/hooks/useScrollToFirstFormikError';
 
 interface ProductCategoryManagerProps {
   storeId: string;
@@ -30,11 +31,9 @@ export function ProductCategoryManager({
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [draftError, setDraftError] = useState<string | undefined>();
+  const [renameError, setRenameError] = useState<string | undefined>();
   const normalizedDraft = draftName.trim().toLowerCase();
-
-  const canCreate = normalizedDraft.length > 0 && !categories.some(
-    (category) => category.name.trim().toLowerCase() === normalizedDraft
-  );
 
   const totalVisible = useMemo(
     () => categories.reduce((sum, category) => sum + (usageCountByCategory[category.name] ?? 0), 0),
@@ -43,8 +42,19 @@ export function ProductCategoryManager({
 
   async function handleCreate() {
     const name = draftName.trim();
-    if (!name || creating) return;
+    if (creating) return;
+    if (!name) {
+      setDraftError('Escribe el nombre de la categoría.');
+      scrollToFirstError({ fieldName: 'new-category' });
+      return;
+    }
+    if (categories.some((category) => category.name.trim().toLowerCase() === normalizedDraft)) {
+      setDraftError('Esta categoría ya existe.');
+      scrollToFirstError({ fieldName: 'new-category' });
+      return;
+    }
 
+    setDraftError(undefined);
     setCreating(true);
     try {
       const created = await productCategoriesService.createStoreCategory({ storeId, name });
@@ -62,9 +72,14 @@ export function ProductCategoryManager({
 
   async function handleRename(categoryId: string) {
     const name = editingName.trim();
-    if (!name) return;
+    if (!name) {
+      setRenameError('Escribe el nombre de la categoría.');
+      scrollToFirstError({ fieldName: `edit-category-${categoryId}` });
+      return;
+    }
 
     try {
+      setRenameError(undefined);
       const updated = await productCategoriesService.renameStoreCategory(categoryId, name);
       onCategoriesChange(
         categories.map((category) => (category.id === categoryId ? updated : category))
@@ -97,16 +112,20 @@ export function ProductCategoryManager({
           <div className="flex w-full gap-2 md:w-auto md:min-w-[340px]">
             <Input
               id="new-category"
+              name="new-category"
               placeholder="Nueva categoría"
               value={draftName}
-              onChange={(event) => setDraftName(event.target.value)}
+              onChange={(event) => {
+                setDraftName(event.target.value);
+                setDraftError(undefined);
+              }}
+              error={draftError}
               className="flex-1"
             />
             <Button
               type="button"
               leftIcon={<Plus className="h-4 w-4" />}
               onClick={() => void handleCreate()}
-              disabled={!canCreate}
               isLoading={creating}
             >
               Agregar
@@ -135,20 +154,39 @@ export function ProductCategoryManager({
 
             if (isEditing) {
               return (
-                <div key={category.id} className="flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1.5">
-                  <input
-                    value={editingName}
-                    onChange={(event) => setEditingName(event.target.value)}
-                    className="w-32 bg-transparent text-sm text-indigo-900 outline-none"
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void handleRename(category.id)}
-                    className="text-xs font-medium text-indigo-700"
-                  >
-                    Guardar
-                  </button>
+                <div key={category.id} className="space-y-1">
+                  <div className="flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1.5">
+                    <input
+                      id={`edit-category-${category.id}`}
+                      name={`edit-category-${category.id}`}
+                      value={editingName}
+                      onChange={(event) => {
+                        setEditingName(event.target.value);
+                        setRenameError(undefined);
+                      }}
+                      aria-invalid={Boolean(renameError)}
+                      aria-describedby={renameError ? `edit-category-${category.id}-error` : undefined}
+                      className="w-32 bg-transparent text-sm text-indigo-900 outline-none"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleRename(category.id)}
+                      className="text-xs font-medium text-indigo-700"
+                    >
+                      Guardar
+                    </button>
+                  </div>
+                  {renameError && (
+                    <p
+                      id={`edit-category-${category.id}-error`}
+                      data-error-for={`edit-category-${category.id}`}
+                      role="alert"
+                      className="px-2 text-xs text-red-600"
+                    >
+                      {renameError}
+                    </p>
+                  )}
                 </div>
               );
             }
@@ -172,6 +210,7 @@ export function ProductCategoryManager({
                   onClick={() => {
                     setEditingId(category.id);
                     setEditingName(category.name);
+                    setRenameError(undefined);
                   }}
                   className="text-gray-400 transition-colors hover:text-gray-600"
                   aria-label={`Editar ${category.name}`}

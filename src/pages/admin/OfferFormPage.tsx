@@ -29,6 +29,7 @@ import type { Product } from '@/features/products/products.types';
 import type { Offer } from '@/features/offers/offers.types';
 import type { CountdownMode } from '@/types/common.types';
 import { sanitizePhoneInput } from '@/lib/phone/phoneValidation';
+import { FormikErrorFocus } from '@/hooks/useScrollToFirstFormikError';
 
 function toISOOrNull(dtLocal: string): string | null {
   if (!dtLocal) return null;
@@ -235,7 +236,8 @@ export function OfferFormPage() {
         }}
       >
         {({ values, errors, touched, handleChange, handleBlur, setFieldValue, setFieldTouched, isSubmitting, status }) => (
-          <Form className="space-y-6">
+          <Form noValidate className="space-y-6">
+            <FormikErrorFocus />
             {status && <FormErrorAlert message={status} />}
 
             {/* Sección 1 — Información de campaña */}

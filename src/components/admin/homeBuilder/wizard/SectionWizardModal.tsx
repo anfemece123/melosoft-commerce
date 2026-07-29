@@ -17,6 +17,7 @@ import {
 import { getWizardSteps } from './sectionWizardConfig';
 import { WizardLivePreview } from './WizardLivePreview';
 import type { PreviewDevice } from '@/components/admin/homeBuilder/previewFrame/StorefrontSectionPreviewFrame';
+import { scrollToFirstError } from '@/hooks/useScrollToFirstFormikError';
 
 interface SectionWizardModalProps {
   open: boolean;
@@ -81,6 +82,8 @@ export function SectionWizardModal({
   const [loadingExisting, setLoadingExisting] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
   const [mobileView, setMobileView] = useState<'form' | 'preview'>('form');
+  const [stepValidationVisible, setStepValidationVisible] = useState(false);
+  const formPanelRef = useRef<HTMLDivElement>(null);
 
   // Object URLs (item images, image_text's content image) are created via
   // URL.createObjectURL purely for local preview — the actual upload later
@@ -136,7 +139,26 @@ export function SectionWizardModal({
     setDraft((current) => ({ ...current, ...patch }));
   }
 
+  function revealCurrentStepErrors() {
+    setStepValidationVisible(true);
+    setMobileView('form');
+    scrollToFirstError({ root: formPanelRef.current });
+  }
+
+  function handleNext() {
+    if (!canGoNext) {
+      revealCurrentStepErrors();
+      return;
+    }
+    setStepValidationVisible(false);
+    setStepIndex((index) => index + 1);
+  }
+
   async function handleSave() {
+    if (!canGoNext) {
+      revealCurrentStepErrors();
+      return;
+    }
     setSaving(true);
     try {
       const sectionId = isEditMode ? existingSection!.id : null;
@@ -296,11 +318,23 @@ export function SectionWizardModal({
         {/* Body — form on the left, live preview on the right (desktop);
             tab-switched (mobile). */}
         <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
-          <div className={`flex-1 overflow-y-auto px-6 py-5 ${mobileView === 'preview' ? 'hidden lg:block' : ''}`}>
+          <div ref={formPanelRef} className={`flex-1 overflow-y-auto px-6 py-5 ${mobileView === 'preview' ? 'hidden lg:block' : ''}`}>
             {loadingExisting ? (
               <p className="py-10 text-center text-sm text-gray-400">Cargando sección…</p>
             ) : (
-              <currentStep.component key={`${sectionType}-${currentStep.key}`} draft={draft} updateDraft={updateDraft} storeId={storeId} />
+              <>
+                {stepValidationVisible && !canGoNext && (
+                  <div
+                    data-error-summary="true"
+                    tabIndex={-1}
+                    role="alert"
+                    className="mb-4 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-700 outline-none focus:ring-2 focus:ring-red-300"
+                  >
+                    Completa o corrige los campos señalados antes de continuar.
+                  </div>
+                )}
+                <currentStep.component key={`${sectionType}-${currentStep.key}`} draft={draft} updateDraft={updateDraft} storeId={storeId} />
+              </>
             )}
           </div>
           <div
@@ -339,7 +373,10 @@ export function SectionWizardModal({
                 type="button"
                 variant="secondary"
                 leftIcon={<ArrowLeft className="h-4 w-4" />}
-                onClick={() => setStepIndex((i) => i - 1)}
+                onClick={() => {
+                  setStepValidationVisible(false);
+                  setStepIndex((i) => i - 1);
+                }}
                 disabled={saving}
               >
                 Atrás
@@ -358,8 +395,8 @@ export function SectionWizardModal({
             ) : (
               <Button
                 type="button"
-                onClick={() => setStepIndex((i) => i + 1)}
-                disabled={!canGoNext || loadingExisting}
+                onClick={handleNext}
+                disabled={loadingExisting}
               >
                 Siguiente
                 <ArrowRight className="ml-1.5 h-4 w-4" />

@@ -22,7 +22,7 @@ import { addStore } from '@/features/stores/storesSlice';
 import { storesService } from '@/features/stores/storesService';
 import { storeCreationSchema } from '@/schemas/storeCreation.schema';
 import type { StoreCreationFormValues } from '@/schemas/storeCreation.schema';
-import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
+import { scrollToFirstError, useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
 import { useSlugAvailability } from '@/hooks/useSlugAvailability';
 import { getThemeColors, THEME_PRESET_LIST } from '@/utils/themePresets';
 import type { ThemePreset, ThemeMode } from '@/types/common.types';
@@ -299,6 +299,7 @@ export function StoreFormPage() {
   const [cities, setCities] = useState<GeoCity[]>([]);
   const [loadingGeo, setLoadingGeo] = useState(false);
   const [ownerPasswordVisible, setOwnerPasswordVisible] = useState(false);
+  const [slugSubmitAttempted, setSlugSubmitAttempted] = useState(false);
   const [createdCredentials, setCreatedCredentials] = useState<{
     storeId: string;
     storeName: string;
@@ -313,7 +314,15 @@ export function StoreFormPage() {
   const formik = useFormik<StoreCreationFormValues>({
     initialValues: INITIAL_VALUES,
     validationSchema: storeCreationSchema,
-    onSubmit: async (values, { setStatus }) => {
+    onSubmit: async (values, { setStatus, setFieldError, setFieldTouched }) => {
+      if (slugAvailability.status !== 'available') {
+        const message = slugAvailability.message ?? 'Confirma una URL de tienda disponible para continuar.';
+        setSlugSubmitAttempted(true);
+        await setFieldTouched('slug', true, false);
+        setFieldError('slug', message);
+        scrollToFirstError({ fieldName: 'slug' });
+        return;
+      }
       try {
         const colors = getThemeColors(values.themePreset as ThemePreset, values.mode as ThemeMode);
         const normalizedOwnerEmail = values.ownerEmail.trim().toLowerCase();
@@ -425,16 +434,19 @@ export function StoreFormPage() {
   const slugAvailability = useSlugAvailability(formik.values.slug);
 
   function handleSlugChange(event: ChangeEvent<HTMLInputElement>) {
+    setSlugSubmitAttempted(false);
     setSlugEditedManually(true);
     void formik.setFieldValue('slug', event.target.value);
   }
 
   function handleRegenerateSlug() {
+    setSlugSubmitAttempted(false);
     setSlugEditedManually(false);
     void formik.setFieldValue('slug', normalizeStorefrontSubdomain(formik.values.name));
   }
 
   function handlePickSlugSuggestion(suggestion: string) {
+    setSlugSubmitAttempted(false);
     setSlugEditedManually(true);
     void formik.setFieldValue('slug', suggestion);
   }
@@ -843,7 +855,9 @@ export function StoreFormPage() {
                     value={formik.values.slug}
                     onChange={handleSlugChange}
                     onBlur={formik.handleBlur}
-                    error={fieldError('slug')}
+                    error={fieldError('slug') ?? (slugSubmitAttempted && slugAvailability.status !== 'available'
+                      ? slugAvailability.message ?? 'Confirma una URL de tienda disponible para continuar.'
+                      : undefined)}
                     endAdornment={
                       slugAvailability.status === 'checking' ? (
                         <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
@@ -858,7 +872,7 @@ export function StoreFormPage() {
                   <p className="mt-1 text-xs text-gray-500 font-mono truncate">
                     {domainsService.getPlatformStoreUrl(formik.values.slug || 'nombre-empresa')}
                   </p>
-                  {slugAvailability.message && (
+                  {slugAvailability.message && !(slugSubmitAttempted && slugAvailability.status !== 'available') && (
                     <p
                       className={cn(
                         'mt-1 text-xs',
@@ -1431,8 +1445,7 @@ export function StoreFormPage() {
           <Button
             type="submit"
             isLoading={formik.isSubmitting}
-            disabled={formik.isSubmitting || slugAvailability.status !== 'available'}
-            title={slugAvailability.status !== 'available' ? 'Confirma una URL de tienda disponible antes de continuar' : undefined}
+            disabled={formik.isSubmitting}
           >
             {formik.values.ownerAccessMode === 'password'
               ? 'Crear empresa y acceso'

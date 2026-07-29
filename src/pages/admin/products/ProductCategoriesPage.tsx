@@ -10,6 +10,7 @@ import { PanelLoadingState } from '@/components/ui/LoadingScreen';
 import { categoriesService } from '@/features/categories/categoriesService';
 import type { PublicStoreCategory } from '@/types/common.types';
 import { notify } from '@/lib/notifications';
+import { scrollToFirstError } from '@/hooks/useScrollToFirstFormikError';
 
 interface CategoryForm {
   name: string;
@@ -28,6 +29,7 @@ export function ProductCategoriesPage() {
   const [form, setForm] = useState<CategoryForm>(EMPTY_CAT_FORM);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | undefined>();
 
   async function load() {
     if (!storeId) return;
@@ -48,12 +50,14 @@ export function ProductCategoriesPage() {
   function openCreate() {
     setEditingId(null);
     setForm(EMPTY_CAT_FORM);
+    setNameError(undefined);
     setShowForm(true);
   }
 
   function openEdit(cat: PublicStoreCategory) {
     setEditingId(cat.id);
     setForm({ name: cat.name, parentId: cat.parentId ?? '', showInMenu: cat.showInMenu });
+    setNameError(undefined);
     setShowForm(true);
   }
 
@@ -61,10 +65,16 @@ export function ProductCategoriesPage() {
     setShowForm(false);
     setEditingId(null);
     setForm(EMPTY_CAT_FORM);
+    setNameError(undefined);
   }
 
   async function save() {
-    if (!form.name.trim()) { notify.error('El nombre es requerido'); return; }
+    if (!form.name.trim()) {
+      setNameError('El nombre es requerido.');
+      scrollToFirstError({ fieldName: 'category-name' });
+      return;
+    }
+    setNameError(undefined);
     setSaving(true);
     try {
       const payload = {
@@ -140,9 +150,15 @@ export function ProductCategoriesPage() {
               {editingId ? 'Editar categoría' : 'Nueva categoría'}
             </h3>
             <Input
+              id="category-name"
+              name="category-name"
               label="Nombre"
               value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, name: e.target.value }));
+                setNameError(undefined);
+              }}
+              error={nameError}
               placeholder="Ej: Zapatos, Camisetas, Bebidas"
             />
             <Select

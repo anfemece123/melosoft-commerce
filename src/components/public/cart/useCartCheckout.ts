@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useFormik } from 'formik';
-import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
+import { scrollToFirstError, useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
 import { useCart } from '@/lib/cart/cartContext';
 import { useSelectedLocation } from '@/lib/locations/locationContext';
 import { env } from '@/lib/env';
@@ -120,6 +120,7 @@ export function useCartCheckout({
               ? 'No hay un punto de retiro disponible para este pedido.'
               : 'No encontramos una sede operativa para procesar este pedido.',
           );
+          scrollToFirstError({ fieldName: 'storeLocation' });
           return;
         }
 
