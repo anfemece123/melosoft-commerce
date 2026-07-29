@@ -2,7 +2,6 @@ import { supabase } from '@/lib/supabase';
 import type {
   Order,
   OrderInsert,
-  OrderItemInsert,
   CreateWebOrderPayload,
   WebOrderResult,
   DispatchOrderPayload,
@@ -20,7 +19,6 @@ import {
   mapOrderRowToOrder,
   mapOrderInsertToRow,
   mapOrderUpdateToRow,
-  mapOrderItemInsertToRow,
 } from './orders.mapper';
 
 function mapOrderEditError(message: string): Error {
@@ -50,6 +48,30 @@ function mapOrderEditError(message: string): Error {
   }
   if (message.includes('INSUFFICIENT_STOCK')) {
     return new Error('No hay inventario suficiente para la nueva cantidad.');
+  }
+  if (message.includes('INVALID_PRODUCT') || message.includes('ORDER_ITEM_PRODUCT_UNAVAILABLE')) {
+    return new Error('Uno de los productos agregados ya no está disponible. Actualiza el pedido e inténtalo nuevamente.');
+  }
+  if (message.includes('INVALID_VARIANT') || message.includes('ORDER_ITEM_VARIANT_UNAVAILABLE')) {
+    return new Error('Una de las variantes agregadas ya no está disponible. Selecciona otra opción.');
+  }
+  if (message.includes('VARIANT_REQUIRED')) {
+    return new Error('Selecciona una variante para el producto.');
+  }
+  if (message.includes('MODIFIER_GROUP_REQUIRED') || message.includes('MODIFIER_GROUP_MIN')) {
+    return new Error('Completa las opciones obligatorias del producto agregado.');
+  }
+  if (message.includes('MODIFIER_GROUP_MAX') || message.includes('DUPLICATE_MODIFIER')) {
+    return new Error('Revisa las adiciones seleccionadas para el producto.');
+  }
+  if (message.includes('INVALID_SPECIAL_INSTRUCTIONS')) {
+    return new Error('Las indicaciones especiales del producto no son válidas.');
+  }
+  if (message.includes('INVALID_ORDER_ITEM') || message.includes('DUPLICATE_ORDER_ITEM')) {
+    return new Error('La lista de productos del pedido no es válida. Recarga el pedido e inténtalo nuevamente.');
+  }
+  if (message.includes('INVALID_MODIFIER')) {
+    return new Error('Una de las adiciones seleccionadas ya no está disponible.');
   }
   return new Error(message);
 }
@@ -215,7 +237,17 @@ export const ordersService = {
       p_order_id: id,
       p_expected_updated_at: payload.expectedUpdatedAt,
       p_items: payload.items.map(item => ({
-        order_item_id: item.orderItemId,
+        ...('orderItemId' in item
+          ? { order_item_id: item.orderItemId }
+          : {
+              product_id: item.productId,
+              variant_id: item.variantId,
+              customization_notes: item.customizationNotes,
+              customizations: item.customizations.map(customization => ({
+                option_group_id: customization.optionGroupId,
+                option_item_id: customization.optionItemId,
+              })),
+            }),
         quantity: item.quantity,
       })),
       p_reason: payload.reason,
@@ -242,12 +274,6 @@ export const ordersService = {
       actorName: row.actor_name,
       createdAt: row.created_at,
     }));
-  },
-
-  async addOrderItem(payload: OrderItemInsert): Promise<void> {
-    const row = mapOrderItemInsertToRow(payload);
-    const { error } = await supabase.from('order_items').insert(row);
-    if (error) throw new Error(error.message);
   },
 
   async createWebOrder(payload: CreateWebOrderPayload): Promise<WebOrderResult> {

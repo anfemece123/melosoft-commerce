@@ -156,10 +156,25 @@ export interface UpdateOrderDetailsPayload {
 }
 
 export interface AmendOrderItemsPayload {
-  items: Array<{ orderItemId: string; quantity: number }>;
+  items: AmendOrderItemInput[];
   reason: string;
   expectedUpdatedAt: string;
 }
+
+export interface ExistingOrderItemAmendment {
+  orderItemId: string;
+  quantity: number;
+}
+
+export interface NewOrderItemAmendment {
+  productId: string;
+  variantId: string | null;
+  quantity: number;
+  customizationNotes: string | null;
+  customizations: WebOrderCartItemCustomization[];
+}
+
+export type AmendOrderItemInput = ExistingOrderItemAmendment | NewOrderItemAmendment;
 
 export interface OrderChangeEvent {
   id: string;
