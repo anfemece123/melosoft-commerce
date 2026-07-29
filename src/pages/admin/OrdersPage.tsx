@@ -19,7 +19,12 @@ import type { OrderStatus } from '@/types/common.types';
 import type { StoreCommerceSettings } from '@/features/stores/storeCommerce.types';
 import type { StoreLocation } from '@/features/locations/locations.types';
 import type { StoreWhatsappConnection, StoreWhatsappSettings } from '@/features/whatsapp/whatsapp.types';
-import type { DispatchOrderPayload, Order } from '@/features/orders/orders.types';
+import type {
+  AmendOrderItemsPayload,
+  DispatchOrderPayload,
+  Order,
+  UpdateOrderDetailsPayload,
+} from '@/features/orders/orders.types';
 import { RestaurantOrdersBoard } from './orders/RestaurantOrdersBoard';
 import { RetailOrdersTable } from './orders/RetailOrdersTable';
 
@@ -252,6 +257,30 @@ export function OrdersPage() {
     }
   }
 
+  async function handleUpdateOrderDetails(orderId: string, payload: UpdateOrderDetailsPayload): Promise<Order> {
+    try {
+      const updated = await ordersService.updateOrderDetails(orderId, payload);
+      dispatch(updateOrder(updated));
+      notify.success('Datos del pedido actualizados');
+      return updated;
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'No se pudieron actualizar los datos del pedido');
+      throw error;
+    }
+  }
+
+  async function handleAmendOrderItems(orderId: string, payload: AmendOrderItemsPayload): Promise<Order> {
+    try {
+      const updated = await ordersService.amendOrderItems(orderId, payload);
+      dispatch(updateOrder(updated));
+      notify.success('Productos, total e inventario actualizados');
+      return updated;
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'No se pudo modificar el pedido');
+      throw error;
+    }
+  }
+
   function applyCustomRange() {
     if (pendingFrom && pendingTo && pendingFrom <= pendingTo) {
       setAppliedFrom(pendingFrom);
@@ -299,6 +328,8 @@ export function OrdersPage() {
     locationOptions,
     onStatusChange: handleStatusChange,
     onDispatchOrder: handleDispatchOrder,
+    onUpdateDetails: handleUpdateOrderDetails,
+    onAmendItems: handleAmendOrderItems,
     context,
     search: sharedSearch,
     locationId: sharedLocationId,

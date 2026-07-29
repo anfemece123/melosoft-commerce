@@ -1,16 +1,25 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   X, User, Phone, MapPin, Home, Store, Clock, CreditCard,
   StickyNote, ChevronRight, Loader2, ShoppingBag, Check, Copy,
-  ExternalLink, PackageCheck, Truck,
+  ExternalLink, PackageCheck, Truck, Pencil, History,
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { getFulfillmentMethodLabel, normalizeFulfillmentMethod } from '@/lib/orders/fulfillmentLabels';
-import type { DispatchOrderPayload, Order } from '@/features/orders/orders.types';
+import type {
+  AmendOrderItemsPayload,
+  DispatchOrderPayload,
+  Order,
+  OrderChangeEvent,
+  UpdateOrderDetailsPayload,
+} from '@/features/orders/orders.types';
+import { ordersService } from '@/features/orders/ordersService';
 import type { OrderStatus } from '@/types/common.types';
 import { OrderStatusBadge, PaymentStatusBadge, getStatusConfig, type OrderViewContext } from './OrderStatusBadge';
 import { OrderConfirmDialog } from './OrderConfirmDialog';
 import { OrderShipmentDialog } from './OrderShipmentDialog';
+import { OrderDetailsEditDialog } from './OrderDetailsEditDialog';
+import { OrderItemsAmendDialog } from './OrderItemsAmendDialog';
 
 interface NextAction {
   label: string;
@@ -128,6 +137,8 @@ interface OrderDetailDrawerProps {
   onClose: () => void;
   onStatusChange: (orderId: string, status: OrderStatus) => Promise<void>;
   onDispatchOrder?: (orderId: string, payload: DispatchOrderPayload) => Promise<Order>;
+  onUpdateDetails: (orderId: string, payload: UpdateOrderDetailsPayload) => Promise<Order>;
+  onAmendItems: (orderId: string, payload: AmendOrderItemsPayload) => Promise<Order>;
 }
 
 export function OrderDetailDrawer({
@@ -138,11 +149,27 @@ export function OrderDetailDrawer({
   onClose,
   onStatusChange,
   onDispatchOrder,
+  onUpdateDetails,
+  onAmendItems,
 }: OrderDetailDrawerProps) {
   const [updating, setUpdating] = useState<OrderStatus | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showShipmentDialog, setShowShipmentDialog] = useState(false);
   const [trackingCopied, setTrackingCopied] = useState(false);
+  const [showDetailsEdit, setShowDetailsEdit] = useState(false);
+  const [showItemsAmend, setShowItemsAmend] = useState(false);
+  const [changeEvents, setChangeEvents] = useState<OrderChangeEvent[]>([]);
+  const [changeEventsVersion, setChangeEventsVersion] = useState(0);
+  const selectedOrderId = order?.id;
+
+  useEffect(() => {
+    if (!selectedOrderId) return;
+    let active = true;
+    void ordersService.getOrderChangeEvents(selectedOrderId)
+      .then(events => { if (active) setChangeEvents(events); })
+      .catch(() => { if (active) setChangeEvents([]); });
+    return () => { active = false; };
+  }, [selectedOrderId, changeEventsVersion]);
 
   if (!order) return null;
 
@@ -153,6 +180,11 @@ export function OrderDetailDrawer({
     context,
     order.fulfillmentMethod,
   );
+  const detailsEditable = order.status !== 'delivered' && order.status !== 'cancelled';
+  const itemsEditable =
+    (order.status === 'pending' || order.status === 'confirmed') &&
+    order.paymentMethod === 'cash_on_delivery' &&
+    (order.paymentStatus === 'pending' || order.paymentStatus === 'failed');
 
   async function handleAction(status: OrderStatus) {
     if (status === 'shipped' && context === 'retail' && onDispatchOrder) {
@@ -232,6 +264,11 @@ export function OrderDetailDrawer({
                   )}
                 </div>
               </div>
+              {detailsEditable && (
+                <button type="button" onClick={() => setShowDetailsEdit(true)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+                  <Pencil className="h-3.5 w-3.5" /> Corregir cliente y entrega
+                </button>
+              )}
             </Section>
 
             {/* Fulfillment */}
@@ -399,6 +436,17 @@ export function OrderDetailDrawer({
                     </span>
                   </div>
                 </div>
+                {itemsEditable ? (
+                  <button type="button" onClick={() => setShowItemsAmend(true)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+                    <Pencil className="h-3.5 w-3.5" /> Modificar cantidades o retirar productos
+                  </button>
+                ) : (
+                  <p className="text-xs text-gray-400">
+                    {order.paymentMethod === 'online' || order.paymentStatus === 'paid'
+                      ? 'Los productos están bloqueados porque el pedido tiene un pago en línea o cerrado.'
+                      : 'Los productos se bloquean cuando comienza la preparación.'}
+                  </p>
+                )}
               </Section>
             )}
 
@@ -419,6 +467,27 @@ export function OrderDetailDrawer({
                 <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-100 px-3 py-2.5">
                   <StickyNote className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
                   <p className="text-sm text-amber-800">{order.notes}</p>
+                </div>
+              </Section>
+            )}
+
+            {changeEvents.length > 0 && (
+              <Section title="Historial de modificaciones">
+                <div className="space-y-2 rounded-xl border border-gray-100 px-3 py-2.5">
+                  {changeEvents.map(event => (
+                    <div key={event.id} className="flex items-start gap-2 border-b border-gray-50 py-1.5 last:border-0">
+                      <History className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-gray-700">
+                          {event.changeType === 'items' ? 'Productos modificados' : 'Cliente o entrega corregidos'}
+                        </p>
+                        <p className="text-xs text-gray-500">{event.reason}</p>
+                        <p className="mt-0.5 text-[11px] text-gray-400">
+                          {event.actorName ?? 'Usuario del panel'} · {formatDate(event.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </Section>
             )}
@@ -500,6 +569,26 @@ export function OrderDetailDrawer({
             await onDispatchOrder(order.id, payload);
           }}
           onClose={() => setShowShipmentDialog(false)}
+        />
+      )}
+      {showDetailsEdit && (
+        <OrderDetailsEditDialog
+          order={order}
+          onConfirm={async payload => {
+            await onUpdateDetails(order.id, payload);
+            setChangeEventsVersion(version => version + 1);
+          }}
+          onClose={() => setShowDetailsEdit(false)}
+        />
+      )}
+      {showItemsAmend && (
+        <OrderItemsAmendDialog
+          order={order}
+          onConfirm={async payload => {
+            await onAmendItems(order.id, payload);
+            setChangeEventsVersion(version => version + 1);
+          }}
+          onClose={() => setShowItemsAmend(false)}
         />
       )}
     </>

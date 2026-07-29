@@ -140,3 +140,33 @@ export interface DispatchOrderPayload {
   trackingUrl: string | null;
   estimatedDeliveryAt: string | null;
 }
+
+export interface UpdateOrderDetailsPayload {
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string | null;
+  shippingAddress: string | null;
+  city: string | null;
+  department: string | null;
+  deliveryNeighborhood: string | null;
+  deliveryReference: string | null;
+  notes: string | null;
+  reason: string;
+  expectedUpdatedAt: string;
+}
+
+export interface AmendOrderItemsPayload {
+  items: Array<{ orderItemId: string; quantity: number }>;
+  reason: string;
+  expectedUpdatedAt: string;
+}
+
+export interface OrderChangeEvent {
+  id: string;
+  orderId: string;
+  changeType: 'customer_delivery' | 'items';
+  changedFields: string[];
+  reason: string;
+  actorName: string | null;
+  createdAt: string;
+}

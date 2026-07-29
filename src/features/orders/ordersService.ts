@@ -6,6 +6,9 @@ import type {
   CreateWebOrderPayload,
   WebOrderResult,
   DispatchOrderPayload,
+  UpdateOrderDetailsPayload,
+  AmendOrderItemsPayload,
+  OrderChangeEvent,
 } from './orders.types';
 import type { OrderStatus, PaymentStatus } from '@/types/common.types';
 
@@ -19,6 +22,37 @@ import {
   mapOrderUpdateToRow,
   mapOrderItemInsertToRow,
 } from './orders.mapper';
+
+function mapOrderEditError(message: string): Error {
+  if (message.includes('ORDER_CHANGED_RELOAD')) {
+    return new Error('El pedido cambió mientras lo editabas. Recárgalo y revisa los datos antes de guardar.');
+  }
+  if (message.includes('ORDER_DETAILS_LOCKED')) {
+    return new Error('Los pedidos entregados o cancelados ya no permiten cambios operativos.');
+  }
+  if (message.includes('ORDER_ITEMS_LOCKED_BY_STATUS')) {
+    return new Error('Los productos solo pueden modificarse antes de iniciar la preparación.');
+  }
+  if (message.includes('ORDER_ITEMS_LOCKED_BY_PAYMENT')) {
+    return new Error('Este pedido tiene un pago en línea o cerrado. Para proteger la conciliación, cancélalo y crea uno nuevo.');
+  }
+  if (message.includes('INVALID_CUSTOMER_PHONE')) {
+    return new Error('Ingresa un celular colombiano válido de 10 dígitos.');
+  }
+  if (message.includes('INVALID_CUSTOMER_EMAIL')) {
+    return new Error('Ingresa un correo válido o deja el campo vacío.');
+  }
+  if (message.includes('INVALID_SHIPPING_ADDRESS') || message.includes('INVALID_DELIVERY_CITY')) {
+    return new Error('Completa una dirección y ciudad válidas para la entrega.');
+  }
+  if (message.includes('INVALID_CHANGE_REASON')) {
+    return new Error('Describe brevemente por qué se realiza el cambio.');
+  }
+  if (message.includes('INSUFFICIENT_STOCK')) {
+    return new Error('No hay inventario suficiente para la nueva cantidad.');
+  }
+  return new Error(message);
+}
 
 export const ordersService = {
   async getOrdersByStore(storeId: string): Promise<Order[]> {
@@ -153,6 +187,61 @@ export const ordersService = {
     }
     if (!data) throw new Error('No data returned after dispatch');
     return mapOrderRowToOrder(data);
+  },
+
+  async updateOrderDetails(id: string, payload: UpdateOrderDetailsPayload): Promise<Order> {
+    const { error } = await supabase.rpc('update_store_order_details', {
+      p_order_id: id,
+      p_expected_updated_at: payload.expectedUpdatedAt,
+      p_customer_name: payload.customerName,
+      p_customer_phone: payload.customerPhone,
+      p_customer_email: payload.customerEmail,
+      p_shipping_address: payload.shippingAddress,
+      p_city: payload.city,
+      p_department: payload.department,
+      p_delivery_neighborhood: payload.deliveryNeighborhood,
+      p_delivery_reference: payload.deliveryReference,
+      p_notes: payload.notes,
+      p_reason: payload.reason,
+    });
+    if (error) throw mapOrderEditError(error.message);
+    const updated = await ordersService.getOrderWithItems(id);
+    if (!updated) throw new Error('No se encontró el pedido después de actualizarlo.');
+    return updated;
+  },
+
+  async amendOrderItems(id: string, payload: AmendOrderItemsPayload): Promise<Order> {
+    const { error } = await supabase.rpc('amend_store_order_items', {
+      p_order_id: id,
+      p_expected_updated_at: payload.expectedUpdatedAt,
+      p_items: payload.items.map(item => ({
+        order_item_id: item.orderItemId,
+        quantity: item.quantity,
+      })),
+      p_reason: payload.reason,
+    });
+    if (error) throw mapOrderEditError(error.message);
+    const updated = await ordersService.getOrderWithItems(id);
+    if (!updated) throw new Error('No se encontró el pedido después de modificarlo.');
+    return updated;
+  },
+
+  async getOrderChangeEvents(orderId: string): Promise<OrderChangeEvent[]> {
+    const { data, error } = await supabase
+      .from('order_change_events')
+      .select('id, order_id, change_type, changed_fields, reason, actor_name, created_at')
+      .eq('order_id', orderId)
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(row => ({
+      id: row.id,
+      orderId: row.order_id,
+      changeType: row.change_type as OrderChangeEvent['changeType'],
+      changedFields: row.changed_fields,
+      reason: row.reason,
+      actorName: row.actor_name,
+      createdAt: row.created_at,
+    }));
   },
 
   async addOrderItem(payload: OrderItemInsert): Promise<void> {

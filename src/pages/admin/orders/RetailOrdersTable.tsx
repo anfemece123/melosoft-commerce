@@ -5,7 +5,12 @@ import {
   ChevronLeft, ChevronRight as ChevronRightIcon, Hash,
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatCurrency';
-import type { DispatchOrderPayload, Order } from '@/features/orders/orders.types';
+import type {
+  AmendOrderItemsPayload,
+  DispatchOrderPayload,
+  Order,
+  UpdateOrderDetailsPayload,
+} from '@/features/orders/orders.types';
 import type { OrderStatus } from '@/types/common.types';
 import { getFulfillmentBadgeLabel, normalizeFulfillmentMethod } from '@/lib/orders/fulfillmentLabels';
 import { OrderDetailDrawer } from './OrderDetailDrawer';
@@ -41,6 +46,8 @@ interface RetailOrdersTableProps {
   locationOptions: Array<{ id: string; name: string }>;
   onStatusChange: (orderId: string, status: OrderStatus) => Promise<void>;
   onDispatchOrder: (orderId: string, payload: DispatchOrderPayload) => Promise<Order>;
+  onUpdateDetails: (orderId: string, payload: UpdateOrderDetailsPayload) => Promise<Order>;
+  onAmendItems: (orderId: string, payload: AmendOrderItemsPayload) => Promise<Order>;
   context: OrderViewContext;
   // Shared with parent — persist across board↔table switches
   search: string;
@@ -57,6 +64,8 @@ export function RetailOrdersTable({
   locationOptions,
   onStatusChange,
   onDispatchOrder,
+  onUpdateDetails,
+  onAmendItems,
   context,
   search,
   locationId,
@@ -429,6 +438,16 @@ export function RetailOrdersTable({
           }}
           onDispatchOrder={async (id, payload) => {
             const updated = await onDispatchOrder(id, payload);
+            setSelectedOrder(updated);
+            return updated;
+          }}
+          onUpdateDetails={async (id, payload) => {
+            const updated = await onUpdateDetails(id, payload);
+            setSelectedOrder(updated);
+            return updated;
+          }}
+          onAmendItems={async (id, payload) => {
+            const updated = await onAmendItems(id, payload);
             setSelectedOrder(updated);
             return updated;
           }}

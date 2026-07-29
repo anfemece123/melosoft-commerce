@@ -13,7 +13,11 @@ import {
 } from '@dnd-kit/core';
 import { Clock, Home, Store, Users } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatCurrency';
-import type { Order } from '@/features/orders/orders.types';
+import type {
+  AmendOrderItemsPayload,
+  Order,
+  UpdateOrderDetailsPayload,
+} from '@/features/orders/orders.types';
 import type { OrderStatus } from '@/types/common.types';
 import { getFulfillmentBadgeLabel, normalizeFulfillmentMethod } from '@/lib/orders/fulfillmentLabels';
 import { OrderDetailDrawer } from './OrderDetailDrawer';
@@ -294,6 +298,8 @@ interface RestaurantOrdersBoardProps {
   locationMap: Record<string, string>;
   locationOptions: Array<{ id: string; name: string }>;
   onStatusChange: (orderId: string, status: OrderStatus) => Promise<void>;
+  onUpdateDetails: (orderId: string, payload: UpdateOrderDetailsPayload) => Promise<Order>;
+  onAmendItems: (orderId: string, payload: AmendOrderItemsPayload) => Promise<Order>;
   context: OrderViewContext;
   // Shared with parent — persist across view switches
   search: string;
@@ -309,6 +315,8 @@ export function RestaurantOrdersBoard({
   locationMap,
   locationOptions,
   onStatusChange,
+  onUpdateDetails,
+  onAmendItems,
   context,
   search,
   locationId,
@@ -520,6 +528,16 @@ export function RestaurantOrdersBoard({
           onStatusChange={async (id, status) => {
             await onStatusChange(id, status);
             setSelectedOrder(prev => prev?.id === id ? { ...prev, status } : prev);
+          }}
+          onUpdateDetails={async (id, payload) => {
+            const updated = await onUpdateDetails(id, payload);
+            setSelectedOrder(updated);
+            return updated;
+          }}
+          onAmendItems={async (id, payload) => {
+            const updated = await onAmendItems(id, payload);
+            setSelectedOrder(updated);
+            return updated;
           }}
         />
       )}

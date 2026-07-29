@@ -1590,6 +1590,48 @@ export interface Database {
         };
         Relationships: [];
       };
+      order_change_events: {
+        Row: {
+          id: string;
+          store_id: string;
+          order_id: string;
+          change_type: string;
+          changed_fields: string[];
+          before_snapshot: Json;
+          after_snapshot: Json;
+          reason: string;
+          actor_user_id: string | null;
+          actor_name: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          order_id: string;
+          change_type: string;
+          changed_fields?: string[];
+          before_snapshot?: Json;
+          after_snapshot?: Json;
+          reason: string;
+          actor_user_id?: string | null;
+          actor_name?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          order_id?: string;
+          change_type?: string;
+          changed_fields?: string[];
+          before_snapshot?: Json;
+          after_snapshot?: Json;
+          reason?: string;
+          actor_user_id?: string | null;
+          actor_name?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       order_item_customizations: {
         Row: {
           id: string;
@@ -3182,6 +3224,32 @@ export interface Database {
         };
         Returns: Database['public']['Tables']['orders']['Row'];
       };
+      update_store_order_details: {
+        Args: {
+          p_order_id: string;
+          p_expected_updated_at: string;
+          p_customer_name: string;
+          p_customer_phone: string;
+          p_customer_email: string | null;
+          p_shipping_address: string | null;
+          p_city: string | null;
+          p_department: string | null;
+          p_delivery_neighborhood: string | null;
+          p_delivery_reference: string | null;
+          p_notes: string | null;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
+      amend_store_order_items: {
+        Args: {
+          p_order_id: string;
+          p_expected_updated_at: string;
+          p_items: Json;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
       enqueue_test_whatsapp_notification: {
         Args: {
           p_store_id: string;
@@ -3330,6 +3398,7 @@ export type OrderRowUpdate = Database['public']['Tables']['orders']['Update'];
 
 export type OrderItemRow = Database['public']['Tables']['order_items']['Row'];
 export type OrderItemRowInsert = Database['public']['Tables']['order_items']['Insert'];
+export type OrderChangeEventRow = Database['public']['Tables']['order_change_events']['Row'];
 export type OrderItemCustomizationRow = Database['public']['Tables']['order_item_customizations']['Row'];
 export type OrderItemCustomizationRowInsert = Database['public']['Tables']['order_item_customizations']['Insert'];
 
