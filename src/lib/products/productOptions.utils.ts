@@ -5,7 +5,7 @@ export type ProductOptionSelections = Record<string, string[]>;
 
 export function buildInitialProductOptionSelections(groups: PublicProductOptionGroup[]): ProductOptionSelections {
   return groups.reduce<ProductOptionSelections>((acc, group) => {
-    const defaults = group.items.filter((item) => item.isDefault).map((item) => item.id);
+    const defaults = group.items.filter((item) => item.isDefault && item.isAvailable).map((item) => item.id);
     if (defaults.length > 0) {
       acc[group.id] = group.selectionType === 'single' ? defaults.slice(0, 1) : defaults;
     } else {
@@ -21,6 +21,8 @@ export function toggleProductOptionSelection(
   itemId: string
 ): ProductOptionSelections {
   const current = selections[group.id] ?? [];
+  const item = group.items.find((candidate) => candidate.id === itemId);
+  if (!item?.isAvailable) return selections;
 
   if (group.selectionType === 'single') {
     return { ...selections, [group.id]: current[0] === itemId ? [] : [itemId] };
@@ -58,8 +60,20 @@ export function validateProductOptionSelections(
   const errors: string[] = [];
 
   groups.forEach((group) => {
-    const count = (selections[group.id] ?? []).length;
+    const availableIds = new Set(group.items.filter((item) => item.isAvailable).map((item) => item.id));
+    const selectedIds = selections[group.id] ?? [];
+    const count = selectedIds.filter((id) => availableIds.has(id)).length;
     const minimum = group.isRequired ? Math.max(group.minSelect, 1) : group.minSelect;
+
+    if (selectedIds.some((id) => !availableIds.has(id))) {
+      errors.push(`Una opción de "${group.name}" se agotó. Elige otra para continuar.`);
+      return;
+    }
+
+    if (minimum > group.items.filter((item) => item.isAvailable).length) {
+      errors.push(`"${group.name}" no tiene suficientes opciones disponibles en este momento.`);
+      return;
+    }
 
     if (minimum > 0 && count < minimum) {
       errors.push(`Debes completar "${group.name}".`);
@@ -87,7 +101,7 @@ export function buildSelectedProductOptions(
   groups.forEach((group) => {
     const selectedIds = selections[group.id] ?? [];
     group.items
-      .filter((item) => selectedIds.includes(item.id))
+      .filter((item) => item.isAvailable && selectedIds.includes(item.id))
       .forEach((item) => {
         result.push({
           optionGroupId: group.id,

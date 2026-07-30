@@ -219,6 +219,20 @@ export const productsService = {
     return attachProductTaxonomy((data ?? []).map(mapProductRowToProduct));
   },
 
+  /** Lightweight product load for Carta's editor. Carta only needs the
+   * base row (visibility, category, price and image); unrelated taxonomy
+   * requests must never prevent its categories/products from rendering. */
+  async getCartaProductsByStore(storeId: string): Promise<Product[]> {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('store_id', storeId)
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(mapProductRowToProduct);
+  },
+
   async getProductById(id: string): Promise<Product | null> {
     const { data, error } = await supabase
       .from('products')
@@ -386,6 +400,17 @@ export const productsService = {
     return mapProductRowToProduct(data);
   },
 
+  /** Persists an explicit full order (drag-and-drop can move a product
+   * more than one position at once) — assigns sort_order = index for
+   * every id in `orderedIds`. */
+  async reorderProducts(orderedIds: string[]): Promise<void> {
+    const results = await Promise.all(
+      orderedIds.map((id, index) => supabase.from('products').update({ sort_order: index }).eq('id', id))
+    );
+    const failed = results.find((r) => r.error);
+    if (failed?.error) throw new Error(failed.error.message);
+  },
+
   async publishProduct(id: string): Promise<Product> {
     return productsService.updateProduct(id, { status: 'active', isAvailable: true });
   },
@@ -484,6 +509,22 @@ export const productsService = {
       .from('product_images')
       .select('*')
       .eq('product_id', productId)
+      .order('sort_order', { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(mapProductImageRowToProductImage);
+  },
+
+  /** Loads each product's general gallery images in one query. Used by
+   * visual builders such as Carta so their live preview has the same
+   * primary-image fallback as the public storefront. */
+  async getProductImagesByStore(storeId: string): Promise<ProductImage[]> {
+    const { data, error } = await supabase
+      .from('product_images')
+      .select('*')
+      .eq('store_id', storeId)
+      .is('variant_id', null)
+      .is('option_value_id', null)
+      .order('is_primary', { ascending: false })
       .order('sort_order', { ascending: true });
     if (error) throw new Error(error.message);
     return (data ?? []).map(mapProductImageRowToProductImage);

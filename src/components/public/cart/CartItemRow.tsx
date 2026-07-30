@@ -33,9 +33,13 @@ export function CartItemRow({ item, theme, currency, onUpdateQuantity, onRemove 
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-sm font-medium leading-snug">{item.productName}</p>
+            <p className="text-sm font-medium leading-snug" style={{ color: theme.text }}>
+              {item.productName}
+            </p>
             {item.variantLabel && (
-              <p className="mt-0.5 text-xs opacity-60">{item.variantLabel}</p>
+              <p className="mt-0.5 text-xs" style={{ color: theme.mutedText }}>
+                {item.variantLabel}
+              </p>
             )}
           </div>
           <button
@@ -59,17 +63,21 @@ export function CartItemRow({ item, theme, currency, onUpdateQuantity, onRemove 
 
         {item.customizations.length > 0 ? (
           <div className="mt-1.5">
-            <p className="text-xs font-medium opacity-60">Adiciones:</p>
+            <p className="text-xs font-medium" style={{ color: theme.mutedText }}>
+              Adiciones:
+            </p>
             {item.customizations.map((c) => (
-              <p key={c.optionItemId} className="text-xs opacity-50 pl-2">
-                {c.optionItemLabel} <span className="opacity-70">+{formatCurrency(c.priceDelta, 'es-CO', currency)}</span>
+              <p key={c.optionItemId} className="text-xs pl-2" style={{ color: theme.mutedText }}>
+                {c.optionItemLabel} <span>+{formatCurrency(c.priceDelta, 'es-CO', currency)}</span>
               </p>
             ))}
           </div>
         ) : item.customizationNotes ? (
           // Fallback for cart lines added before structured customizations
           // existed (persisted in localStorage from an earlier session).
-          <p className="mt-1.5 text-xs opacity-50 line-clamp-2">{item.customizationNotes}</p>
+          <p className="mt-1.5 text-xs line-clamp-2" style={{ color: theme.mutedText }}>
+            {item.customizationNotes}
+          </p>
         ) : null}
         <div className="mt-2 flex items-center justify-between">
           <div className="flex items-center gap-1">
@@ -77,17 +85,19 @@ export function CartItemRow({ item, theme, currency, onUpdateQuantity, onRemove 
               type="button"
               onClick={() => onUpdateQuantity(item.lineId, item.quantity - 1)}
               className="flex h-7 w-7 items-center justify-center rounded-lg border hover:opacity-70 transition-opacity"
-              style={{ borderColor: theme.border }}
+              style={{ borderColor: theme.border, color: theme.text }}
             >
               <Minus className="h-3 w-3" />
             </button>
-            <span className="w-6 text-center text-sm font-semibold">{item.quantity}</span>
+            <span className="w-6 text-center text-sm font-semibold" style={{ color: theme.text }}>
+              {item.quantity}
+            </span>
             <button
               type="button"
               onClick={() => onUpdateQuantity(item.lineId, item.quantity + 1)}
               disabled={outOfStock || atMax}
               className="flex h-7 w-7 items-center justify-center rounded-lg border hover:opacity-70 transition-opacity disabled:opacity-40 disabled:hover:opacity-40"
-              style={{ borderColor: theme.border }}
+              style={{ borderColor: theme.border, color: theme.text }}
             >
               <Plus className="h-3 w-3" />
             </button>

@@ -1,4 +1,5 @@
-import { Plus, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link2, Package, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -6,9 +7,16 @@ import { Textarea } from '@/components/ui/Textarea';
 import { IntegerInput } from '@/components/forms/IntegerInput';
 import { MoneyInput } from '@/components/forms/MoneyInput';
 import type { ProductOptionGroupDraft } from '@/features/products/productOptionsService';
+import { productsService } from '@/features/products/productsService';
+import { productVariantsService } from '@/features/products/productVariantsService';
+import type { Product } from '@/features/products/products.types';
+import type { ProductVariant } from '@/features/products/productVariants.types';
+import { formatCurrency } from '@/utils/formatCurrency';
 
 interface ProductOptionsEditorProps {
   currency: string;
+  storeId: string;
+  productId?: string;
   groups: ProductOptionGroupDraft[];
   onChange: (groups: ProductOptionGroupDraft[]) => void;
 }
@@ -18,6 +26,10 @@ function createEmptyItem() {
     label: '',
     description: '',
     priceDelta: 0,
+    linkedProductId: null,
+    linkedVariantId: null,
+    linkedQuantity: 1,
+    priceMode: 'custom' as const,
     isDefault: false,
     isActive: true,
   };
@@ -38,9 +50,62 @@ function createEmptyGroup(): ProductOptionGroupDraft {
 
 export function ProductOptionsEditor({
   currency,
+  storeId,
+  productId,
   groups,
   onChange,
 }: ProductOptionsEditorProps) {
+  const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
+  const [variantsByProduct, setVariantsByProduct] = useState<Record<string, ProductVariant[]>>({});
+  const [catalogLoadError, setCatalogLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void productsService.getProductsByStore(storeId)
+      .then((products) => {
+        if (!cancelled) {
+          setCatalogProducts(products.filter((product) => product.id !== productId));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCatalogLoadError('No pudimos cargar el catálogo. Guarda el producto e inténtalo nuevamente.');
+      });
+    return () => { cancelled = true; };
+  }, [productId, storeId]);
+
+  const productsById = useMemo(
+    () => new Map(catalogProducts.map((product) => [product.id, product])),
+    [catalogProducts]
+  );
+
+  async function ensureVariants(linkedProductId: string): Promise<ProductVariant[]> {
+    if (variantsByProduct[linkedProductId]) return variantsByProduct[linkedProductId];
+    const variants = await productVariantsService.getProductVariants(linkedProductId);
+    const active = variants.filter((variant) => variant.status === 'active');
+    setVariantsByProduct((current) => ({ ...current, [linkedProductId]: active }));
+    return active;
+  }
+
+  useEffect(() => {
+    const linkedIds = Array.from(new Set(groups.flatMap((group) => group.items)
+      .map((item) => item.linkedProductId)
+      .filter((id): id is string => Boolean(id))));
+    linkedIds.forEach((id) => { void ensureVariants(id).catch(() => undefined); });
+    // The map is a cache; rerunning because it changed would refetch nothing
+    // but would make this effect harder to reason about.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups]);
+
+  function activeCatalogPrice(product: Product, variant?: ProductVariant | null): number {
+    return variant?.price ?? product.salePrice ?? product.regularPrice;
+  }
+
+  function variantLabel(variant: ProductVariant): string {
+    return variant.selectedValues.map((value) => value.value).filter(Boolean).join(' / ')
+      || variant.sku
+      || 'Presentación';
+  }
+
   function updateGroup(index: number, updater: (group: ProductOptionGroupDraft) => ProductOptionGroupDraft) {
     onChange(groups.map((group, currentIndex) => (currentIndex === index ? updater(group) : group)));
   }
@@ -65,9 +130,19 @@ export function ProductOptionsEditor({
           </Button>
         </div>
 
-        <div className="rounded-lg bg-amber-50 border border-amber-100 px-4 py-2.5 text-xs text-amber-700">
-          Los adicionales con precio extra (+$) se muestran en el carrito, pero el total del pedido web usa el precio base del plato. Úsalos sin costo adicional o para pedidos por WhatsApp hasta la próxima actualización.
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <strong>Inventario inteligente:</strong> usa una opción simple para preferencias como “sin cebolla”. Si agregas una bebida, postre u otro artículo vendible, vincúlalo con el catálogo para compartir su precio y descontar el mismo inventario.
         </div>
+
+        {catalogLoadError ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{catalogLoadError}</div>
+        ) : null}
+
+        {!catalogLoadError && catalogProducts.length === 0 ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Para vincular bebidas, postres u otros productos, créalos primero como productos independientes del catálogo. Las preferencias sin inventario, como “sin cebolla”, pueden configurarse como opciones simples.
+          </div>
+        ) : null}
 
         {groups.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-6 text-sm text-gray-500">
@@ -215,7 +290,41 @@ export function ProductOptionsEditor({
                 <div className="space-y-3">
                   {group.items.map((item, itemIndex) => (
                     <div key={`group-${groupIndex}-item-${itemIndex}`} className="rounded-2xl border border-gray-200 bg-white p-4">
-                      <div className="grid gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_140px_auto]">
+                      <div className="mb-4 flex flex-wrap gap-2">
+                        {([
+                          { linked: false, label: 'Opción simple', icon: <Plus className="h-3.5 w-3.5" /> },
+                          { linked: true, label: 'Producto del catálogo', icon: <Link2 className="h-3.5 w-3.5" /> },
+                        ] as const).map((source) => {
+                          const selected = source.linked === Boolean(item.linkedProductId);
+                          return (
+                            <button
+                              key={source.label}
+                              type="button"
+                              onClick={() => updateGroup(groupIndex, (current) => ({
+                                ...current,
+                                items: current.items.map((currentItem, currentIndex) => currentIndex === itemIndex
+                                  ? source.linked
+                                    ? {
+                                        ...currentItem,
+                                        linkedProductId: catalogProducts[0]?.id ?? null,
+                                        linkedVariantId: null,
+                                        linkedQuantity: 1,
+                                        priceMode: 'catalog',
+                                        label: currentItem.label || catalogProducts[0]?.name || '',
+                                        priceDelta: catalogProducts[0] ? activeCatalogPrice(catalogProducts[0]) : currentItem.priceDelta,
+                                      }
+                                    : { ...currentItem, linkedProductId: null, linkedVariantId: null, linkedQuantity: 1, priceMode: 'custom' }
+                                  : currentItem),
+                              }))}
+                              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${selected ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'}`}
+                            >
+                              {source.icon}{source.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_auto]">
                         <Input
                           id={`item-label-${groupIndex}-${itemIndex}`}
                           label="Nombre"
@@ -244,20 +353,6 @@ export function ProductOptionsEditor({
                             )),
                           }))}
                         />
-                        <MoneyInput
-                          id={`item-price-${groupIndex}-${itemIndex}`}
-                          label="Extra"
-                          currency={currency}
-                          value={item.priceDelta}
-                          onChange={(value) => updateGroup(groupIndex, (current) => ({
-                            ...current,
-                            items: current.items.map((currentItem, currentIndex) => (
-                              currentIndex === itemIndex
-                                ? { ...currentItem, priceDelta: value }
-                                : currentItem
-                            )),
-                          }))}
-                        />
                         <div className="flex items-end justify-end">
                           <button
                             type="button"
@@ -272,6 +367,144 @@ export function ProductOptionsEditor({
                           </button>
                         </div>
                       </div>
+
+                      {item.linkedProductId ? (
+                        <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
+                          <div className="grid gap-4 md:grid-cols-3">
+                            <div>
+                              <label htmlFor={`item-product-${groupIndex}-${itemIndex}`} className="mb-1 block text-sm font-medium text-gray-700">Producto que se descontará</label>
+                              <select
+                                id={`item-product-${groupIndex}-${itemIndex}`}
+                                value={item.linkedProductId}
+                                onChange={(event) => {
+                                  const nextProduct = productsById.get(event.target.value);
+                                  void ensureVariants(event.target.value).catch(() => undefined);
+                                  updateGroup(groupIndex, (current) => ({
+                                    ...current,
+                                    items: current.items.map((currentItem, currentIndex) => currentIndex === itemIndex
+                                      ? {
+                                          ...currentItem,
+                                          linkedProductId: event.target.value,
+                                          linkedVariantId: null,
+                                          label: nextProduct?.name ?? currentItem.label,
+                                          priceDelta: nextProduct ? activeCatalogPrice(nextProduct) : currentItem.priceDelta,
+                                        }
+                                      : currentItem),
+                                  }));
+                                }}
+                                className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                              >
+                                <option value="">Selecciona un producto</option>
+                                {catalogProducts.map((product) => (
+                                  <option key={product.id} value={product.id}>
+                                    {product.name}{product.status !== 'active' ? ' · Borrador' : !product.isAvailable ? ' · No disponible' : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {productsById.get(item.linkedProductId)?.hasVariants ? (
+                              <div>
+                                <label htmlFor={`item-variant-${groupIndex}-${itemIndex}`} className="mb-1 block text-sm font-medium text-gray-700">Presentación</label>
+                                <select
+                                  id={`item-variant-${groupIndex}-${itemIndex}`}
+                                  value={item.linkedVariantId ?? ''}
+                                  onChange={(event) => {
+                                    const product = productsById.get(item.linkedProductId!);
+                                    const variant = (variantsByProduct[item.linkedProductId!] ?? []).find((candidate) => candidate.id === event.target.value);
+                                    updateGroup(groupIndex, (current) => ({
+                                      ...current,
+                                      items: current.items.map((currentItem, currentIndex) => currentIndex === itemIndex
+                                        ? {
+                                            ...currentItem,
+                                            linkedVariantId: event.target.value || null,
+                                            label: product && variant ? `${product.name} · ${variantLabel(variant)}` : currentItem.label,
+                                            priceDelta: product && variant ? activeCatalogPrice(product, variant) : currentItem.priceDelta,
+                                          }
+                                        : currentItem),
+                                    }));
+                                  }}
+                                  className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                                >
+                                  <option value="">Selecciona una presentación</option>
+                                  {(variantsByProduct[item.linkedProductId] ?? []).map((variant) => (
+                                    <option key={variant.id} value={variant.id}>
+                                      {variantLabel(variant)}{variant.stockPolicy === 'deny' && variant.stockQuantity < 1 ? ' · Agotada' : ''}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 rounded-lg border border-indigo-100 bg-white px-3 py-2 text-sm text-indigo-800 md:mt-6">
+                                <Package className="h-4 w-4" /> Producto sin presentaciones
+                              </div>
+                            )}
+
+                            <IntegerInput
+                              id={`item-linked-qty-${groupIndex}-${itemIndex}`}
+                              label="Unidades por selección"
+                              min={1}
+                              value={item.linkedQuantity}
+                              onChange={(value) => updateGroup(groupIndex, (current) => ({
+                                ...current,
+                                items: current.items.map((currentItem, currentIndex) => currentIndex === itemIndex ? { ...currentItem, linkedQuantity: value } : currentItem),
+                              }))}
+                              hint="Ej: 1 gaseosa por combo"
+                            />
+                          </div>
+
+                          <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
+                            <div>
+                              <span className="mb-2 block text-sm font-medium text-gray-700">Precio en esta opción</span>
+                              <div className="flex flex-wrap gap-2">
+                                {([
+                                  { value: 'catalog', label: 'Usar precio actual del catálogo' },
+                                  { value: 'custom', label: 'Definir precio especial' },
+                                ] as const).map((mode) => (
+                                  <button
+                                    key={mode.value}
+                                    type="button"
+                                    onClick={() => {
+                                      const product = productsById.get(item.linkedProductId!);
+                                      const variant = (variantsByProduct[item.linkedProductId!] ?? []).find((candidate) => candidate.id === item.linkedVariantId);
+                                      updateGroup(groupIndex, (current) => ({
+                                        ...current,
+                                        items: current.items.map((currentItem, currentIndex) => currentIndex === itemIndex
+                                          ? { ...currentItem, priceMode: mode.value, priceDelta: mode.value === 'catalog' && product ? activeCatalogPrice(product, variant) : currentItem.priceDelta }
+                                          : currentItem),
+                                      }));
+                                    }}
+                                    className={`rounded-lg border px-3 py-2 text-xs font-medium ${item.priceMode === mode.value ? 'border-indigo-600 bg-white text-indigo-700' : 'border-gray-200 bg-white/70 text-gray-600'}`}
+                                  >{mode.label}</button>
+                                ))}
+                              </div>
+                            </div>
+                            {item.priceMode === 'custom' ? (
+                              <MoneyInput
+                                id={`item-price-${groupIndex}-${itemIndex}`}
+                                label="Precio adicional"
+                                currency={currency}
+                                value={item.priceDelta}
+                                onChange={(value) => updateGroup(groupIndex, (current) => ({ ...current, items: current.items.map((currentItem, currentIndex) => currentIndex === itemIndex ? { ...currentItem, priceDelta: value } : currentItem) }))}
+                              />
+                            ) : (
+                              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 md:mt-6">
+                                {formatCurrency(Number(item.priceDelta) || 0, 'es-CO', currency)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-4 max-w-[180px]">
+                          <MoneyInput
+                            id={`item-price-${groupIndex}-${itemIndex}`}
+                            label="Precio adicional"
+                            currency={currency}
+                            value={item.priceDelta}
+                            onChange={(value) => updateGroup(groupIndex, (current) => ({ ...current, items: current.items.map((currentItem, currentIndex) => currentIndex === itemIndex ? { ...currentItem, priceDelta: value } : currentItem) }))}
+                          />
+                        </div>
+                      )}
 
                       <div className="mt-3 flex flex-wrap gap-4">
                         <label className="flex items-center gap-2 text-sm text-gray-700">

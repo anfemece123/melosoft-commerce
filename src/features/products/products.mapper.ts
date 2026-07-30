@@ -167,6 +167,9 @@ export function mapProductRowToProduct(row: ProductRow): Product {
     compareAtPrice: row.compare_at_price !== null ? Number(row.compare_at_price) : null,
     salePrice: row.sale_price !== null ? Number(row.sale_price) : null,
     costPrice: row.cost_price !== null ? Number(row.cost_price) : null,
+    cartaPrice: row.carta_price !== null ? Number(row.carta_price) : null,
+    showInCarta: row.show_in_carta ?? true,
+    showInEcommerce: row.show_in_ecommerce ?? true,
     stock: row.stock,
     sku: row.sku ?? null,
     trackInventory: row.track_inventory ?? true,
@@ -216,6 +219,10 @@ export function mapProductOptionItemRowToProductOptionItem(row: ProductOptionIte
     label: row.label,
     description: row.description ?? null,
     priceDelta: Number(row.price_delta ?? 0),
+    linkedProductId: row.linked_product_id ?? null,
+    linkedVariantId: row.linked_variant_id ?? null,
+    linkedQuantity: row.linked_quantity ?? 1,
+    priceMode: (row.price_mode as 'custom' | 'catalog') ?? 'custom',
     isDefault: row.is_default ?? false,
     isActive: row.is_active ?? true,
     sortOrder: row.sort_order ?? 0,
@@ -306,6 +313,7 @@ export function mapPublicProductPageRowToPublicProductPage(row: PublicProductPag
     commerceMode: (row.commerce_mode as CommerceMode) ?? null,
     catalogType: (row.catalog_type as CatalogType) ?? null,
     hasVariants: row.has_variants ?? false,
+    hasOptions: row.has_options ?? false,
     showVariantsAsCards: row.show_variants_as_cards ?? false,
     sizeChart: parseSizeChart(row.size_chart),
     variantOptions: parseVariantOptions(row.variant_options),
@@ -328,6 +336,9 @@ export function mapProductInsertToRow(data: ProductInsert, ownerId: string): Pro
     compare_at_price: data.compareAtPrice ?? null,
     sale_price: data.salePrice ?? null,
     cost_price: data.costPrice ?? null,
+    carta_price: data.cartaPrice ?? null,
+    show_in_carta: data.showInCarta,
+    show_in_ecommerce: data.showInEcommerce,
     stock: data.stock,
     sku: data.sku ?? null,
     track_inventory: data.trackInventory,
@@ -361,6 +372,9 @@ export function mapProductUpdateToRow(data: ProductUpdate): ProductRowUpdate {
   if (data.compareAtPrice !== undefined) row.compare_at_price = data.compareAtPrice ?? null;
   if (data.salePrice !== undefined) row.sale_price = data.salePrice ?? null;
   if (data.costPrice !== undefined) row.cost_price = data.costPrice ?? null;
+  if (data.cartaPrice !== undefined) row.carta_price = data.cartaPrice ?? null;
+  if (data.showInCarta !== undefined) row.show_in_carta = data.showInCarta;
+  if (data.showInEcommerce !== undefined) row.show_in_ecommerce = data.showInEcommerce;
   if (data.stock !== undefined) row.stock = data.stock;
   if (data.sku !== undefined) row.sku = data.sku ?? null;
   if (data.trackInventory !== undefined) row.track_inventory = data.trackInventory;

@@ -23,7 +23,6 @@ import { StorefrontMediaFrame } from '@/components/public/storefront/StorefrontM
 import { StorefrontRatingStars } from '@/components/public/storefront/StorefrontRatingStars';
 import { StorefrontHomeSkeleton } from '@/components/public/storefront/StorefrontSkeletons';
 import { StorefrontCampaignOffersSection } from '@/components/public/storefront/StorefrontCampaignOffersSection';
-import { StorefrontWhatsappCtaSection } from '@/components/public/storefront/StorefrontWhatsappCtaSection';
 import { HomeSectionRenderer } from '@/components/public/storefront/homeSections/HomeSectionRenderer';
 import { buildStorefrontTheme, STOREFRONT_CONTAINER_CLASS } from '@/components/public/storefront/storefrontTheme';
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
@@ -41,7 +40,6 @@ import {
   getCatalogLabel,
   getProductCardCtaLabel,
   getNoPurchaseMethodMessage,
-  canUseWhatsappCheckout,
   canUseWebOrders,
   type PublicCommerceConfig,
 } from '@/lib/commerce/commerceConfig.utils';
@@ -218,11 +216,6 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
     textColor: store.textColor,
     buttonRadius: store.buttonRadius,
   });
-  const whatsappNumber = store.whatsappNumber;
-  const whatsappHref = whatsappNumber
-    ? `https://wa.me/${whatsappNumber.replace(/\D/g, '')}`
-    : null;
-
   const commerceConfig: PublicCommerceConfig = {
     catalogType: store.catalogType,
     commerceMode: store.commerceMode,
@@ -240,7 +233,6 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
   const catalogLabel = getCatalogLabel(commerceConfig);
   const productCardCtaLabel = getProductCardCtaLabel(commerceConfig);
   const noPurchaseMessage = getNoPurchaseMethodMessage(commerceConfig);
-  const showWhatsappCta = canUseWhatsappCheckout(commerceConfig) && !canUseWebOrders(commerceConfig) && !!whatsappHref;
   const showCartButton = canUseWebOrders(commerceConfig);
 
   const isMenu = store.catalogType === 'menu';
@@ -283,6 +275,7 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
     event: MouseEvent<HTMLElement>,
     product: PublicProductPage
   ) {
+    if (product.hasVariants || product.hasOptions) return;
     event.preventDefault();
     event.stopPropagation();
     if (unavailableProductIds.has(product.productId)) return;
@@ -502,6 +495,16 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
                               ? (isMenu ? 'Agotado por el momento' : 'Sin stock disponible')
                               : 'No disponible en esta sede'}
                           </div>
+                        ) : product.hasVariants || product.hasOptions ? (
+                          <StorefrontActionButton
+                            as="div"
+                            theme={theme}
+                            variant="outline"
+                            fullWidth
+                            className="mt-3 h-10 text-sm font-semibold"
+                          >
+                            {product.hasOptions ? 'Personalizar' : 'Ver opciones'}
+                          </StorefrontActionButton>
                         ) : showCartButton ? (
                           <StorefrontActionButton
                             as="button"
@@ -554,14 +557,6 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
         theme={theme}
         storeSlug={storeSlug}
         currency={store.currency}
-      />
-
-      <StorefrontWhatsappCtaSection
-        theme={theme}
-        whatsappHref={whatsappHref}
-        supportEmail={store.supportEmail}
-        showPrimaryCta={showWhatsappCta}
-        showFallbackLink={!showWhatsappCta && !canUseWhatsappCheckout(commerceConfig)}
       />
     </div>
   );

@@ -76,6 +76,9 @@ interface ValidatedCustomization {
   option_group_name: string;
   option_item_label: string;
   price_delta: number;
+  linked_product_id: string | null;
+  linked_variant_id: string | null;
+  linked_quantity: number | null;
 }
 
 interface ValidatedItem {
@@ -239,7 +242,7 @@ serve(async (req: Request) => {
 
       const { data: item, error: itemErr } = await supabase
         .from('product_option_items')
-        .select('id, label, price_delta, product_option_groups!inner(id, name, product_id, store_id, is_active)')
+        .select('id, label, price_delta, linked_product_id, linked_variant_id, linked_quantity, product_option_groups!inner(id, name, product_id, store_id, is_active)')
         .eq('id', sel.option_item_id)
         .eq('group_id', sel.option_group_id)
         .eq('store_id', storeId)
@@ -259,12 +262,42 @@ serve(async (req: Request) => {
       // embed at runtime.
       const groupName = (item.product_option_groups as unknown as { name: string } | null)?.name ?? '';
 
+      if (item.linked_product_id) {
+        const { data: linkedProduct } = await supabase
+          .from('products')
+          .select('id, status, is_available, has_variants')
+          .eq('id', item.linked_product_id)
+          .eq('store_id', storeId)
+          .maybeSingle();
+        if (!linkedProduct || linkedProduct.status !== 'active' || !linkedProduct.is_available) {
+          return { error: `La opción "${item.label}" ya no está disponible.` };
+        }
+        if (linkedProduct.has_variants && !item.linked_variant_id) {
+          return { error: `La opción "${item.label}" necesita una presentación.` };
+        }
+        if (item.linked_variant_id) {
+          const { data: linkedVariant } = await supabase
+            .from('product_variants')
+            .select('id, status')
+            .eq('id', item.linked_variant_id)
+            .eq('product_id', item.linked_product_id)
+            .eq('store_id', storeId)
+            .maybeSingle();
+          if (!linkedVariant || linkedVariant.status !== 'active') {
+            return { error: `La presentación de "${item.label}" ya no está disponible.` };
+          }
+        }
+      }
+
       validated.push({
         option_group_id: sel.option_group_id,
         option_item_id: sel.option_item_id,
         option_group_name: groupName,
         option_item_label: item.label,
         price_delta: Number(item.price_delta),
+        linked_product_id: item.linked_product_id ?? null,
+        linked_variant_id: item.linked_variant_id ?? null,
+        linked_quantity: item.linked_product_id ? Number(item.linked_quantity ?? 1) : null,
       });
       total += Number(item.price_delta);
     }
@@ -633,14 +666,32 @@ serve(async (req: Request) => {
   // 'error' and its checkoutUrl is never handed to the client — the
   // customer never reaches Wompi's payment page for something that
   // isn't actually available.
+  const reservationRequirements = new Map<string, { product_id: string; variant_id: string | null; quantity: number }>();
+  const addReservationRequirement = (productId: string, variantId: string | null, quantity: number) => {
+    const key = `${productId}:${variantId ?? ''}`;
+    const current = reservationRequirements.get(key);
+    reservationRequirements.set(key, {
+      product_id: productId,
+      variant_id: variantId,
+      quantity: (current?.quantity ?? 0) + quantity,
+    });
+  };
+  validatedItems.forEach((item) => {
+    addReservationRequirement(item.product_id, item.variant_id, item.quantity);
+    item.customizations.forEach((customization) => {
+      if (!customization.linked_product_id || !customization.linked_quantity) return;
+      addReservationRequirement(
+        customization.linked_product_id,
+        customization.linked_variant_id,
+        item.quantity * customization.linked_quantity,
+      );
+    });
+  });
+
   const { error: reservationErr } = await supabase.rpc('create_wompi_checkout_reservation', {
     p_checkout_session_id: session.id,
     p_store_id:            storeId,
-    p_items: validatedItems.map((i) => ({
-      product_id: i.product_id,
-      variant_id: i.variant_id,
-      quantity:   i.quantity,
-    })),
+    p_items: Array.from(reservationRequirements.values()),
   });
 
   if (reservationErr) {
@@ -652,6 +703,9 @@ serve(async (req: Request) => {
     const message = reservationErr.message ?? '';
     if (message.includes('INSUFFICIENT_STOCK')) {
       return json({ error: 'No hay unidades suficientes disponibles.', code: 'INSUFFICIENT_STOCK' }, 422);
+    }
+    if (message.includes('INSUFFICIENT_LINKED_STOCK')) {
+      return json({ error: 'Una de las opciones elegidas se agotó. Elige otra para continuar.', code: 'INSUFFICIENT_STOCK' }, 422);
     }
     if (message.includes('INVALID_VARIANT')) {
       return json({ error: 'La variante seleccionada ya no está disponible.', code: 'INVALID_VARIANT' }, 422);

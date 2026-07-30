@@ -175,10 +175,18 @@ export const storesService = {
     return storesService.uploadStoreBrandingAsset(storeKey, file, 'hero-badge');
   },
 
+  async uploadStoreCartaCover(storeKey: string, file: File): Promise<string> {
+    return storesService.uploadStoreBrandingAsset(storeKey, file, 'carta-cover');
+  },
+
+  async uploadStoreCartaCoverBackground(storeKey: string, file: File): Promise<string> {
+    return storesService.uploadStoreBrandingAsset(storeKey, file, 'carta-cover-background');
+  },
+
   async uploadStoreBrandingAsset(
     storeKey: string,
     file: File,
-    assetKind: 'logo' | 'favicon' | 'hero-image' | 'hero-background' | 'hero-badge'
+    assetKind: 'logo' | 'favicon' | 'hero-image' | 'hero-background' | 'hero-badge' | 'carta-cover' | 'carta-cover-background'
   ): Promise<string> {
     const ownerId = await getOwnerId();
     const ext = (file.name.split('.').pop() ?? 'png').toLowerCase();

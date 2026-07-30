@@ -1,9 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import type {
   ProductOptionGroupRow,
-  ProductOptionGroupRowInsert,
   ProductOptionItemRow,
-  ProductOptionItemRowInsert,
 } from '@/types/database.types';
 import type { PublicProductOptionGroup, PublicProductOptionItem } from '@/types/common.types';
 import type { ProductOptionGroup, ProductOptionItem } from './products.types';
@@ -19,6 +17,10 @@ export interface ProductOptionItemDraft {
   /** `''` only while the owner is actively clearing/retyping the field in
    * ProductOptionsEditor — never persisted as-is, see replaceProductOptionGroups. */
   priceDelta: number | '';
+  linkedProductId: string | null;
+  linkedVariantId: string | null;
+  linkedQuantity: number | '';
+  priceMode: 'custom' | 'catalog';
   isDefault: boolean;
   isActive: boolean;
 }
@@ -104,6 +106,12 @@ interface PublicOptionItemRow {
   price_delta: number;
   is_default: boolean;
   sort_order: number;
+  linked_product_id: string | null;
+  linked_variant_id: string | null;
+  linked_quantity: number;
+  price_mode: 'custom' | 'catalog';
+  is_available: boolean;
+  unavailable_reason: string | null;
 }
 
 // Reads through public_product_option_groups/items (security-definer views)
@@ -139,6 +147,12 @@ async function fetchPublicOptionGroups(productId: string): Promise<PublicProduct
       priceDelta: Number(row.price_delta),
       isDefault: row.is_default,
       sortOrder: row.sort_order,
+      linkedProductId: row.linked_product_id,
+      linkedVariantId: row.linked_variant_id,
+      linkedQuantity: row.linked_quantity,
+      priceMode: row.price_mode,
+      isAvailable: row.is_available,
+      unavailableReason: row.unavailable_reason,
     });
     itemsByGroup.set(row.group_id, list);
   }
@@ -154,8 +168,7 @@ async function fetchPublicOptionGroups(productId: string): Promise<PublicProduct
       isRequired: row.is_required,
       sortOrder: row.sort_order,
       items: itemsByGroup.get(row.id) ?? [],
-    }))
-    .filter((group) => group.items.length > 0);
+    }));
 }
 
 export const productOptionsService = {
@@ -172,10 +185,9 @@ export const productOptionsService = {
     productId: string,
     groups: ProductOptionGroupDraft[]
   ): Promise<void> {
-    const ownerId = await getOwnerId();
+    await getOwnerId();
 
-    const sanitizedGroups = groups
-      .map((group, groupIndex) => ({
+    const sanitizedGroups = groups.map((group, groupIndex) => ({
         ...group,
         name: group.name.trim(),
         description: group.description?.trim() || null,
@@ -186,65 +198,55 @@ export const productOptionsService = {
             label: item.label.trim(),
             description: item.description?.trim() || null,
             sortOrder: itemIndex,
-          }))
-          .filter((item) => item.label.length > 0),
-      }))
-      .filter((group) => group.name.length > 0 && group.items.length > 0);
+          })),
+      }));
 
-    const { error: deleteError } = await supabase
-      .from('product_option_groups')
-      .delete()
-      .eq('product_id', productId);
+    for (const [groupIndex, group] of sanitizedGroups.entries()) {
+      if (!group.name) throw new Error(`Escribe el nombre del grupo ${groupIndex + 1}.`);
+      if (group.items.length === 0) throw new Error(`Agrega al menos una opción en "${group.name}".`);
+      const minimum = group.isRequired ? Math.max(Number(group.minSelect) || 0, 1) : Number(group.minSelect) || 0;
+      const maximum = group.selectionType === 'single' ? 1 : group.maxSelect;
+      if (maximum !== null && Number(maximum) < minimum) {
+        throw new Error(`El máximo de "${group.name}" no puede ser menor que el mínimo.`);
+      }
+      for (const [itemIndex, item] of group.items.entries()) {
+        if (!item.label) throw new Error(`Escribe el nombre de la opción ${itemIndex + 1} en "${group.name}".`);
+        if (item.linkedProductId && (!item.linkedQuantity || Number(item.linkedQuantity) < 1)) {
+          throw new Error(`Indica cuántas unidades descuenta "${item.label}".`);
+        }
+        if (item.priceDelta === '' || Number(item.priceDelta) < 0) {
+          throw new Error(`Revisa el precio adicional de "${item.label}".`);
+        }
+      }
+    }
 
-    if (deleteError) throw new Error(deleteError.message);
-
-    if (sanitizedGroups.length === 0) return;
-
-    const groupRows: ProductOptionGroupRowInsert[] = sanitizedGroups.map((group) => ({
-      store_id: storeId,
-      product_id: productId,
-      owner_id: ownerId,
-      name: group.name,
-      description: group.description,
-      selection_type: group.selectionType,
-      min_select: group.minSelect === '' ? 0 : group.minSelect,
-      max_select: group.maxSelect,
-      is_required: group.isRequired,
-      is_active: group.isActive,
-      sort_order: group.sortOrder,
-    }));
-
-    const { data: createdGroups, error: insertGroupsError } = await supabase
-      .from('product_option_groups')
-      .insert(groupRows)
-      .select('*');
-
-    if (insertGroupsError) throw new Error(insertGroupsError.message);
-
-    const itemRows: ProductOptionItemRowInsert[] = [];
-
-    (createdGroups ?? []).forEach((groupRow, groupIndex) => {
-      sanitizedGroups[groupIndex].items.forEach((item) => {
-        itemRows.push({
-          store_id: storeId,
-          group_id: groupRow.id,
-          owner_id: ownerId,
+    const rpcClient = supabase as unknown as {
+      rpc: (name: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
+    };
+    const { error } = await rpcClient.rpc('replace_product_option_groups', {
+      p_store_id: storeId,
+      p_product_id: productId,
+      p_groups: sanitizedGroups.map((group) => ({
+        name: group.name,
+        description: group.description,
+        selection_type: group.selectionType,
+        min_select: group.minSelect === '' ? 0 : group.minSelect,
+        max_select: group.maxSelect,
+        is_required: group.isRequired,
+        is_active: group.isActive,
+        items: group.items.map((item) => ({
           label: item.label,
           description: item.description,
           price_delta: item.priceDelta === '' ? 0 : item.priceDelta,
           is_default: item.isDefault,
           is_active: item.isActive,
-          sort_order: item.sortOrder,
-        });
-      });
+          linked_product_id: item.linkedProductId,
+          linked_variant_id: item.linkedVariantId,
+          linked_quantity: item.linkedQuantity === '' ? 1 : item.linkedQuantity,
+          price_mode: item.linkedProductId ? item.priceMode : 'custom',
+        })),
+      })),
     });
-
-    if (itemRows.length > 0) {
-      const { error: insertItemsError } = await supabase
-        .from('product_option_items')
-        .insert(itemRows);
-
-      if (insertItemsError) throw new Error(insertItemsError.message);
-    }
+    if (error) throw new Error(error.message);
   },
 };

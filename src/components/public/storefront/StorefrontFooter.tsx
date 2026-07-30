@@ -7,6 +7,7 @@ import { PublicStoreLogo } from './PublicStoreLogo';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 import { useSelectedLocation } from '@/lib/locations/locationContext';
 import { summarizeWeeklySchedule } from '@/lib/locations/schedule.utils';
+import { buildWhatsAppContactUrl } from '@/lib/whatsapp/whatsappUrl';
 
 interface StorefrontFooterProps {
   theme: StorefrontTheme;
@@ -59,9 +60,11 @@ export function StorefrontFooter({ theme, branding, locations }: StorefrontFoote
   const socialBorder = withAlpha(theme.primary, 0.85);
   const primaryLocations = locations.slice(0, 3);
   const scheduleSummary = summarizeWeeklySchedule(businessHours);
-  const whatsappHref = branding.whatsappNumber
-    ? `https://wa.me/${branding.whatsappNumber.replace(/\D/g, '')}`
-    : null;
+  const whatsappHref = buildWhatsAppContactUrl(
+    branding.whatsappNumber,
+    null,
+    branding.country,
+  );
   const socialLinks = [
     whatsappHref
       ? { href: whatsappHref, label: 'WhatsApp', icon: MessageCircle }

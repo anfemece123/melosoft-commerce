@@ -4,6 +4,7 @@ export type ImageAssetKind =
   | 'store_hero'
   | 'store_hero_badge'
   | 'store_hero_background'
+  | 'carta_cover'
   | 'product_image'
   | 'offer_hero'
   | 'home_section_image'
@@ -70,6 +71,17 @@ export const IMAGE_ASSET_PRESETS: Record<ImageAssetKind, ImageAssetPreset> = {
   store_hero_background: {
     kind: 'store_hero_background',
     label: 'Fondo de portada',
+    aspectRatio: 16 / 9,
+    minWidth: 1200,
+    minHeight: 675,
+    recommendedWidth: 1920,
+    recommendedHeight: 1080,
+    maxBytes: 10 * 1024 * 1024,
+    shape: 'rounded',
+  },
+  carta_cover: {
+    kind: 'carta_cover',
+    label: 'Imagen de portada de la carta',
     aspectRatio: 16 / 9,
     minWidth: 1200,
     minHeight: 675,

@@ -4,6 +4,8 @@ import { CartDrawer } from '@/components/public/cart/CartDrawer';
 import { StorefrontFooter } from '@/components/public/storefront/StorefrontFooter';
 import { StorefrontHeader } from '@/components/public/storefront/StorefrontHeader';
 import { StorefrontPageLoader } from '@/components/public/storefront/StorefrontPageLoader';
+import { WhatsappFloatingButton } from '@/components/public/storefront/WhatsappFloatingButton';
+import { CartaFloatingButton } from '@/components/public/storefront/CartaFloatingButton';
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import { storesService } from '@/features/stores/storesService';
 import { categoriesService, buildCategoryTree } from '@/features/categories/categoriesService';
@@ -22,7 +24,6 @@ import { PublicLocationProvider } from '@/lib/locations/locationContext';
 import { PublicRouteReadyProvider } from './PublicRouteReadyContext';
 import { readPublicScrollPosition, writePublicScrollPosition } from '@/lib/storefront/publicScrollRestoration';
 import { useSelectedLocation } from '@/lib/locations/locationContext';
-import { OrderingStatusNotice } from '@/components/public/cart/OrderingStatusNotice';
 import { pruneEmptyCategoryTree, pruneEmptyCollections } from '@/lib/storefront/catalogVisibility';
 import { useStorefrontDocumentMetadata } from '@/lib/storefront/useStorefrontDocumentMetadata';
 import {
@@ -30,6 +31,7 @@ import {
   useStorefrontDomain,
 } from '@/lib/storefront/storefrontDomainContext';
 import { domainsService } from '@/features/domains/domainsService';
+import { buildWhatsAppContactUrl } from '@/lib/whatsapp/whatsappUrl';
 
 export function PublicLayout() {
   const location = useLocation();
@@ -148,7 +150,7 @@ function PublicStoreShell({
   const { mode: domainMode } = useStorefrontDomain();
   const navigationType = useNavigationType();
   const { totalItems } = useCart();
-  const { locations, selectedLocation, orderStatus, scheduleLoading } = useSelectedLocation();
+  const { locations, orderStatus, scheduleLoading } = useSelectedLocation();
   const [cartOpen, setCartOpen] = useState(false);
   const [routeReady, setRouteReady] = useState(false);
   const [catalogMeta, setCatalogMeta] = useState<CatalogMeta | null>(null);
@@ -206,6 +208,16 @@ function PublicStoreShell({
     (isStorefrontHostnameMode(domainMode) && location.pathname === '/');
   const hasHero = hasHeroRoute && branding?.heroEnabled !== false;
   const showCart = canUseWebOrders(commerceConfig);
+  const whatsappHref = branding?.whatsappNumber
+    ? buildWhatsAppContactUrl(
+        branding.whatsappNumber,
+        `Hola, tengo una consulta para ${branding.storeName}.`,
+        branding.country,
+      )
+    : null;
+  const showWhatsappButton = branding?.whatsappButtonEnabled !== false && !!whatsappHref;
+  const cartaHref = isStorefrontHostnameMode(domainMode) ? '/carta' : `/s/${storeSlug}/carta`;
+  const showCartaButton = Boolean(branding?.cartaListed);
 
   useEffect(() => {
     if (!storeSlug) return;
@@ -366,13 +378,9 @@ function PublicStoreShell({
             headerSettings={branding.headerSettings}
             categories={(catalogMeta?.categoryTree ?? []).filter((c: PublicStoreCategory) => c.showInMenu)}
             catalogMeta={catalogMeta}
+            orderStatus={orderStatus}
+            scheduleLoading={scheduleLoading}
           />
-        ) : null}
-
-        {showCart && selectedLocation && (scheduleLoading || orderStatus?.isAcceptingOrders !== true) ? (
-          <div className="mx-auto w-full max-w-[1440px] px-4 pt-3 sm:px-6 lg:px-8">
-            <OrderingStatusNotice theme={theme} showWhenOpen={false} />
-          </div>
         ) : null}
 
         {loading && branding ? (
@@ -380,6 +388,18 @@ function PublicStoreShell({
         ) : (
           <Outlet />
         )}
+
+        {showWhatsappButton && whatsappHref ? (
+          <WhatsappFloatingButton
+            href={whatsappHref}
+            color={branding?.whatsappButtonColor}
+            layout={branding?.whatsappButtonLayout}
+            storeName={branding?.storeName ?? 'la empresa'}
+            theme={theme}
+          />
+        ) : null}
+
+        {showCartaButton ? <CartaFloatingButton href={cartaHref} theme={theme} /> : null}
 
         {branding ? (
           <StorefrontFooter

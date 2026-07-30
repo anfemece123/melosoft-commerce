@@ -41,6 +41,21 @@ export function mapSupabaseError(err: unknown): string {
 
   const { message, code, details } = err;
 
+  const businessRuleMessages: Array<[string, string]> = [
+    ['LINKED_VARIANT_REQUIRED', 'Selecciona la presentación del producto vinculado antes de guardar.'],
+    ['INVALID_LINKED_PRODUCT', 'El producto vinculado ya no pertenece a este catálogo. Elige otro.'],
+    ['INVALID_LINKED_VARIANT', 'La presentación vinculada ya no está disponible. Elige otra.'],
+    ['OPTION_CANNOT_LINK_PARENT_PRODUCT', 'Un producto no puede vincularse como opción de sí mismo.'],
+    ['INVALID_OPTION_LIMITS', 'Revisa el mínimo y el máximo permitido en cada grupo de opciones.'],
+    ['INVALID_OPTION_GROUP', 'Cada grupo visible necesita un nombre y al menos una opción.'],
+    ['INSUFFICIENT_LINKED_STOCK', 'Una opción vinculada se agotó. Elige otra o ajusta su inventario.'],
+    ['LINKED_PRODUCT_UNAVAILABLE', 'Uno de los productos vinculados ya no está disponible.'],
+    ['LINKED_VARIANT_UNAVAILABLE', 'Una presentación vinculada ya no está disponible.'],
+  ];
+  for (const [rule, friendlyMessage] of businessRuleMessages) {
+    if (message.includes(rule)) return friendlyMessage;
+  }
+
   if (code === PG_UNIQUE_VIOLATION) {
     const searchIn = `${message} ${details ?? ''}`;
     for (const [constraint, msg] of Object.entries(CONSTRAINT_MESSAGES)) {

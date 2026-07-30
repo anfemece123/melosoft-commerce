@@ -3,6 +3,7 @@ import { formatCurrency } from '@/utils/formatCurrency';
 import type { StorefrontTheme } from '../storefront/storefrontTheme';
 import type { WebOrderResult } from '@/features/orders/orders.types';
 import { getFulfillmentMethodLabel, type CheckoutFulfillmentMethod } from '@/lib/orders/fulfillmentLabels';
+import { buildWhatsAppContactUrl } from '@/lib/whatsapp/whatsappUrl';
 
 interface CheckoutResultMessageProps {
   theme: StorefrontTheme;
@@ -47,7 +48,6 @@ export function CheckoutResultMessage({
 }: CheckoutResultMessageProps) {
   function handleSendWhatsApp() {
     if (!whatsappNumber) return;
-    const phone = whatsappNumber.replace(/\D/g, '');
     const deliveryLabel = fulfillmentMethod ? getFulfillmentMethodLabel(fulfillmentMethod, { city }) : null;
     const lines: string[] = [
       `Hola ${storeName}, acabo de confirmar el pedido ${orderResult.orderNumber}.`,
@@ -62,7 +62,8 @@ export function CheckoutResultMessage({
       `Total: ${formatCurrency(orderResult.totalAmount, 'es-CO', currency)}`,
       'Pago: Contraentrega',
     );
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(lines.join('\n'))}`;
+    const url = buildWhatsAppContactUrl(whatsappNumber, lines.join('\n'));
+    if (!url) return;
     window.open(url, '_blank', 'noopener,noreferrer');
   }
 

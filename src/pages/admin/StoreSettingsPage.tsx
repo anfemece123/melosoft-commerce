@@ -41,11 +41,12 @@ import type { StoreGeneralSettingsFormValues } from '@/schemas/storeGeneralSetti
 import { storeThemeSchema } from '@/schemas/storeTheme.schema';
 import { getThemeColors, THEME_PRESET_LIST } from '@/utils/themePresets';
 import { cn } from '@/utils/cn';
-import type { BusinessCategory, CatalogType, CommerceMode, DeliveryMode, ThemeMode, ThemePreset, PublicHeaderSettings, PublicHeaderStyle, LogoSize, MenuTextSize, HeaderMenuMode } from '@/types/common.types';
+import type { BusinessCategory, CatalogType, CommerceMode, DeliveryMode, ThemeMode, ThemePreset, PublicHeaderSettings, PublicHeaderStyle, LogoSize, MenuTextSize, HeaderMenuMode, WhatsappButtonLayout } from '@/types/common.types';
 import { COMMERCE_PROFILES } from '@/features/stores/storeCommerceProfiles';
 import { DEFAULT_HEADER_SETTINGS } from '@/types/common.types';
 import type { Store } from '@/features/stores/stores.types';
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
+import { WhatsappLogoIcon } from '@/components/public/storefront/WhatsappLogoIcon';
 import { AdminPanelTabs } from '@/components/admin/AdminPanelTabs';
 import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { isPlatformAdmin } from '@/utils/permissions';
@@ -340,6 +341,12 @@ export function StoreSettingsPage() {
   const [headerSettings, setHeaderSettings] = useState<PublicHeaderSettings>({ ...DEFAULT_HEADER_SETTINGS });
   const [headerSaved, setHeaderSaved] = useState(false);
   const [headerSaving, setHeaderSaving] = useState(false);
+  const [whatsappButtonEnabled, setWhatsappButtonEnabled] = useState(true);
+  const [whatsappButtonColorMode, setWhatsappButtonColorMode] = useState<'default' | 'custom'>('default');
+  const [whatsappButtonCustomColor, setWhatsappButtonCustomColor] = useState('#25D366');
+  const [whatsappButtonLayout, setWhatsappButtonLayout] = useState<WhatsappButtonLayout>('floating');
+  const [whatsappButtonSaved, setWhatsappButtonSaved] = useState(false);
+  const [whatsappButtonSaving, setWhatsappButtonSaving] = useState(false);
   const [themeInitialValues, setThemeInitialValues] = useState<ThemeAppearanceFormValues>(() => {
     const defaults = getThemeColors('blue', 'light');
     return {
@@ -392,6 +399,10 @@ export function StoreSettingsPage() {
           if (theme.headerSettings) {
             setHeaderSettings({ ...DEFAULT_HEADER_SETTINGS, ...theme.headerSettings });
           }
+          setWhatsappButtonEnabled(theme.whatsappButtonEnabled);
+          setWhatsappButtonColorMode(theme.whatsappButtonColor ? 'custom' : 'default');
+          if (theme.whatsappButtonColor) setWhatsappButtonCustomColor(theme.whatsappButtonColor);
+          setWhatsappButtonLayout(theme.whatsappButtonLayout);
           return;
         }
 
@@ -725,6 +736,9 @@ export function StoreSettingsPage() {
           textColor: values.textColor,
           buttonRadius: values.buttonRadius,
           templateKey: 'default',
+          whatsappButtonEnabled,
+          whatsappButtonColor: whatsappButtonColorMode === 'custom' ? whatsappButtonCustomColor : null,
+          whatsappButtonLayout,
         });
         setThemeSaved(true);
         setTimeout(() => setThemeSaved(false), 3000);
@@ -790,6 +804,26 @@ export function StoreSettingsPage() {
       notify.fromError(err, 'No se pudo guardar la configuración del header.');
     } finally {
       setHeaderSaving(false);
+    }
+  }
+
+  async function handleSaveWhatsappButtonSettings() {
+    if (!storeId) return;
+    setWhatsappButtonSaving(true);
+    try {
+      await storesService.updateStoreTheme(storeId, {
+        whatsappButtonEnabled,
+        whatsappButtonColor: whatsappButtonColorMode === 'custom' ? whatsappButtonCustomColor : null,
+        whatsappButtonLayout,
+      });
+      if (currentStore?.slug) clearCachedPublicStoreBranding(currentStore.slug);
+      setWhatsappButtonSaved(true);
+      setTimeout(() => setWhatsappButtonSaved(false), 3000);
+      notify.success('Botón de WhatsApp guardado.');
+    } catch (err) {
+      notify.fromError(err, 'No se pudo guardar el botón de WhatsApp.');
+    } finally {
+      setWhatsappButtonSaving(false);
     }
   }
 
@@ -1919,6 +1953,179 @@ export function StoreSettingsPage() {
               Configurar WhatsApp
               <ExternalLink className="w-3.5 h-3.5 opacity-70" />
             </Link>
+          </CardBody>
+        </Card>
+        )}
+
+        {activeSection === 'whatsapp' && storeId && (
+        <Card>
+          <CardBody>
+            <div className="flex items-center gap-3 mb-4">
+              <WhatsappLogoIcon className="h-5 w-5 text-green-600" />
+              <h2 className="font-semibold text-gray-900">Botón de contacto por WhatsApp</h2>
+            </div>
+            <p className="text-sm text-gray-500 mb-5">
+              Facilita que tus clientes te escriban desde cualquier página pública. Puedes dejarlo
+              visible en una esquina o integrarlo de forma natural antes del pie de página.
+            </p>
+
+            {!currentStore?.whatsappNumber && (
+              <button
+                type="button"
+                onClick={() => setActiveSection('general')}
+                className="mb-5 block w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-left text-xs text-amber-700 hover:border-amber-300"
+              >
+                Agrega tu número de <span className="font-semibold">WhatsApp de contacto</span> en
+                Información general para activar este botón.
+              </button>
+            )}
+
+            <div className="space-y-5">
+              <SwitchField
+                id="whatsapp-floating-button"
+                label="Mostrar contacto por WhatsApp"
+                description="Actívalo o desactívalo cuando quieras, de forma independiente a tus notificaciones automáticas."
+                checked={whatsappButtonEnabled}
+                onChange={setWhatsappButtonEnabled}
+              />
+
+              {whatsappButtonEnabled && (
+                <div className="space-y-4 rounded-xl border border-gray-100 bg-gray-50/60 p-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Ubicación en la tienda pública</p>
+                    <p className="mt-1 text-xs text-gray-500">Elige la presentación que mejor se adapte a tu página.</p>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      {([
+                        {
+                          value: 'floating' as const,
+                          title: 'Flotante',
+                          description: 'Permanece visible en la esquina mientras el cliente navega.',
+                          recommended: true,
+                        },
+                        {
+                          value: 'inline' as const,
+                          title: 'Integrado en la página',
+                          description: 'Aparece como un bloque de contacto antes del pie de página.',
+                          recommended: false,
+                        },
+                      ]).map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setWhatsappButtonLayout(option.value)}
+                          aria-pressed={whatsappButtonLayout === option.value}
+                          className={cn(
+                            'rounded-xl border bg-white p-4 text-left transition-colors',
+                            whatsappButtonLayout === option.value
+                              ? 'border-green-500 ring-2 ring-green-100'
+                              : 'border-gray-200 hover:border-gray-300'
+                          )}
+                        >
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-semibold text-gray-900">{option.title}</span>
+                            {option.recommended && (
+                              <span className="rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700">
+                                Recomendado
+                              </span>
+                            )}
+                          </span>
+                          <span className="mt-2 block text-xs leading-5 text-gray-500">{option.description}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-gray-200 pt-4">
+                  <p className="text-sm font-medium text-gray-700">Color del botón</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setWhatsappButtonColorMode('default')}
+                      className={cn(
+                        'flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all',
+                        whatsappButtonColorMode === 'default'
+                          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                          : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                      )}
+                    >
+                      <span className="h-5 w-5 rounded-full border border-black/10" style={{ backgroundColor: '#25D366' }} />
+                      WhatsApp (verde)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWhatsappButtonColorMode('custom')}
+                      className={cn(
+                        'flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all',
+                        whatsappButtonColorMode === 'custom'
+                          ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                          : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                      )}
+                    >
+                      <span
+                        className="h-5 w-5 rounded-full border border-black/10"
+                        style={{ backgroundColor: whatsappButtonCustomColor }}
+                      />
+                      Personalizado
+                    </button>
+                  </div>
+
+                  {whatsappButtonColorMode === 'custom' && (
+                    <ThemeColorField
+                      id="whatsappButtonColor"
+                      label="Color personalizado"
+                      value={whatsappButtonCustomColor}
+                      onChange={setWhatsappButtonCustomColor}
+                    />
+                  )}
+
+                  </div>
+
+                  <div className="rounded-xl border border-gray-200 bg-white px-4 py-4">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Vista previa</p>
+                    <div className={cn(
+                      'flex items-center gap-3',
+                      whatsappButtonLayout === 'inline' && 'rounded-xl border border-gray-100 bg-gray-50 p-3'
+                    )}>
+                      <span
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white shadow-sm"
+                        style={{
+                          backgroundColor: whatsappButtonColorMode === 'custom' ? whatsappButtonCustomColor : '#25D366',
+                        }}
+                      >
+                        <WhatsappLogoIcon className="h-6 w-6" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-800">
+                          {whatsappButtonLayout === 'floating' ? 'Chatea con nosotros' : '¿Necesitas ayuda?'}
+                        </p>
+                        <p className="mt-0.5 text-xs text-gray-500">
+                          {whatsappButtonLayout === 'floating'
+                            ? 'Se mantendrá estable en la esquina, sin parpadear.'
+                            : 'Se mostrará integrado antes del pie de página.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  onClick={() => void handleSaveWhatsappButtonSettings()}
+                  isLoading={whatsappButtonSaving}
+                >
+                  <Save className="w-4 h-4 mr-1.5" />
+                  Guardar botón de WhatsApp
+                </Button>
+                {whatsappButtonSaved && (
+                  <span className="flex items-center gap-1.5 text-sm text-green-600">
+                    <CheckCircle className="w-4 h-4" />
+                    Guardado
+                  </span>
+                )}
+              </div>
+            </div>
           </CardBody>
         </Card>
         )}

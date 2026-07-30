@@ -65,6 +65,7 @@ import { readPublicPageCache, writePublicPageCache } from '@/lib/storefront/publ
 import { buildCatalogItems } from '@/lib/storefront/catalogItems';
 import { useResolvedStoreSlug } from '@/lib/storefront/storefrontDomainContext';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
+import { buildWhatsAppContactUrl, normalizePhoneForWhatsApp } from '@/lib/whatsapp/whatsappUrl';
 
 interface ProductPageCachePayload {
   product: PublicProductPage | null;
@@ -97,6 +98,7 @@ function normalizePublicProduct(p: PublicProductPage | null): PublicProductPage 
     images: Array.isArray(p.images) ? p.images : [],
     optionGroups: Array.isArray(p.optionGroups) ? p.optionGroups : [],
     hasVariants: p.hasVariants ?? false,
+    hasOptions: p.hasOptions ?? false,
     showVariantsAsCards: p.showVariantsAsCards ?? false,
     sizeChart: p.sizeChart ?? null,
     variantOptions: Array.isArray(p.variantOptions) ? p.variantOptions : [],
@@ -506,7 +508,7 @@ function ProductLandingContent({
   });
   const textColor = theme.text;
   const isMenu = currentProduct.productType === 'menu_item';
-  const whatsappNumber = (currentProduct.storeWhatsappNumber ?? '').replace(/\D/g, '');
+  const whatsappNumber = normalizePhoneForWhatsApp(currentProduct.storeWhatsappNumber);
   // A missing/broken image must still read as "no photo" — never a blank
   // colored box that looks like a loading/blank state — so every gallery
   // fallback here shares this one icon treatment (same visual language as
@@ -622,7 +624,8 @@ function ProductLandingContent({
       ...(specialInstructions.trim() ? [`Notas: ${specialInstructions.trim()}`] : []),
       `Total estimado: ${formatCurrency(finalPrice, 'es-CO', 'COP')}`,
     ];
-    const href = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(lines.join('\n'))}`;
+    const href = buildWhatsAppContactUrl(whatsappNumber, lines.join('\n'));
+    if (!href) return;
     setPurchaseDialogOpen(false);
     window.open(href, '_blank', 'noopener,noreferrer');
   }

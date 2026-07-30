@@ -181,4 +181,17 @@ export const categoriesService = {
     const { error } = await supabase.from('store_product_categories').delete().eq('id', id);
     if (error) throw new Error(error.message);
   },
+
+  /** Persists an explicit full order (drag-and-drop can move a category
+   * more than one position at once) — assigns sort_order = index for
+   * every id in `orderedIds`. */
+  async reorderCategories(orderedIds: string[]): Promise<void> {
+    const results = await Promise.all(
+      orderedIds.map((id, index) =>
+        supabase.from('store_product_categories').update({ sort_order: index }).eq('id', id)
+      )
+    );
+    const failed = results.find((r) => r.error);
+    if (failed?.error) throw new Error(failed.error.message);
+  },
 };

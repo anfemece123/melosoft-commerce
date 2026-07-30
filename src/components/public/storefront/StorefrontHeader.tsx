@@ -4,7 +4,9 @@ import { ChevronDown, Menu, Search, ShoppingCart, X } from 'lucide-react';
 import { PublicStoreLogo } from './PublicStoreLogo';
 import { MobileNavDrawer } from './MobileNavDrawer';
 import { MegaMenuPanel } from './MegaMenuPanel';
+import { StoreStatusBadge } from './StoreStatusBadge';
 import { STOREFRONT_CONTAINER_CLASS, type StorefrontTheme } from './storefrontTheme';
+import type { LocationOrderStatus } from '@/features/locations/locations.types';
 import type { CatalogMeta, CatalogType, PublicHeaderSettings, PublicStoreCategory } from '@/types/common.types';
 import { DEFAULT_HEADER_SETTINGS } from '@/types/common.types';
 import {
@@ -66,6 +68,8 @@ interface StorefrontHeaderProps {
   headerSettings?: PublicHeaderSettings | null;
   categories?: PublicStoreCategory[];
   catalogMeta?: CatalogMeta | null;
+  orderStatus?: LocationOrderStatus | null;
+  scheduleLoading?: boolean;
 }
 
 export function StorefrontHeader({
@@ -82,6 +86,8 @@ export function StorefrontHeader({
   headerSettings,
   categories = [],
   catalogMeta,
+  orderStatus = null,
+  scheduleLoading = false,
 }: StorefrontHeaderProps & { categories?: PublicStoreCategory[] }) {
   const settings = resolveHeaderSettings(headerSettings ?? DEFAULT_HEADER_SETTINGS);
   const navigate = useNavigate();
@@ -389,12 +395,17 @@ export function StorefrontHeader({
                         />
                       )}
                       {settings.showStoreName && (
-                        <span
-                          className="truncate text-[22px] font-semibold leading-none tracking-[-0.03em] md:text-[26px]"
-                          style={{ color: theme.mode === 'dark' ? theme.text : '#1f2937' }}
-                        >
-                          {storeName}
-                        </span>
+                        <div className="flex min-w-0 flex-col gap-1">
+                          <span
+                            className="truncate text-[22px] font-semibold leading-none tracking-[-0.03em] md:text-[26px]"
+                            style={{ color: theme.mode === 'dark' ? theme.text : '#1f2937' }}
+                          >
+                            {storeName}
+                          </span>
+                          {showCart && (
+                            <StoreStatusBadge theme={theme} orderStatus={orderStatus} scheduleLoading={scheduleLoading} />
+                          )}
+                        </div>
                       )}
                     </Link>
                   )}
@@ -510,12 +521,17 @@ export function StorefrontHeader({
                   />
                 )}
                 {settings.showStoreName && (
-                  <span
-                    className="hidden truncate text-base font-semibold leading-tight tracking-tight md:block max-w-[160px]"
-                    style={{ color: theme.mode === 'dark' ? theme.text : '#1f2937' }}
-                  >
-                    {storeName}
-                  </span>
+                  <div className="hidden min-w-0 flex-col items-start gap-1 md:flex">
+                    <span
+                      className="truncate text-base font-semibold leading-tight tracking-tight max-w-[160px]"
+                      style={{ color: theme.mode === 'dark' ? theme.text : '#1f2937' }}
+                    >
+                      {storeName}
+                    </span>
+                    {showCart && (
+                      <StoreStatusBadge theme={theme} orderStatus={orderStatus} scheduleLoading={scheduleLoading} />
+                    )}
+                  </div>
                 )}
               </Link>
             )}

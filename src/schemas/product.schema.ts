@@ -15,6 +15,9 @@ export interface ProductFormValues {
   discountMode: DiscountMode;
   discountValue: number | '';  // helper: percentage (1-99) or fixed amount
   salePrice: number | '';      // the actual promotional price saved to DB
+  cartaPrice: number | '';     // optional price shown in the "Carta digital" visual menu
+  showInCarta: boolean;
+  showInEcommerce: boolean;
   sku: string;
   trackInventory: boolean;
   stockQuantity: number | '';
@@ -59,6 +62,12 @@ export const productSchema = Yup.object({
         return value < regularPrice;
       }
     ),
+  cartaPrice: Yup.number()
+    .min(0, 'Debe ser mayor o igual a 0')
+    .nullable()
+    .optional(),
+  showInCarta: Yup.boolean().required(),
+  showInEcommerce: Yup.boolean().required(),
   discountValue: Yup.number()
     .nullable()
     .optional()

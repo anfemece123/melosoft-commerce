@@ -188,7 +188,7 @@ export function StorefrontProductCard({
               ? (isMenu ? 'Agotado por el momento' : 'Agotado')
               : 'No disponible en esta sede'}
           </div>
-        ) : product.hasVariants ? (
+        ) : product.hasVariants || product.hasOptions ? (
           <StorefrontActionButton
             as="div"
             theme={theme}
@@ -196,7 +196,7 @@ export function StorefrontProductCard({
             fullWidth
             className={`mt-3 text-sm font-semibold ${isLarge ? 'h-11' : 'h-10'}`}
           >
-            Ver opciones
+            {product.hasOptions ? 'Personalizar' : 'Ver opciones'}
           </StorefrontActionButton>
         ) : showCartButton ? (
           <StorefrontActionButton

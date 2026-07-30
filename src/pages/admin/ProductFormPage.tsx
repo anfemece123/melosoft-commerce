@@ -235,6 +235,9 @@ export function ProductFormPage() {
       discountMode: 'none',
       discountValue: '',
       salePrice: '',
+      cartaPrice: '',
+      showInCarta: true,
+      showInEcommerce: true,
       sku: '',
       // Restaurant dishes are prepared on demand, so their professional
       // default is "available without a quantity limit". Retail products
@@ -303,6 +306,9 @@ export function ProductFormPage() {
           salePrice: finalSalePrice,
           compareAtPrice: null,
           costPrice: null,
+          cartaPrice: values.cartaPrice !== '' ? Number(values.cartaPrice) : null,
+          showInCarta: values.showInCarta,
+          showInEcommerce: values.showInEcommerce,
           sku: values.sku || null,
           // Variants own their availability/stock policy. Never let a stale
           // parent stock value make the whole product appear sold out.
@@ -630,6 +636,9 @@ export function ProductFormPage() {
           discountMode: product.salePrice !== null ? 'direct_price' : 'none',
           discountValue: '',
           salePrice: product.salePrice ?? '',
+          cartaPrice: product.cartaPrice ?? '',
+          showInCarta: product.showInCarta,
+          showInEcommerce: product.showInEcommerce,
           sku: product.sku ?? '',
           trackInventory: product.trackInventory,
           stockQuantity: product.stock,
@@ -672,6 +681,10 @@ export function ProductFormPage() {
             label: item.label,
             description: item.description,
             priceDelta: item.priceDelta,
+            linkedProductId: item.linkedProductId,
+            linkedVariantId: item.linkedVariantId,
+            linkedQuantity: item.linkedQuantity,
+            priceMode: item.priceMode,
             isDefault: item.isDefault,
             isActive: item.isActive,
           })),
@@ -1243,6 +1256,44 @@ export function ProductFormPage() {
           </CardBody>
         </Card>
 
+        {/* Carta digital — visual, checkout-free menu (e.g. QR at the table) */}
+        <Card>
+          <CardBody>
+            <SectionHeader
+              title="Carta digital"
+              description="Precio y visibilidad de este producto en el menú visual del local, independientes de la tienda online."
+            />
+            <div className="space-y-4">
+              <MoneyInput
+                id="cartaPrice"
+                name="cartaPrice"
+                label="Precio en la carta del local (opcional)"
+                currency={currency}
+                value={formik.values.cartaPrice}
+                onChange={(val) => void formik.setFieldValue('cartaPrice', val)}
+                onBlur={() => void formik.setFieldTouched('cartaPrice', true)}
+                error={formik.touched.cartaPrice ? formik.errors.cartaPrice : undefined}
+              />
+              <p className="text-xs text-gray-400 -mt-2">
+                Si lo dejas vacío, la carta del local usa el mismo precio de tu tienda online.
+              </p>
+
+              <ToggleField
+                label="Mostrar en la carta del local"
+                description="Aparece en el menú visual accesible por QR."
+                checked={formik.values.showInCarta}
+                onChange={(v) => void formik.setFieldValue('showInCarta', v)}
+              />
+              <ToggleField
+                label="Mostrar en la tienda online"
+                description="Aparece en tu catálogo de ecommerce."
+                checked={formik.values.showInEcommerce}
+                onChange={(v) => void formik.setFieldValue('showInEcommerce', v)}
+              />
+            </div>
+          </CardBody>
+        </Card>
+
         {/* Type-specific fields */}
         {isMenu ? (
           <Card>
@@ -1434,12 +1485,13 @@ export function ProductFormPage() {
           />
         ) : null}
 
-        {/* Modificadores/adiciones: solo para tiendas tipo menú — no crean
-            stock ni variant_id, para no explotar combinaciones (queso,
-            tocineta, sin cebolla...) en variantes exactas. */}
-        {isMenu ? (
+        {/* Modificadores/adiciones: las preferencias simples no crean stock;
+            las bebidas/postres vinculados comparten inventario de catálogo. */}
+        {isMenu && storeId ? (
           <ProductOptionsEditor
             currency={currency}
+            storeId={storeId}
+            productId={productId}
             groups={optionGroups}
             onChange={setOptionGroups}
           />

@@ -22,6 +22,8 @@ export function StorefrontProductCustomizer({
     <div className="space-y-4">
       {groups.map((group) => {
         const selectedCount = (selections[group.id] ?? []).length;
+        const availableCount = group.items.filter((item) => item.isAvailable).length;
+        const minimum = group.isRequired ? Math.max(group.minSelect, 1) : group.minSelect;
         const helper = group.selectionType === 'single'
           ? group.isRequired
             ? 'Elige 1 opción obligatoria.'
@@ -71,11 +73,14 @@ export function StorefrontProductCustomizer({
                     key={item.id}
                     type="button"
                     onClick={() => onToggleOption(group, item.id)}
+                    aria-disabled={!item.isAvailable}
                     className="rounded-2xl border px-3 py-2 text-left transition-colors"
                     style={{
                       borderColor: selected ? theme.primary : theme.border,
                       backgroundColor: selected ? theme.softPrimary : theme.surface,
                       color: theme.text,
+                      cursor: item.isAvailable ? 'pointer' : 'not-allowed',
+                      opacity: item.isAvailable ? 1 : 0.58,
                     }}
                   >
                     <div className="flex items-center gap-2">
@@ -83,6 +88,11 @@ export function StorefrontProductCustomizer({
                       {item.priceDelta > 0 ? (
                         <span className="text-xs font-semibold" style={{ color: theme.primary }}>
                           +{formatCurrency(item.priceDelta, 'es-CO', currency)}
+                        </span>
+                      ) : null}
+                      {!item.isAvailable ? (
+                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-600">
+                          {item.unavailableReason ?? 'Agotado'}
                         </span>
                       ) : null}
                     </div>
@@ -95,6 +105,11 @@ export function StorefrontProductCustomizer({
                 );
               })}
             </div>
+            {minimum > availableCount ? (
+              <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                No hay suficientes opciones disponibles en este grupo. Intenta nuevamente más tarde.
+              </p>
+            ) : null}
           </div>
         );
       })}

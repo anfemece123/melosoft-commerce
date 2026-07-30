@@ -83,6 +83,7 @@ export type ThemePreset =
   | 'fuchsia'
   | 'pink';
 export type ThemeMode = 'light' | 'dark';
+export type WhatsappButtonLayout = 'floating' | 'inline';
 export type TemplateKey = 'default';
 
 // Products
@@ -219,6 +220,11 @@ export interface PublicStorePage {
   nationalShippingBaseFee: number | null;
   nationalShippingFreeFrom: number | null;
   headerSettings: PublicHeaderSettings | null;
+  whatsappButtonEnabled: boolean;
+  whatsappButtonColor: string | null;
+  whatsappButtonLayout: WhatsappButtonLayout;
+  cartaEnabled: boolean;
+  cartaListed: boolean;
 }
 
 export interface PublicStoreHeroSlide {
@@ -366,6 +372,8 @@ export interface PublicProductPage {
   catalogType: CatalogType | null;
   descriptionSections: ProductDescriptionSection[];
   hasVariants: boolean;
+  /** True when the customer must open the product before adding it. */
+  hasOptions: boolean;
   // Per-product catalog display preference: split the controlsMedia option
   // (usually Color/Modelo) into one card per value (fashion/footwear style)
   // instead of a single grouped card. See buildCatalogItems.
@@ -402,6 +410,12 @@ export interface PublicProductOptionItem {
   priceDelta: number;
   isDefault: boolean;
   sortOrder: number;
+  isAvailable: boolean;
+  unavailableReason: string | null;
+  linkedProductId: string | null;
+  linkedVariantId: string | null;
+  linkedQuantity: number;
+  priceMode: 'custom' | 'catalog';
 }
 
 // A single selected modifier/adición — carried through cart → checkout →

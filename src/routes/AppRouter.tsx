@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { PublicLayout } from '@/components/layout/PublicLayout';
+import { PublicCartaLayout } from '@/components/layout/PublicCartaLayout';
 import { ProtectedRoute } from './ProtectedRoute';
 import { PlatformAdminRoute } from './PlatformAdminRoute';
 import { StoreAccessRoute } from './StoreAccessRoute';
@@ -21,6 +22,7 @@ import { ProductFormPage } from '@/pages/admin/ProductFormPage';
 import { OffersPage } from '@/pages/admin/OffersPage';
 import { OfferFormPage } from '@/pages/admin/OfferFormPage';
 import { LocationsPage } from '@/pages/admin/LocationsPage';
+import { CartaSettingsPage } from '@/pages/admin/CartaSettingsPage';
 import { ProductsLayout } from '@/pages/admin/products/ProductsLayout';
 import { ProductCategoriesPage } from '@/pages/admin/products/ProductCategoriesPage';
 import { ProductCollectionsPage } from '@/pages/admin/products/ProductCollectionsPage';
@@ -37,6 +39,7 @@ import { StoreCheckoutPage } from '@/pages/public/StoreCheckoutPage';
 import { ProductLandingPage } from '@/pages/public/ProductLandingPage';
 import { OfferLandingPage } from '@/pages/public/OfferLandingPage';
 import { StorePoliciesPage } from '@/pages/public/StorePoliciesPage';
+import { StoreCartaPage } from '@/pages/public/StoreCartaPage';
 import { PaymentResultPage } from '@/pages/public/PaymentResultPage';
 import { AccessDeniedPage } from '@/pages/AccessDeniedPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
@@ -79,6 +82,7 @@ export function AppRouter() {
                 <Route path="/admin/stores/:storeId/settings" element={<StoreSettingsPage />} />
                 <Route path="/admin/stores/:storeId/home-builder" element={<HomeBuilderPage />} />
                 <Route path="/admin/stores/:storeId/locations" element={<LocationsPage />} />
+                <Route path="/admin/stores/:storeId/carta" element={<CartaSettingsPage />} />
                 <Route path="/admin/stores/:storeId/products" element={<ProductsLayout />}>
                   <Route index element={<ProductsPage />} />
                   <Route path="categories" element={<ProductCategoriesPage />} />
@@ -124,6 +128,15 @@ export function AppRouter() {
             <Route path="/o/:offerSlug" element={<OfferLandingPage />} />
             <Route path="/policies" element={<StorePoliciesPage />} />
             <Route path="/payment-result" element={<PaymentResultPage />} />
+          </Route>
+        </Route>
+
+        {/* Carta digital — visual, checkout-free menu. Deliberately outside
+            PublicLayout (no cart/ecommerce nav belongs here). */}
+        <Route element={<PublicCartaLayout />}>
+          <Route path="/s/:storeSlug/carta" element={<StoreCartaPage />} />
+          <Route element={<CustomDomainRoute />}>
+            <Route path="/carta" element={<StoreCartaPage />} />
           </Route>
         </Route>
 

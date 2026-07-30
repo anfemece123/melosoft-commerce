@@ -115,6 +115,9 @@ export function mapStoreThemeRowToStoreTheme(row: StoreThemeRow): StoreTheme {
     buttonRadius: row.button_radius,
     templateKey: row.template_key as TemplateKey,
     headerSettings: (row.header_settings as PublicHeaderSettings | null) ?? null,
+    whatsappButtonEnabled: row.whatsapp_button_enabled,
+    whatsappButtonColor: row.whatsapp_button_color,
+    whatsappButtonLayout: row.whatsapp_button_layout === 'inline' ? 'inline' : 'floating',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -196,6 +199,11 @@ export function mapPublicStorePageRowToPublicStorePage(row: PublicStorePageRow):
     nationalShippingBaseFee: row.national_shipping_base_fee != null ? Number(row.national_shipping_base_fee) : null,
     nationalShippingFreeFrom: row.national_shipping_free_from != null ? Number(row.national_shipping_free_from) : null,
     headerSettings: (row.header_settings as PublicHeaderSettings | null) ?? null,
+    whatsappButtonEnabled: row.whatsapp_button_enabled,
+    whatsappButtonColor: row.whatsapp_button_color,
+    whatsappButtonLayout: row.whatsapp_button_layout === 'inline' ? 'inline' : 'floating',
+    cartaEnabled: row.carta_enabled,
+    cartaListed: row.carta_listed,
   };
 }
 
@@ -273,6 +281,9 @@ export function mapStoreThemeInsertToRow(data: StoreThemeInsert): StoreThemeRowI
     button_radius: data.buttonRadius ?? null,
     template_key: data.templateKey,
     header_settings: (data.headerSettings ?? null) as Json | null,
+    whatsapp_button_enabled: data.whatsappButtonEnabled,
+    whatsapp_button_color: data.whatsappButtonColor ?? null,
+    whatsapp_button_layout: data.whatsappButtonLayout,
   };
 }
 
@@ -288,6 +299,9 @@ export function mapStoreThemeUpdateToRow(data: StoreThemeUpdate): StoreThemeRowU
   if (data.buttonRadius !== undefined) row.button_radius = data.buttonRadius ?? null;
   if (data.templateKey !== undefined) row.template_key = data.templateKey;
   if (data.headerSettings !== undefined) row.header_settings = (data.headerSettings ?? null) as Json | null;
+  if (data.whatsappButtonEnabled !== undefined) row.whatsapp_button_enabled = data.whatsappButtonEnabled;
+  if (data.whatsappButtonColor !== undefined) row.whatsapp_button_color = data.whatsappButtonColor ?? null;
+  if (data.whatsappButtonLayout !== undefined) row.whatsapp_button_layout = data.whatsappButtonLayout;
   return row;
 }
 

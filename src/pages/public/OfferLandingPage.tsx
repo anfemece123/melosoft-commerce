@@ -20,6 +20,7 @@ import { readPublicPageCache, writePublicPageCache } from '@/lib/storefront/publ
 import { writePublicScrollPosition } from '@/lib/storefront/publicScrollRestoration';
 import { useResolvedStoreSlug } from '@/lib/storefront/storefrontDomainContext';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
+import { buildWhatsAppContactUrl } from '@/lib/whatsapp/whatsappUrl';
 
 interface OfferPageCachePayload {
   offer: PublicOfferPage | null;
@@ -163,13 +164,13 @@ export function OfferLandingPage() {
   const primaryColor = offer.primaryColor ?? '#6366f1';
 
   // WhatsApp
-  const wa = (offer.offerWhatsappNumber ?? offer.storeWhatsappNumber ?? '').replace(/\D/g, '');
   const baseMsg = offer.whatsappMessage
     ?? `Hola, quiero la oferta: ${offer.title}${offer.productName ? ` — ${offer.productName}` : ''} por ${formatCurrency(offer.offerPrice, 'es-CO', 'COP')}`;
   const fullMsg = session?.claimCode ? `${baseMsg}. Código: ${session.claimCode}` : baseMsg;
-  const whatsappHref = wa
-    ? `https://wa.me/${wa}?text=${encodeURIComponent(fullMsg)}`
-    : null;
+  const whatsappHref = buildWhatsAppContactUrl(
+    offer.offerWhatsappNumber ?? offer.storeWhatsappNumber,
+    fullMsg,
+  );
 
   const displayImage = offer.heroImageUrl ?? offer.productMainImageUrl;
   const hasDiscount = offer.regularPrice > 0 && offer.offerPrice < offer.regularPrice;

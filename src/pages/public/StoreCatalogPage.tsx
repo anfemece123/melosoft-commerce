@@ -476,6 +476,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
   }
 
   function handleAddProductToCart(event: MouseEvent<HTMLElement>, product: PublicProductPage) {
+    if (product.hasVariants || product.hasOptions) return;
     event.preventDefault();
     event.stopPropagation();
     if (unavailableProductIds.has(product.productId)) return;

@@ -35,6 +35,9 @@ export interface Product {
   compareAtPrice: number | null;
   salePrice: number | null;
   costPrice: number | null;
+  cartaPrice: number | null;
+  showInCarta: boolean;
+  showInEcommerce: boolean;
   stock: number;
   sku: string | null;
   trackInventory: boolean;
@@ -78,6 +81,10 @@ export interface ProductOptionItem {
   label: string;
   description: string | null;
   priceDelta: number;
+  linkedProductId: string | null;
+  linkedVariantId: string | null;
+  linkedQuantity: number;
+  priceMode: 'custom' | 'catalog';
   isDefault: boolean;
   isActive: boolean;
   sortOrder: number;

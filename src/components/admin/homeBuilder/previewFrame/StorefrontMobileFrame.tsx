@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 const MOBILE_WIDTH = 390;
@@ -29,6 +29,10 @@ interface StorefrontMobileFrameProps {
    *  mockup doesn't look like a broken embedded webpage).
    * @default 'fade' */
   clipMode?: MobileClipMode;
+  /** Lets safe, preview-only controls (for example Carta category tabs)
+   * receive clicks. Home Builder keeps the default false because its
+   * renderers contain real links and purchase actions. */
+  allowInteractions?: boolean;
 }
 
 /** Mobile-mode preview shell. Deliberately NOT "the desktop scaler at a
@@ -81,30 +85,50 @@ export function StorefrontMobileFrame({
   scale = 0.8,
   maxHeight,
   clipMode = 'fade',
+  allowInteractions = false,
 }: StorefrontMobileFrameProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   const [contentHeight, setContentHeight] = useState(300);
 
-  function handleLoad() {
+  const initializeFrame = useCallback(() => {
     const doc = iframeRef.current?.contentDocument;
-    if (!doc) return;
+    if (!doc?.body) return;
+
+    const existingContainer = doc.body.querySelector<HTMLElement>('[data-storefront-preview-root]');
+    if (existingContainer) {
+      setMountNode((current) => current === existingContainer ? current : existingContainer);
+      return;
+    }
 
     document.querySelectorAll('link[rel="stylesheet"], style').forEach((node) => {
-      doc.head.appendChild(node.cloneNode(true));
+      const clone = node.cloneNode(true) as HTMLElement;
+      clone.setAttribute('data-storefront-preview-style', 'true');
+      doc.head.appendChild(clone);
     });
 
     const blockRealAction = (e: Event) => {
       e.preventDefault();
       e.stopPropagation();
     };
-    doc.addEventListener('click', blockRealAction, true);
-    doc.addEventListener('submit', blockRealAction, true);
+    if (!allowInteractions) {
+      doc.addEventListener('click', blockRealAction, true);
+      doc.addEventListener('submit', blockRealAction, true);
+    }
 
     const container = doc.createElement('div');
+    container.setAttribute('data-storefront-preview-root', 'true');
     doc.body.appendChild(container);
     setMountNode(container);
-  }
+  }, [allowInteractions]);
+
+  // `srcDoc` can finish before React receives the iframe's native load
+  // event in some browsers/webviews. Initialize once from the parent too,
+  // so a missed onLoad can never leave the preview as an empty phone.
+  useEffect(() => {
+    const frame = requestAnimationFrame(initializeFrame);
+    return () => cancelAnimationFrame(frame);
+  }, [initializeFrame]);
 
   useEffect(() => {
     if (!mountNode) return;
@@ -139,6 +163,11 @@ export function StorefrontMobileFrame({
           overflowY: clipMode === 'scroll' ? 'auto' : 'hidden',
         }}
       >
+        {!mountNode && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white px-6 text-center text-sm text-gray-500">
+            Preparando vista previa móvil…
+          </div>
+        )}
         <div style={{ width: naturalWidth, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
           <div
             className="overflow-hidden rounded-[1.4rem] border-[5px] border-gray-800 bg-gray-800 shadow-md"
@@ -149,7 +178,7 @@ export function StorefrontMobileFrame({
                 ref={iframeRef}
                 title="Vista previa móvil"
                 srcDoc="<!doctype html><html style='overflow-x:hidden'><head></head><body style='margin:0;overflow-x:hidden;width:100%'></body></html>"
-                onLoad={handleLoad}
+                onLoad={initializeFrame}
                 style={{ width: MOBILE_WIDTH, height: contentHeight, border: 'none', display: 'block', backgroundColor }}
               />
             </div>

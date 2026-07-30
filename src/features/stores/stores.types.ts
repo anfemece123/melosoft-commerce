@@ -10,6 +10,7 @@ import type {
   BusinessType,
   ThemePreset,
   PublicHeaderSettings,
+  WhatsappButtonLayout,
 } from '@/types/common.types';
 import type { StoreCommerceSettings } from './storeCommerce.types';
 
@@ -26,6 +27,9 @@ export interface StoreTheme {
   buttonRadius: string | null;
   templateKey: TemplateKey;
   headerSettings?: PublicHeaderSettings | null;
+  whatsappButtonEnabled: boolean;
+  whatsappButtonColor: string | null;
+  whatsappButtonLayout: WhatsappButtonLayout;
   createdAt: string;
   updatedAt: string;
 }
