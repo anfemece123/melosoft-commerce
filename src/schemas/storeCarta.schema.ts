@@ -16,9 +16,11 @@ export const storeCartaSchema = Yup.object({
   showProductDescriptions: Yup.boolean().required(),
   categoryHeadingAlignment: Yup.string().oneOf(['left', 'center']).required(),
   productImageMode: Yup.string().oneOf(['all', 'first_per_category', 'none']).required(),
+  categoryImageModes: Yup.object().required(),
   categoryImageSelections: Yup.object().required(),
   categoryImagePositions: Yup.object().required(),
   categoryImageSizes: Yup.object().required(),
+  productImagePositions: Yup.object().required(),
 });
 
 export interface StoreCartaFormValues {
@@ -37,7 +39,9 @@ export interface StoreCartaFormValues {
   showProductDescriptions: boolean;
   categoryHeadingAlignment: 'left' | 'center';
   productImageMode: 'all' | 'first_per_category' | 'none';
+  categoryImageModes: Record<string, 'all' | 'first_per_category' | 'none'>;
   categoryImageSelections: Record<string, string>;
   categoryImagePositions: Record<string, 'above_heading' | 'below_heading' | 'beside_left' | 'beside_right'>;
   categoryImageSizes: Record<string, 'small' | 'medium' | 'large'>;
+  productImagePositions: Record<string, 'left' | 'right'>;
 }

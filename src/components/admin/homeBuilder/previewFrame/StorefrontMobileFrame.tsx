@@ -156,6 +156,8 @@ export function StorefrontMobileFrame({
     <div className="mx-auto" style={{ width: scaledWidth }}>
       <div
         className={`relative ${clipMode === 'scroll' ? 'no-scrollbar' : ''}`}
+        data-storefront-mobile-clip-mode={clipMode}
+        data-storefront-mobile-max-height={maxHeight}
         style={{
           width: scaledWidth,
           height: displayHeight,

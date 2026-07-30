@@ -13,6 +13,7 @@ import type {
   PublicCartaProduct,
   CartaCategoryImagePosition,
   CartaCategoryImageSize,
+  CartaProductImagePosition,
 } from './carta.types';
 
 function normalizeTemplateKey(value: string | null | undefined): CartaSettings['templateKey'] {
@@ -37,6 +38,14 @@ function normalizeProductImageMode(value: string | null | undefined): CartaSetti
   return value === 'first_per_category' || value === 'none' ? value : 'all';
 }
 
+function normalizeCategoryImageModes(value: unknown): CartaSettings['categoryImageModes'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const validModes = new Set<CartaSettings['productImageMode']>(['all', 'first_per_category', 'none']);
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, CartaSettings['productImageMode']] => validModes.has(entry[1] as CartaSettings['productImageMode']))
+  );
+}
+
 function normalizeCategoryImageSelections(value: unknown): Record<string, string> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   return Object.fromEntries(
@@ -57,6 +66,14 @@ function normalizeCategoryImageSizes(value: unknown): Record<string, CartaCatego
   const validSizes = new Set<CartaCategoryImageSize>(['small', 'medium', 'large']);
   return Object.fromEntries(
     Object.entries(value).filter((entry): entry is [string, CartaCategoryImageSize] => validSizes.has(entry[1] as CartaCategoryImageSize))
+  );
+}
+
+function normalizeProductImagePositions(value: unknown): Record<string, CartaProductImagePosition> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const validPositions = new Set<CartaProductImagePosition>(['left', 'right']);
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, CartaProductImagePosition] => validPositions.has(entry[1] as CartaProductImagePosition))
   );
 }
 
@@ -104,9 +121,11 @@ export function mapCartaSettingsRowToCartaSettings(row: StoreCartaSettingsRow): 
     showProductDescriptions: row.show_product_descriptions ?? true,
     categoryHeadingAlignment: normalizeCategoryHeadingAlignment(row.category_heading_alignment),
     productImageMode: normalizeProductImageMode(row.product_image_mode),
+    categoryImageModes: normalizeCategoryImageModes(row.category_image_modes),
     categoryImageSelections: normalizeCategoryImageSelections(row.category_image_selections),
     categoryImagePositions: normalizeCategoryImagePositions(row.category_image_positions),
     categoryImageSizes: normalizeCategoryImageSizes(row.category_image_sizes),
+    productImagePositions: normalizeProductImagePositions(row.product_image_positions),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -132,9 +151,11 @@ export function mapCartaSettingsInsertToRow(data: CartaSettingsInsert): StoreCar
     show_product_descriptions: data.showProductDescriptions,
     category_heading_alignment: data.categoryHeadingAlignment,
     product_image_mode: data.productImageMode,
+    category_image_modes: data.categoryImageModes,
     category_image_selections: data.categoryImageSelections,
     category_image_positions: data.categoryImagePositions,
     category_image_sizes: data.categoryImageSizes,
+    product_image_positions: data.productImagePositions,
   };
 }
 
@@ -157,9 +178,11 @@ export function mapCartaSettingsUpdateToRow(data: CartaSettingsUpdate): StoreCar
   if (data.showProductDescriptions !== undefined) row.show_product_descriptions = data.showProductDescriptions;
   if (data.categoryHeadingAlignment !== undefined) row.category_heading_alignment = data.categoryHeadingAlignment;
   if (data.productImageMode !== undefined) row.product_image_mode = data.productImageMode;
+  if (data.categoryImageModes !== undefined) row.category_image_modes = data.categoryImageModes;
   if (data.categoryImageSelections !== undefined) row.category_image_selections = data.categoryImageSelections;
   if (data.categoryImagePositions !== undefined) row.category_image_positions = data.categoryImagePositions;
   if (data.categoryImageSizes !== undefined) row.category_image_sizes = data.categoryImageSizes;
+  if (data.productImagePositions !== undefined) row.product_image_positions = data.productImagePositions;
   return row;
 }
 
@@ -225,9 +248,11 @@ export function mapPublicCartaPageRowsToPublicCartaPage(rows: PublicCartaPageRow
     showProductDescriptions: first.show_product_descriptions ?? true,
     categoryHeadingAlignment: normalizeCategoryHeadingAlignment(first.category_heading_alignment),
     productImageMode: normalizeProductImageMode(first.product_image_mode),
+    categoryImageModes: normalizeCategoryImageModes(first.category_image_modes),
     categoryImageSelections: normalizeCategoryImageSelections(first.category_image_selections),
     categoryImagePositions: normalizeCategoryImagePositions(first.category_image_positions),
     categoryImageSizes: normalizeCategoryImageSizes(first.category_image_sizes),
+    productImagePositions: normalizeProductImagePositions(first.product_image_positions),
     themeMode: first.theme_mode,
     primaryColor: first.primary_color,
     secondaryColor: first.secondary_color,

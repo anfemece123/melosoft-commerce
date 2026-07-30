@@ -216,9 +216,11 @@ export interface Database {
           show_product_descriptions: boolean;
           category_heading_alignment: string;
           product_image_mode: string;
+          category_image_modes: Json;
           category_image_selections: Json;
           category_image_positions: Json;
           category_image_sizes: Json;
+          product_image_positions: Json;
           created_at: string;
           updated_at: string;
         };
@@ -242,9 +244,11 @@ export interface Database {
           show_product_descriptions?: boolean;
           category_heading_alignment?: string;
           product_image_mode?: string;
+          category_image_modes?: Json;
           category_image_selections?: Json;
           category_image_positions?: Json;
           category_image_sizes?: Json;
+          product_image_positions?: Json;
           created_at?: string;
           updated_at?: string;
         };
@@ -268,9 +272,11 @@ export interface Database {
           show_product_descriptions?: boolean;
           category_heading_alignment?: string;
           product_image_mode?: string;
+          category_image_modes?: Json;
           category_image_selections?: Json;
           category_image_positions?: Json;
           category_image_sizes?: Json;
+          product_image_positions?: Json;
           created_at?: string;
           updated_at?: string;
         };
@@ -2948,9 +2954,11 @@ export interface Database {
           show_product_descriptions: boolean;
           category_heading_alignment: string;
           product_image_mode: string;
+          category_image_modes: Json;
           category_image_selections: Json;
           category_image_positions: Json;
           category_image_sizes: Json;
+          product_image_positions: Json;
           theme_mode: string | null;
           primary_color: string | null;
           secondary_color: string | null;

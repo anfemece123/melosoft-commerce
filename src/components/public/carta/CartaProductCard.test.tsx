@@ -53,4 +53,17 @@ describe('CartaProductCard descriptions', () => {
     rerender(<CartaProductCard product={product} currency="COP" theme={theme} variant="minimal" />);
     expect(container.querySelector('article')?.className).toContain('py-2');
   });
+
+  it.each<CartaTemplateKey>(['signature', 'gallery', 'minimal'])(
+    'places an individual product image on the right in the %s format',
+    (variant) => {
+      const { container } = render(
+        <CartaProductCard product={product} currency="COP" theme={theme} variant={variant} imagePosition="right" />
+      );
+
+      const article = container.querySelector('article');
+      expect(article?.getAttribute('data-carta-product-image-position')).toBe('right');
+      expect(article?.className).toContain('grid-cols-[minmax(0,1fr)_');
+    }
+  );
 });

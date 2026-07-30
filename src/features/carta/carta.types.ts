@@ -3,6 +3,7 @@ export type CartaNavigationMode = 'continuous' | 'paginated';
 export type CartaCoverLayout = 'none' | 'single';
 export type CartaCategoryHeadingAlignment = 'left' | 'center';
 export type CartaProductImageMode = 'all' | 'first_per_category' | 'none';
+export type CartaProductImagePosition = 'left' | 'right';
 export type CartaCategoryImagePosition = 'above_heading' | 'below_heading' | 'beside_left' | 'beside_right';
 export type CartaCategoryImageSize = 'small' | 'medium' | 'large';
 
@@ -26,9 +27,11 @@ export interface CartaSettings {
   showProductDescriptions: boolean;
   categoryHeadingAlignment: CartaCategoryHeadingAlignment;
   productImageMode: CartaProductImageMode;
+  categoryImageModes: Record<string, CartaProductImageMode>;
   categoryImageSelections: Record<string, string>;
   categoryImagePositions: Record<string, CartaCategoryImagePosition>;
   categoryImageSizes: Record<string, CartaCategoryImageSize>;
+  productImagePositions: Record<string, CartaProductImagePosition>;
   createdAt: string;
   updatedAt: string;
 }
@@ -72,9 +75,11 @@ export interface PublicCartaPage {
   showProductDescriptions: boolean;
   categoryHeadingAlignment: CartaCategoryHeadingAlignment;
   productImageMode: CartaProductImageMode;
+  categoryImageModes: Record<string, CartaProductImageMode>;
   categoryImageSelections: Record<string, string>;
   categoryImagePositions: Record<string, CartaCategoryImagePosition>;
   categoryImageSizes: Record<string, CartaCategoryImageSize>;
+  productImagePositions: Record<string, CartaProductImagePosition>;
   themeMode: string | null;
   primaryColor: string | null;
   secondaryColor: string | null;

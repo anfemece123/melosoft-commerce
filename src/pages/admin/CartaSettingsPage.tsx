@@ -43,7 +43,7 @@ import { domainsService } from '@/features/domains/domainsService';
 import { generateQrCodeDataUrl } from '@/lib/qrcode';
 import { notify } from '@/lib/notifications';
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
-import type { PublicCartaCategory, PublicCartaPage } from '@/features/carta/carta.types';
+import type { CartaProductImagePosition, PublicCartaCategory, PublicCartaPage } from '@/features/carta/carta.types';
 import type { Store, StoreTheme } from '@/features/stores/stores.types';
 import type { StoreDomain } from '@/features/domains/domains.types';
 import type { PublicStoreCategory } from '@/types/common.types';
@@ -71,9 +71,11 @@ const EMPTY_FORM: StoreCartaFormValues = {
   showProductDescriptions: true,
   categoryHeadingAlignment: 'center',
   productImageMode: 'all',
+  categoryImageModes: {},
   categoryImageSelections: {},
   categoryImagePositions: {},
   categoryImageSizes: {},
+  productImagePositions: {},
 };
 
 function sortBySavedOrder<T extends { id: string }>(items: T[], savedOrder: string[]): T[] {
@@ -91,47 +93,84 @@ function sortBySavedOrder<T extends { id: string }>(items: T[], savedOrder: stri
 
 interface CartaPriceEditingProps {
   priceDrafts: Record<string, string>;
+  showProductImagePosition: boolean;
+  productImagePosition: CartaProductImagePosition | undefined;
   onCartaPriceChange: (productId: string, value: string) => void;
   onCartaPriceBlur: (productId: string) => void;
   onCartaPriceReset: (productId: string) => void;
+  onProductImagePositionChange: (productId: string, value: CartaProductImagePosition | null) => void;
 }
 
 function SortableProductRow({
   product,
   currency,
   priceDrafts,
+  showProductImagePosition,
+  productImagePosition,
   onCartaPriceChange,
   onCartaPriceBlur,
   onCartaPriceReset,
+  onProductImagePositionChange,
 }: { product: Product; currency: string } & CartaPriceEditingProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: product.id });
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`flex flex-wrap items-center gap-3 rounded-xl border px-3 py-2.5 transition-shadow sm:flex-nowrap ${isDragging ? 'z-10 border-indigo-300 bg-indigo-50 shadow-lg' : 'border-gray-100 bg-white'}`}
+      className={`rounded-xl border px-3 py-2.5 transition-shadow ${isDragging ? 'z-10 border-indigo-300 bg-indigo-50 shadow-lg' : 'border-gray-100 bg-white'}`}
     >
-      <button type="button" {...attributes} {...listeners} aria-label={`Mover ${product.name}`} className="cursor-grab touch-none text-gray-300 hover:text-gray-500 active:cursor-grabbing">
-        <GripVertical className="h-4 w-4" />
-      </button>
-      {product.mainImageUrl ? <img src={product.mainImageUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" /> : <div className="h-10 w-10 shrink-0 rounded-lg bg-gray-100" />}
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-gray-800">{product.name}</p>
-        <p className={`mt-0.5 text-[11px] font-medium ${product.showInCarta && product.status === 'active' ? 'text-emerald-600' : 'text-amber-600'}`}>
-          {product.showInCarta && product.status === 'active' ? 'Visible en la carta' : 'No visible en la carta'}
-        </p>
+      <div className="flex flex-wrap items-center gap-3 sm:flex-nowrap">
+        <button type="button" {...attributes} {...listeners} aria-label={`Mover ${product.name}`} className="cursor-grab touch-none text-gray-300 hover:text-gray-500 active:cursor-grabbing">
+          <GripVertical className="h-4 w-4" />
+        </button>
+        {product.mainImageUrl ? <img src={product.mainImageUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" /> : <div className="h-10 w-10 shrink-0 rounded-lg bg-gray-100" />}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-gray-800">{product.name}</p>
+          <p className={`mt-0.5 text-[11px] font-medium ${product.showInCarta && product.status === 'active' ? 'text-emerald-600' : 'text-amber-600'}`}>
+            {product.showInCarta && product.status === 'active' ? 'Visible en la carta' : 'No visible en la carta'}
+          </p>
+        </div>
+        <CartaPriceEditor
+          productId={product.id}
+          productName={product.name}
+          currency={currency}
+          ecommercePrice={product.regularPrice}
+          cartaPrice={product.cartaPrice}
+          value={priceDrafts[product.id] ?? String(product.cartaPrice ?? product.regularPrice)}
+          onChange={(value) => onCartaPriceChange(product.id, value)}
+          onBlur={() => onCartaPriceBlur(product.id)}
+          onReset={() => onCartaPriceReset(product.id)}
+        />
       </div>
-      <CartaPriceEditor
-        productId={product.id}
-        productName={product.name}
-        currency={currency}
-        ecommercePrice={product.regularPrice}
-        cartaPrice={product.cartaPrice}
-        value={priceDrafts[product.id] ?? String(product.cartaPrice ?? product.regularPrice)}
-        onChange={(value) => onCartaPriceChange(product.id, value)}
-        onBlur={() => onCartaPriceBlur(product.id)}
-        onReset={() => onCartaPriceReset(product.id)}
-      />
+      {showProductImagePosition && product.mainImageUrl && (
+        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-2.5">
+          <div>
+            <p className="text-[11px] font-bold text-gray-700">Posición de imagen en la carta</p>
+            <p className="text-[10px] leading-4 text-gray-400">Este ajuste no cambia las imágenes del ecommerce.</p>
+          </div>
+          <div className="flex rounded-lg bg-gray-100 p-1">
+            {([
+              [null, 'Automática'],
+              ['left', 'Izquierda'],
+              ['right', 'Derecha'],
+            ] as const).map(([value, label]) => {
+              const selected = productImagePosition === undefined ? value === null : productImagePosition === value;
+              return (
+                <button
+                  key={value ?? 'auto'}
+                  type="button"
+                  onClick={() => onProductImagePositionChange(product.id, value)}
+                  aria-label={`${label} para la imagen de ${product.name}`}
+                  aria-pressed={selected}
+                  className={`rounded-md px-2 py-1.5 text-[10px] font-semibold transition ${selected ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -147,6 +186,9 @@ interface SortableCategoryCardProps {
   onCartaPriceChange: (productId: string, value: string) => void;
   onCartaPriceBlur: (productId: string) => void;
   onCartaPriceReset: (productId: string) => void;
+  showProductImagePositions: boolean;
+  productImagePositions: Record<string, CartaProductImagePosition>;
+  onProductImagePositionChange: (productId: string, value: CartaProductImagePosition | null) => void;
 }
 
 function SortableCategoryCard({
@@ -160,6 +202,9 @@ function SortableCategoryCard({
   onCartaPriceChange,
   onCartaPriceBlur,
   onCartaPriceReset,
+  showProductImagePositions,
+  productImagePositions,
+  onProductImagePositionChange,
 }: SortableCategoryCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: category.id });
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
@@ -206,9 +251,12 @@ function SortableCategoryCard({
                       product={product}
                       currency={currency}
                       priceDrafts={priceDrafts}
+                      showProductImagePosition={showProductImagePositions}
+                      productImagePosition={productImagePositions[product.id]}
                       onCartaPriceChange={onCartaPriceChange}
                       onCartaPriceBlur={onCartaPriceBlur}
                       onCartaPriceReset={onCartaPriceReset}
+                      onProductImagePositionChange={onProductImagePositionChange}
                     />
                   ))}
                 </div>
@@ -285,9 +333,11 @@ function buildPreviewPage(
     showProductDescriptions: values.showProductDescriptions,
     categoryHeadingAlignment: values.categoryHeadingAlignment,
     productImageMode: values.productImageMode,
+    categoryImageModes: values.categoryImageModes,
     categoryImageSelections: values.categoryImageSelections,
     categoryImagePositions: values.categoryImagePositions,
     categoryImageSizes: values.categoryImageSizes,
+    productImagePositions: values.productImagePositions,
     themeMode: storeTheme?.mode ?? null,
     primaryColor: storeTheme?.primaryColor ?? null,
     secondaryColor: storeTheme?.secondaryColor ?? null,
@@ -357,6 +407,9 @@ export function CartaSettingsPage() {
             showProductDescriptions: values.showProductDescriptions,
             categoryHeadingAlignment: values.categoryHeadingAlignment,
             productImageMode: values.productImageMode,
+            categoryImageModes: Object.fromEntries(
+              Object.entries(values.categoryImageModes).filter(([categoryId]) => categories.some((category) => category.id === categoryId))
+            ),
             categoryImageSelections: Object.fromEntries(
               Object.entries(values.categoryImageSelections).filter(([categoryId]) => categories.some((category) => category.id === categoryId))
             ),
@@ -365,6 +418,9 @@ export function CartaSettingsPage() {
             ),
             categoryImageSizes: Object.fromEntries(
               Object.entries(values.categoryImageSizes).filter(([categoryId]) => categories.some((category) => category.id === categoryId))
+            ),
+            productImagePositions: Object.fromEntries(
+              Object.entries(values.productImagePositions).filter(([productId]) => products.some((product) => product.id === productId))
             ),
           }),
           ...productsWithPriceChanges.map((product) => productsService.updateProductCartaPrice(product.id, product.cartaPrice)),
@@ -423,9 +479,11 @@ export function CartaSettingsPage() {
           showProductDescriptions: settings.showProductDescriptions,
           categoryHeadingAlignment: settings.categoryHeadingAlignment,
           productImageMode: settings.productImageMode,
+          categoryImageModes: settings.categoryImageModes,
           categoryImageSelections: settings.categoryImageSelections,
           categoryImagePositions: settings.categoryImagePositions,
           categoryImageSizes: settings.categoryImageSizes,
+          productImagePositions: settings.productImagePositions,
         } : EMPTY_FORM;
         formik.resetForm({ values });
         const publicationValues = {
@@ -585,6 +643,13 @@ export function CartaSettingsPage() {
     setCartaPriceDrafts((current) => ({ ...current, [productId]: String(product.regularPrice) }));
   }
 
+  function handleProductImagePositionChange(productId: string, value: CartaProductImagePosition | null) {
+    const nextPositions = { ...formik.values.productImagePositions };
+    if (value === null) delete nextPositions[productId];
+    else nextPositions[productId] = value;
+    void formik.setFieldValue('productImagePositions', nextPositions);
+  }
+
   const publicationDirty = publication.enabled !== savedPublication.enabled
     || publication.listedInStorefront !== savedPublication.listedInStorefront;
   const cartaPriceDirty = products.some(
@@ -701,8 +766,8 @@ export function CartaSettingsPage() {
                   <SwitchField id="carta-product-descriptions" label="Mostrar descripciones de platos" description="Ocúltalas si quieres una carta todavía más limpia." checked={formik.values.showProductDescriptions} onChange={(value) => void formik.setFieldValue('showProductDescriptions', value)} />
                 </div>
                 <div className="mt-4">
-                  <p className="text-xs font-semibold text-gray-700">Fotografías dentro de las categorías</p>
-                  <p className="mt-1 text-[11px] leading-4 text-gray-500">La portada se configura aparte y no cambia con esta opción.</p>
+                  <p className="text-xs font-semibold text-gray-700">Configuración general de fotografías</p>
+                  <p className="mt-1 text-[11px] leading-4 text-gray-500">Se aplicará a todas las categorías que no tengan una configuración propia. La portada se configura aparte.</p>
                   <div className="mt-2 overflow-hidden rounded-xl border border-gray-200 bg-white">
                     {([
                       ['all', 'Una por producto', 'Muestra la foto disponible de cada producto.'],
@@ -730,22 +795,23 @@ export function CartaSettingsPage() {
                     })}
                   </div>
                 </div>
-                {formik.values.productImageMode === 'first_per_category' && (
-                  <div className="mt-4 border-t border-gray-100 pt-4">
-                    <p className="text-xs font-semibold text-gray-700">Elige la imagen de cada categoría</p>
-                    <p className="mb-3 mt-1 text-[11px] leading-4 text-gray-500">Puedes usar la foto propia de la categoría o cualquiera de sus productos visibles.</p>
-                    <CartaCategoryImagePicker
-                      categories={categories}
-                      products={products}
-                      selections={formik.values.categoryImageSelections}
-                      positions={formik.values.categoryImagePositions}
-                      sizes={formik.values.categoryImageSizes}
-                      onChange={(value) => void formik.setFieldValue('categoryImageSelections', value)}
-                      onPositionsChange={(value) => void formik.setFieldValue('categoryImagePositions', value)}
-                      onSizesChange={(value) => void formik.setFieldValue('categoryImageSizes', value)}
-                    />
-                  </div>
-                )}
+                <div className="mt-4 border-t border-gray-100 pt-4">
+                  <p className="text-xs font-semibold text-gray-700">Personalizar por categoría</p>
+                  <p className="mb-3 mt-1 text-[11px] leading-4 text-gray-500">Cambia únicamente las categorías que lo necesiten. Por ejemplo, puedes dejar los platos con fotografía y mostrar Bebidas solo como una lista de texto y precios.</p>
+                  <CartaCategoryImagePicker
+                    categories={categories}
+                    products={products}
+                    defaultMode={formik.values.productImageMode}
+                    modes={formik.values.categoryImageModes}
+                    selections={formik.values.categoryImageSelections}
+                    positions={formik.values.categoryImagePositions}
+                    sizes={formik.values.categoryImageSizes}
+                    onModesChange={(value) => void formik.setFieldValue('categoryImageModes', value)}
+                    onChange={(value) => void formik.setFieldValue('categoryImageSelections', value)}
+                    onPositionsChange={(value) => void formik.setFieldValue('categoryImagePositions', value)}
+                    onSizesChange={(value) => void formik.setFieldValue('categoryImageSizes', value)}
+                  />
+                </div>
                 <div className="mt-4"><p className="mb-2 text-xs font-semibold text-gray-700">Alineación de categorías</p><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => void formik.setFieldValue('categoryHeadingAlignment', 'left')} className={`rounded-lg border px-3 py-2 text-xs font-semibold ${formik.values.categoryHeadingAlignment === 'left' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600'}`}>A la izquierda</button><button type="button" onClick={() => void formik.setFieldValue('categoryHeadingAlignment', 'center')} className={`rounded-lg border px-3 py-2 text-xs font-semibold ${formik.values.categoryHeadingAlignment === 'center' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-600'}`}>Centrada</button></div></div>
               </CardBody></Card>
             </aside>
@@ -761,7 +827,7 @@ export function CartaSettingsPage() {
           <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,650px)_minmax(0,1fr)]">
             <section>
               <Card><CardBody>
-                <div className="mb-5"><h2 className="text-base font-bold text-gray-900">Categorías, platos y precios</h2><p className="mt-1 text-sm leading-6 text-gray-500">Arrastra para ordenar y abre cada categoría para editar el precio exclusivo de la carta. Ningún cambio de precio afecta el ecommerce.</p></div>
+                <div className="mb-5"><h2 className="text-base font-bold text-gray-900">Categorías, platos y precios</h2><p className="mt-1 text-sm leading-6 text-gray-500">Arrastra para ordenar y abre cada categoría para editar el precio y la posición de cada imagen en la carta. Estos cambios no afectan el ecommerce.</p></div>
                 {categories.length === 0 ? (categoriesLoadFailed
                   ? <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-5 text-center"><p className="text-sm font-semibold text-amber-800">No fue posible cargar las categorías</p><p className="mt-1 text-xs text-amber-700">Tus categorías no se han eliminado. Recarga el editor para volver a consultarlas.</p></div>
                   : <EmptyState icon={<UtensilsCrossed className="h-12 w-12" />} title="Aún no tienes categorías" description="Crea categorías de producto para organizar tu carta digital." />) : (
@@ -782,9 +848,12 @@ export function CartaSettingsPage() {
                               setOrderDirty(true);
                             }}
                             priceDrafts={cartaPriceDrafts}
+                            showProductImagePositions={(formik.values.categoryImageModes[category.id] ?? formik.values.productImageMode) === 'all'}
+                            productImagePositions={formik.values.productImagePositions}
                             onCartaPriceChange={handleCartaPriceChange}
                             onCartaPriceBlur={handleCartaPriceBlur}
                             onCartaPriceReset={handleCartaPriceReset}
+                            onProductImagePositionChange={handleProductImagePositionChange}
                           />
                         ))}
                       </div>
@@ -804,9 +873,12 @@ export function CartaSettingsPage() {
                               product={product}
                               currency={currency}
                               priceDrafts={cartaPriceDrafts}
+                              showProductImagePosition={formik.values.productImageMode === 'all'}
+                              productImagePosition={formik.values.productImagePositions[product.id]}
                               onCartaPriceChange={handleCartaPriceChange}
                               onCartaPriceBlur={handleCartaPriceBlur}
                               onCartaPriceReset={handleCartaPriceReset}
+                              onProductImagePositionChange={handleProductImagePositionChange}
                             />
                           ))}
                         </div>

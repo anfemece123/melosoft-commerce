@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import type { PublicCartaPage } from '@/features/carta/carta.types';
 import { CartaMenu } from './CartaMenu';
@@ -28,9 +28,11 @@ const page: PublicCartaPage = {
   showProductDescriptions: true,
   categoryHeadingAlignment: 'center',
   productImageMode: 'all',
+  categoryImageModes: {},
   categoryImageSelections: {},
   categoryImagePositions: {},
   categoryImageSizes: {},
+  productImagePositions: {},
   themeMode: 'light',
   primaryColor: '#4f46e5',
   secondaryColor: '#eef2ff',
@@ -61,6 +63,10 @@ const page: PublicCartaPage = {
 };
 
 describe('CartaMenu', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('renders one category at a time when the owner selects paginated navigation', () => {
     render(<CartaMenu page={page} theme={theme} />);
 
@@ -87,6 +93,42 @@ describe('CartaMenu', () => {
 
     expect(screen.getByText('Lomo de la casa')).toBeTruthy();
     expect(screen.queryByText('Croquetas')).toBeNull();
+  });
+
+  it('adds a translucent surface only when the category strip becomes sticky', () => {
+    let observerCallback: IntersectionObserverCallback | undefined;
+    let observerInstance: IntersectionObserver | undefined;
+    class IntersectionObserverMock {
+      readonly root = null;
+      readonly rootMargin = '0px';
+      readonly thresholds = [0];
+      disconnect = vi.fn();
+      observe = vi.fn();
+      takeRecords = vi.fn(() => []);
+      unobserve = vi.fn();
+
+      constructor(callback: IntersectionObserverCallback) {
+        observerCallback = callback;
+        observerInstance = this as unknown as IntersectionObserver;
+      }
+    }
+    vi.stubGlobal('IntersectionObserver', IntersectionObserverMock);
+
+    render(<CartaMenu page={page} theme={theme} />);
+    const navigation = screen.getByRole('navigation', { name: /Categorías de la carta/i });
+    expect(navigation.getAttribute('data-carta-category-nav-stuck')).toBe('false');
+    expect(navigation.className).not.toContain('backdrop-blur-xl');
+
+    act(() => {
+      observerCallback?.([{
+        boundingClientRect: { top: -1 } as DOMRectReadOnly,
+        isIntersecting: false,
+      } as IntersectionObserverEntry], observerInstance as IntersectionObserver);
+    });
+
+    expect(navigation.getAttribute('data-carta-category-nav-stuck')).toBe('true');
+    expect(navigation.className).toContain('backdrop-blur-xl');
+    expect(navigation.getAttribute('style')).toContain('linear-gradient');
   });
 
   it('filters dishes by name, description, or category without being limited by pagination', () => {
@@ -186,6 +228,42 @@ describe('CartaMenu', () => {
 
     expect(screen.queryByRole('img', { name: 'Entradas' })).toBeNull();
     expect(screen.queryByRole('img', { name: 'Croquetas' })).toBeNull();
+  });
+
+  it('supports a different image mode for each category', () => {
+    const mixedImages: PublicCartaPage = {
+      ...page,
+      navigationMode: 'continuous',
+      productImageMode: 'all',
+      categoryImageModes: { mains: 'none' },
+      categories: page.categories.map((category) => ({
+        ...category,
+        products: category.products.map((product) => ({ ...product, imageUrl: `https://example.com/${product.id}.jpg` })),
+      })),
+    };
+
+    render(<CartaMenu page={mixedImages} theme={theme} />);
+
+    expect(screen.getByRole('img', { name: 'Croquetas' })).toBeTruthy();
+    expect(screen.queryByRole('img', { name: 'Lomo de la casa' })).toBeNull();
+    expect(screen.getByText('Lomo de la casa')).toBeTruthy();
+  });
+
+  it('applies the chosen image side independently to each product', () => {
+    const positionedImages: PublicCartaPage = {
+      ...page,
+      navigationMode: 'continuous',
+      productImagePositions: { one: 'right', two: 'left' },
+      categories: page.categories.map((category) => ({
+        ...category,
+        products: category.products.map((product) => ({ ...product, imageUrl: `https://example.com/${product.id}.png` })),
+      })),
+    };
+
+    render(<CartaMenu page={positionedImages} theme={theme} />);
+
+    expect(screen.getByRole('img', { name: 'Croquetas' }).closest('article')?.getAttribute('data-carta-product-image-position')).toBe('right');
+    expect(screen.getByRole('img', { name: 'Lomo de la casa' }).closest('article')?.getAttribute('data-carta-product-image-position')).toBe('left');
   });
 
   it('does not accumulate large gaps between products in the per-product image mode', () => {

@@ -21,9 +21,11 @@ function row(overrides: Partial<PublicCartaPageRow>): PublicCartaPageRow {
     show_product_descriptions: true,
     category_heading_alignment: 'center',
     product_image_mode: 'all',
+    category_image_modes: {},
     category_image_selections: {},
     category_image_positions: {},
     category_image_sizes: {},
+    product_image_positions: {},
     theme_mode: 'light',
     primary_color: '#4f46e5',
     secondary_color: '#eef2ff',
@@ -59,9 +61,11 @@ describe('carta mapper', () => {
     expect(page?.navigationMode).toBe('continuous');
     expect(page?.coverImageUrl).toBeNull();
     expect(page?.coverBackgroundImageUrl).toBeNull();
+    expect(page?.categoryImageModes).toEqual({});
     expect(page?.categoryImageSelections).toEqual({});
     expect(page?.categoryImagePositions).toEqual({});
     expect(page?.categoryImageSizes).toEqual({});
+    expect(page?.productImagePositions).toEqual({});
     expect(page?.categories.map((category) => category.name)).toEqual(['Primera', 'Segunda']);
     expect(page?.categories[0].products.map((product) => product.name)).toEqual(['A', 'B']);
     expect(page?.categories[0].description).toBe('Descripción');
@@ -96,15 +100,19 @@ describe('carta mapper', () => {
   it('preserves the image explicitly selected for each category', () => {
     const page = mapPublicCartaPageRowsToPublicCartaPage([
       row({
+        category_image_modes: { category: 'first_per_category', invalid: 'unknown' },
         category_image_selections: { category: 'product:chosen-product' },
         category_image_positions: { category: 'below_heading' },
         category_image_sizes: { category: 'small' },
+        product_image_positions: { product: 'right', invalid: 'center' },
       }),
     ]);
 
+    expect(page?.categoryImageModes).toEqual({ category: 'first_per_category' });
     expect(page?.categoryImageSelections).toEqual({ category: 'product:chosen-product' });
     expect(page?.categoryImagePositions).toEqual({ category: 'below_heading' });
     expect(page?.categoryImageSizes).toEqual({ category: 'small' });
+    expect(page?.productImagePositions).toEqual({ product: 'right' });
   });
 
   it('hydrates missing carta images from the product gallery source of truth', () => {

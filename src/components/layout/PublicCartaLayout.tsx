@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Outlet, matchPath, useLocation } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
 import { storesService } from '@/features/stores/storesService';
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
+import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import {
   isStorefrontHostnameMode,
   useStorefrontDomain,
@@ -22,35 +22,25 @@ export function PublicCartaLayout() {
   const storeSlug = matchedRoute?.params.storeSlug ??
     (isStorefrontHostnameMode(domainMode) ? domainResolution?.storeSlug ?? null : null);
 
-  const [branding, setBranding] = useState<PublicStorePage | null>(() =>
-    storeSlug ? readCachedPublicStoreBranding(storeSlug) : null
-  );
-  const [loading, setLoading] = useState(Boolean(storeSlug && !branding));
+  const cachedBranding = storeSlug ? readCachedPublicStoreBranding(storeSlug) : null;
+  const [brandingResult, setBrandingResult] = useState<{ storeSlug: string; branding: PublicStorePage | null } | null>(null);
+  const resultMatchesStore = Boolean(storeSlug && brandingResult?.storeSlug === storeSlug);
+  const branding = resultMatchesStore ? brandingResult?.branding ?? null : cachedBranding;
+  const loading = Boolean(storeSlug && !cachedBranding && !resultMatchesStore);
 
   useEffect(() => {
-    if (!storeSlug) {
-      setBranding(null);
-      setLoading(false);
-      return;
-    }
+    if (!storeSlug) return;
 
     const cached = readCachedPublicStoreBranding(storeSlug);
-    if (cached) {
-      setBranding(cached);
-      setLoading(false);
-    } else {
-      setLoading(true);
-    }
-
     let cancelled = false;
     storesService.getPublicStoreBySlug(storeSlug)
       .then((data) => {
         if (cancelled) return;
-        setBranding(data);
+        setBrandingResult({ storeSlug, branding: data });
         writeCachedPublicStoreBranding(storeSlug, data);
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+      .catch(() => {
+        if (!cancelled) setBrandingResult({ storeSlug, branding: cached });
       });
 
     return () => {
@@ -70,14 +60,15 @@ export function PublicCartaLayout() {
 
   if (loading) {
     return (
-      <div
-        role="status"
-        aria-busy="true"
-        className="flex min-h-screen items-center justify-center"
-        style={{ backgroundColor: theme.background }}
-      >
-        <Loader2 className="h-7 w-7 animate-spin motion-reduce:animate-none" style={{ color: theme.primary }} aria-hidden="true" />
-      </div>
+      <LoadingScreen
+        label=""
+        brandName={branding?.storeName ?? ''}
+        brandLogoUrl={branding?.logoUrl}
+        backgroundColor={theme.background}
+        textColor={theme.text}
+        accentColor={theme.primary}
+        markBackgroundColor={theme.surface}
+      />
     );
   }
 

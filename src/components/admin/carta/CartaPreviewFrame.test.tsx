@@ -26,9 +26,11 @@ const page: PublicCartaPage = {
   showProductDescriptions: true,
   categoryHeadingAlignment: 'center',
   productImageMode: 'all',
+  categoryImageModes: {},
   categoryImageSelections: {},
   categoryImagePositions: {},
   categoryImageSizes: {},
+  productImagePositions: {},
   themeMode: 'light',
   primaryColor: '#4f46e5',
   secondaryColor: '#eef2ff',
@@ -61,5 +63,20 @@ describe('CartaPreviewFrame', () => {
     await waitFor(() => {
       expect(iframe.contentDocument?.body.textContent).toContain('Hamburguesa especial');
     });
+
+    const scrollViewport = document.querySelector('[data-storefront-mobile-clip-mode="scroll"]') as HTMLElement | null;
+    expect(scrollViewport?.style.overflowY).toBe('auto');
+    expect(scrollViewport?.getAttribute('data-storefront-mobile-max-height')).toBe('640');
+  });
+
+  it('lets the desktop preview scroll through the carta without a bottom obstruction', () => {
+    vi.stubGlobal('ResizeObserver', ResizeObserverMock);
+    const theme = buildStorefrontTheme({ primaryColor: '#4f46e5', backgroundColor: '#ffffff', textColor: '#111827' });
+    render(<CartaPreviewFrame page={page} theme={theme} device="desktop" onDeviceChange={() => undefined} />);
+
+    const scrollViewport = document.querySelector('[data-carta-preview-scroll="desktop"]');
+    expect(scrollViewport?.className).toContain('max-h-[640px]');
+    expect(scrollViewport?.className).toContain('overflow-y-auto');
+    expect(screen.queryByText(/Vista parcial de la carta/i)).toBeNull();
   });
 });

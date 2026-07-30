@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Search, UtensilsCrossed, X } from 'lucide-react';
 import type { PublicCartaCategory, PublicCartaPage } from '@/features/carta/carta.types';
 import type { StorefrontTheme } from '@/components/public/storefront/storefrontTheme';
@@ -196,9 +196,9 @@ function CategoryHeading({
   );
 }
 
-function resolveCategoryImageUrl(category: PublicCartaCategory, page: PublicCartaPage): string | null {
-  if (page.productImageMode === 'none') return null;
-  if (page.productImageMode === 'all') return category.imageUrl;
+function resolveCategoryImageUrl(category: PublicCartaCategory, page: PublicCartaPage, imageMode: PublicCartaPage['productImageMode']): string | null {
+  if (imageMode === 'none') return null;
+  if (imageMode === 'all') return category.imageUrl;
 
   const selection = category.id ? page.categoryImageSelections[category.id] : undefined;
   if (selection === 'category' && category.imageUrl) return category.imageUrl;
@@ -214,9 +214,10 @@ function resolveCategoryImageUrl(category: PublicCartaCategory, page: PublicCart
 function CategorySection({ category, index, page, theme }: { category: PublicCartaCategory; index: number; page: PublicCartaPage; theme: StorefrontTheme }) {
   const cardStyle = page.templateKey;
   const isSignature = page.templateKey === 'signature';
-  const showProductImages = page.productImageMode === 'all';
-  const categoryImageUrl = resolveCategoryImageUrl(category, page);
-  const headingImageUrl = page.productImageMode === 'all' ? categoryImageUrl : null;
+  const productImageMode = category.id ? page.categoryImageModes[category.id] ?? page.productImageMode : page.productImageMode;
+  const showProductImages = productImageMode === 'all';
+  const categoryImageUrl = resolveCategoryImageUrl(category, page, productImageMode);
+  const headingImageUrl = productImageMode === 'all' ? categoryImageUrl : null;
   const categoryImagePosition = category.id ? page.categoryImagePositions[category.id] ?? 'beside_right' : 'beside_right';
   const categoryImageSize = category.id ? page.categoryImageSizes[category.id] ?? 'medium' : 'medium';
   const imageBesideProducts = categoryImagePosition === 'beside_left' || categoryImagePosition === 'beside_right';
@@ -281,7 +282,8 @@ function CategorySection({ category, index, page, theme }: { category: PublicCar
       variant={cardStyle}
       showDescription={page.showProductDescriptions}
       showImage={showProductImages}
-      compact={page.productImageMode === 'first_per_category' && imageBesideProducts && Boolean(categoryImageUrl)}
+      compact={productImageMode === 'first_per_category' && imageBesideProducts && Boolean(categoryImageUrl)}
+      imagePosition={page.productImagePositions[product.id]}
     />
   ));
   return (
@@ -290,14 +292,14 @@ function CategorySection({ category, index, page, theme }: { category: PublicCar
       className={`relative isolate scroll-mt-24 overflow-hidden pt-0 ${isSignature ? 'pb-6 sm:pb-8 lg:pb-9' : 'pb-5 sm:pb-6'}`}
     >
       <div className="relative z-10">
-        {page.productImageMode === 'first_per_category' && categoryImagePosition === 'above_heading' && (
+        {productImageMode === 'first_per_category' && categoryImagePosition === 'above_heading' && (
           <div className="mb-7 sm:mb-9">{renderCategoryImage(false)}</div>
         )}
         <CategoryHeading category={category} categoryImageUrl={headingImageUrl} page={page} theme={theme} />
-        {page.productImageMode === 'first_per_category' && categoryImagePosition === 'below_heading' && (
+        {productImageMode === 'first_per_category' && categoryImagePosition === 'below_heading' && (
           <div className="mb-7 sm:mb-9">{renderCategoryImage(false)}</div>
         )}
-        {page.productImageMode === 'first_per_category' ? (
+        {productImageMode === 'first_per_category' ? (
           imageBesideProducts && categoryImageUrl ? (
             <div className={`relative grid items-start gap-4 sm:gap-6 ${sideGridClass} lg:gap-10`}>
               <div className={categoryImagePosition === 'beside_right' ? 'order-2' : 'order-1'}>{renderCategoryImage(true)}</div>
@@ -329,7 +331,9 @@ function CategorySection({ category, index, page, theme }: { category: PublicCar
 export function CartaMenu({ page, theme, preview = false }: CartaMenuProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
+  const [categoryNavStuck, setCategoryNavStuck] = useState(false);
   const categoryRefs = useRef(new Map<string, HTMLElement>());
+  const categoryNavSentinelRef = useRef<HTMLDivElement>(null);
   const categories = page.categories;
   const safeActiveIndex = Math.min(activeIndex, Math.max(0, categories.length - 1));
   const gradientAccent = resolveCartaGradientAccent(theme);
@@ -350,6 +354,18 @@ export function CartaMenu({ page, theme, preview = false }: CartaMenuProps) {
         .filter((category) => category.products.length > 0)
     : categories;
   const searchResultCount = matchingCategories.reduce((total, category) => total + category.products.length, 0);
+
+  useEffect(() => {
+    const sentinel = categoryNavSentinelRef.current;
+    if (!sentinel || typeof IntersectionObserver === 'undefined') return undefined;
+
+    const observer = new IntersectionObserver(([entry]) => {
+      setCategoryNavStuck(!entry.isIntersecting && entry.boundingClientRect.top < 0);
+    }, { threshold: 0 });
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, []);
 
   function selectCategory(index: number) {
     setActiveIndex(index);
@@ -440,33 +456,43 @@ export function CartaMenu({ page, theme, preview = false }: CartaMenuProps) {
       )}
 
       {categories.length > 0 && (
-        <nav
-          aria-label="Categorías de la carta"
-          className="pointer-events-none sticky top-0 z-30"
-        >
-          <div className={`no-scrollbar pointer-events-auto mx-auto w-full ${STOREFRONT_CONTAINER_CLASS} overflow-x-auto px-4 py-3 sm:px-6`}>
-            <div data-carta-category-strip className="flex w-max min-w-full justify-center gap-2">
-              {categories.map((category, index) => {
-                const active = index === safeActiveIndex;
-                return (
-                  <button
-                    key={category.id ?? 'uncategorized'}
-                    type="button"
-                    onClick={() => selectCategory(index)}
-                    className="shrink-0 rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition-all"
-                    style={active
-                      ? { backgroundColor: theme.primary, borderColor: theme.primary, color: '#fff', boxShadow: `0 8px 24px ${withAlpha(theme.primary, 0.24)}` }
-                      : theme.mode === 'dark'
-                        ? { backgroundColor: withAlpha(theme.text, 0.94), borderColor: withAlpha(theme.text, 0.94), color: theme.background }
-                        : { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text }}
-                  >
-                    {category.name}
-                  </button>
-                );
-              })}
+        <>
+          <div ref={categoryNavSentinelRef} className="h-px" aria-hidden="true" data-carta-category-sentinel />
+          <nav
+            aria-label="Categorías de la carta"
+            data-carta-category-nav-stuck={categoryNavStuck ? 'true' : 'false'}
+            className={`pointer-events-none sticky top-0 z-30 border-b transition-[background-color,border-color,box-shadow,backdrop-filter] duration-300 ${categoryNavStuck ? 'backdrop-blur-xl' : 'border-transparent'}`}
+            style={categoryNavStuck ? {
+              background: `linear-gradient(180deg, ${withAlpha(theme.background, 0.92)} 0%, ${withAlpha(theme.background, 0.78)} 100%)`,
+              borderColor: withAlpha(theme.text, 0.09),
+              boxShadow: `0 10px 30px ${withAlpha(theme.text, 0.08)}`,
+              WebkitBackdropFilter: 'blur(18px) saturate(140%)',
+            } : undefined}
+          >
+            <div className={`no-scrollbar pointer-events-auto mx-auto w-full ${STOREFRONT_CONTAINER_CLASS} overflow-x-auto px-4 py-3 sm:px-6`}>
+              <div data-carta-category-strip className="flex w-max min-w-full justify-center gap-2">
+                {categories.map((category, index) => {
+                  const active = index === safeActiveIndex;
+                  return (
+                    <button
+                      key={category.id ?? 'uncategorized'}
+                      type="button"
+                      onClick={() => selectCategory(index)}
+                      className="shrink-0 rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition-all"
+                      style={active
+                        ? { backgroundColor: theme.primary, borderColor: theme.primary, color: '#fff', boxShadow: `0 8px 24px ${withAlpha(theme.primary, 0.24)}` }
+                        : theme.mode === 'dark'
+                          ? { backgroundColor: withAlpha(theme.text, 0.94), borderColor: withAlpha(theme.text, 0.94), color: theme.background }
+                          : { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text }}
+                    >
+                      {category.name}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        </nav>
+          </nav>
+        </>
       )}
 
       <main className={`mx-auto w-full ${STOREFRONT_CONTAINER_CLASS} px-4 pb-12 sm:px-6 sm:pb-20`}>

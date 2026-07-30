@@ -4,6 +4,7 @@ import { cartaService } from '@/features/carta/cartaService';
 import type { PublicCartaPage } from '@/features/carta/carta.types';
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import { CartaMenu } from '@/components/public/carta/CartaMenu';
+import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
 
 /** Sets/restores a robots noindex tag while `active` is true. Only used
@@ -65,9 +66,15 @@ export function StoreCartaPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center" style={{ color: theme.mutedText }}>
-        Cargando carta…
-      </div>
+      <LoadingScreen
+        label=""
+        brandName={branding?.storeName ?? ''}
+        brandLogoUrl={branding?.logoUrl}
+        backgroundColor={theme.background}
+        textColor={theme.text}
+        accentColor={theme.primary}
+        markBackgroundColor={theme.surface}
+      />
     );
   }
 

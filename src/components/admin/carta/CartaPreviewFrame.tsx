@@ -16,11 +16,14 @@ interface CartaPreviewFrameProps {
 
 export function CartaPreviewFrame({ page, theme, device, onDeviceChange }: CartaPreviewFrameProps) {
   const previewProducts = page.categories.flatMap((category) => category.products);
-  const imageCount = page.productImageMode === 'none'
-    ? 0
-    : page.productImageMode === 'first_per_category'
-      ? page.categories.filter((category) => category.imageUrl || category.products.some((product) => product.imageUrl)).length
-      : previewProducts.filter((product) => product.imageUrl).length;
+  const imageCount = page.categories.reduce((total, category) => {
+    const imageMode = category.id ? page.categoryImageModes[category.id] ?? page.productImageMode : page.productImageMode;
+    if (imageMode === 'none') return total;
+    if (imageMode === 'first_per_category') {
+      return total + Number(Boolean(category.imageUrl || category.products.some((product) => product.imageUrl)));
+    }
+    return total + category.products.filter((product) => product.imageUrl).length;
+  }, 0);
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-4 py-3">
@@ -54,28 +57,25 @@ export function CartaPreviewFrame({ page, theme, device, onDeviceChange }: Carta
 
       <div className="min-h-[420px] bg-gray-100 p-3 sm:p-5">
         {device === 'mobile' ? (
-          <div className="flex justify-center">
+          <div className="flex justify-center" data-carta-preview-scroll="mobile">
             <StorefrontMobileFrame
               backgroundColor={theme.background}
               scale={0.78}
-              maxHeight={520}
-              clipMode="fade"
+              maxHeight={640}
+              clipMode="scroll"
               allowInteractions
             >
               <CartaMenu page={page} theme={theme} preview />
             </StorefrontMobileFrame>
           </div>
         ) : (
-          <div className="relative max-h-[520px] overflow-hidden rounded-xl border border-gray-200 shadow-sm">
+          <div
+            className="relative max-h-[640px] overflow-x-hidden overflow-y-auto rounded-xl border border-gray-200 shadow-sm"
+            data-carta-preview-scroll="desktop"
+          >
             <StorefrontViewportScaler backgroundColor={theme.background}>
               <CartaMenu page={page} theme={theme} preview />
             </StorefrontViewportScaler>
-            <div
-              className="pointer-events-none absolute inset-x-0 bottom-0 flex h-20 items-end justify-center pb-3"
-              style={{ background: `linear-gradient(to top, ${theme.background}, transparent)` }}
-            >
-              <span className="rounded-full bg-white/90 px-3 py-1 text-[10px] font-semibold text-gray-500 shadow-sm ring-1 ring-gray-200">Vista parcial de la carta</span>
-            </div>
           </div>
         )}
       </div>
