@@ -287,7 +287,7 @@ function CategorySection({ category, index, page, theme }: { category: PublicCar
   return (
     <section
       data-carta-category={category.id ?? 'uncategorized'}
-      className={`relative isolate scroll-mt-24 overflow-hidden ${isSignature ? 'py-12 sm:py-16 lg:py-20' : 'py-8 sm:py-12'}`}
+      className={`relative isolate scroll-mt-24 overflow-hidden pt-0 ${isSignature ? 'pb-6 sm:pb-8 lg:pb-9' : 'pb-5 sm:pb-6'}`}
     >
       <div className="relative z-10">
         {page.productImageMode === 'first_per_category' && categoryImagePosition === 'above_heading' && (

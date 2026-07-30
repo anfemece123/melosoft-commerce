@@ -197,6 +197,18 @@ describe('CartaMenu', () => {
     expect(productGrids.every((grid) => !grid.className.includes('gap-5'))).toBe(true);
   });
 
+  it('keeps the vertical separation between consecutive categories compact', () => {
+    render(<CartaMenu page={{ ...page, navigationMode: 'continuous' }} theme={theme} />);
+
+    const categorySections = Array.from(document.querySelectorAll('[data-carta-category]'));
+    expect(categorySections).toHaveLength(2);
+    expect(categorySections.every((section) => section.className.includes('pt-0'))).toBe(true);
+    expect(categorySections.every((section) => section.className.includes('pb-6'))).toBe(true);
+    expect(categorySections.every((section) => !section.className.split(' ').some((className) => className.startsWith('py-')))).toBe(true);
+    expect(categorySections.every((section) => !section.className.includes('py-12'))).toBe(true);
+    expect(categorySections.every((section) => !section.className.includes('lg:py-20'))).toBe(true);
+  });
+
   it('keeps a right-side category image smaller and right-aligned on mobile', () => {
     const category = {
       ...page.categories[0],
