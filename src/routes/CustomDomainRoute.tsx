@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useOutletContext } from 'react-router-dom';
 import { Globe2, Loader2 } from 'lucide-react';
 import {
   isStorefrontHostnameMode,
@@ -30,6 +30,7 @@ function useNoIndex(active: boolean) {
 
 export function CustomDomainRoute() {
   const { mode, hostname } = useStorefrontDomain();
+  const parentOutletContext = useOutletContext<unknown>();
   const notFound = mode !== 'loading' && !isStorefrontHostnameMode(mode);
   useNoIndex(notFound);
 
@@ -64,5 +65,5 @@ export function CustomDomainRoute() {
     );
   }
 
-  return <Outlet />;
+  return <Outlet context={parentOutletContext} />;
 }

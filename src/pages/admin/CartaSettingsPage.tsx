@@ -25,6 +25,7 @@ import { CartaPreviewFrame, type CartaPreviewDevice } from '@/components/admin/c
 import { CartaNavigationPicker, CartaTemplatePicker } from '@/components/admin/carta/CartaTemplatePicker';
 import { CartaCoverEditor } from '@/components/admin/carta/CartaCoverEditor';
 import { CartaCategoryImagePicker } from '@/components/admin/carta/CartaCategoryImagePicker';
+import { CartaPriceEditor } from '@/components/admin/carta/CartaPriceEditor';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -41,7 +42,6 @@ import { storesService } from '@/features/stores/storesService';
 import { domainsService } from '@/features/domains/domainsService';
 import { generateQrCodeDataUrl } from '@/lib/qrcode';
 import { notify } from '@/lib/notifications';
-import { formatCurrency } from '@/utils/formatCurrency';
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import type { PublicCartaCategory, PublicCartaPage } from '@/features/carta/carta.types';
 import type { Store, StoreTheme } from '@/features/stores/stores.types';
@@ -89,13 +89,27 @@ function sortBySavedOrder<T extends { id: string }>(items: T[], savedOrder: stri
   });
 }
 
-function SortableProductRow({ product, currency }: { product: Product; currency: string }) {
+interface CartaPriceEditingProps {
+  priceDrafts: Record<string, string>;
+  onCartaPriceChange: (productId: string, value: string) => void;
+  onCartaPriceBlur: (productId: string) => void;
+  onCartaPriceReset: (productId: string) => void;
+}
+
+function SortableProductRow({
+  product,
+  currency,
+  priceDrafts,
+  onCartaPriceChange,
+  onCartaPriceBlur,
+  onCartaPriceReset,
+}: { product: Product; currency: string } & CartaPriceEditingProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: product.id });
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-shadow ${isDragging ? 'z-10 border-indigo-300 bg-indigo-50 shadow-lg' : 'border-gray-100 bg-white'}`}
+      className={`flex flex-wrap items-center gap-3 rounded-xl border px-3 py-2.5 transition-shadow sm:flex-nowrap ${isDragging ? 'z-10 border-indigo-300 bg-indigo-50 shadow-lg' : 'border-gray-100 bg-white'}`}
     >
       <button type="button" {...attributes} {...listeners} aria-label={`Mover ${product.name}`} className="cursor-grab touch-none text-gray-300 hover:text-gray-500 active:cursor-grabbing">
         <GripVertical className="h-4 w-4" />
@@ -107,7 +121,17 @@ function SortableProductRow({ product, currency }: { product: Product; currency:
           {product.showInCarta && product.status === 'active' ? 'Visible en la carta' : 'No visible en la carta'}
         </p>
       </div>
-      <span className="shrink-0 text-xs font-semibold text-gray-600">{formatCurrency(product.cartaPrice ?? product.regularPrice, 'es-CO', currency)}</span>
+      <CartaPriceEditor
+        productId={product.id}
+        productName={product.name}
+        currency={currency}
+        ecommercePrice={product.regularPrice}
+        cartaPrice={product.cartaPrice}
+        value={priceDrafts[product.id] ?? String(product.cartaPrice ?? product.regularPrice)}
+        onChange={(value) => onCartaPriceChange(product.id, value)}
+        onBlur={() => onCartaPriceBlur(product.id)}
+        onReset={() => onCartaPriceReset(product.id)}
+      />
     </div>
   );
 }
@@ -119,9 +143,24 @@ interface SortableCategoryCardProps {
   expanded: boolean;
   onToggle: () => void;
   onProductsReordered: (products: Product[]) => void;
+  priceDrafts: Record<string, string>;
+  onCartaPriceChange: (productId: string, value: string) => void;
+  onCartaPriceBlur: (productId: string) => void;
+  onCartaPriceReset: (productId: string) => void;
 }
 
-function SortableCategoryCard({ category, products, currency, expanded, onToggle, onProductsReordered }: SortableCategoryCardProps) {
+function SortableCategoryCard({
+  category,
+  products,
+  currency,
+  expanded,
+  onToggle,
+  onProductsReordered,
+  priceDrafts,
+  onCartaPriceChange,
+  onCartaPriceBlur,
+  onCartaPriceReset,
+}: SortableCategoryCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: category.id });
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -160,7 +199,19 @@ function SortableCategoryCard({ category, products, currency, expanded, onToggle
           {products.length === 0 ? <p className="py-3 text-center text-sm text-gray-400">Esta categoría todavía no tiene productos.</p> : (
             <DndContext sensors={sensors} onDragEnd={handleProductDragEnd}>
               <SortableContext items={products.map((product) => product.id)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-2">{products.map((product) => <SortableProductRow key={product.id} product={product} currency={currency} />)}</div>
+                <div className="space-y-2">
+                  {products.map((product) => (
+                    <SortableProductRow
+                      key={product.id}
+                      product={product}
+                      currency={currency}
+                      priceDrafts={priceDrafts}
+                      onCartaPriceChange={onCartaPriceChange}
+                      onCartaPriceBlur={onCartaPriceBlur}
+                      onCartaPriceReset={onCartaPriceReset}
+                    />
+                  ))}
+                </div>
               </SortableContext>
             </DndContext>
           )}
@@ -263,6 +314,8 @@ export function CartaSettingsPage() {
   const [orderDirty, setOrderDirty] = useState(false);
   const [publication, setPublication] = useState<CartaPublicationState>({ enabled: false, listedInStorefront: false });
   const [savedPublication, setSavedPublication] = useState<CartaPublicationState>({ enabled: false, listedInStorefront: false });
+  const [savedCartaPrices, setSavedCartaPrices] = useState<Record<string, number | null>>({});
+  const [cartaPriceDrafts, setCartaPriceDrafts] = useState<Record<string, string>>({});
   const [loadIssues, setLoadIssues] = useState<string[]>([]);
   const [coverImageUploading, setCoverImageUploading] = useState(false);
   const [coverImageError, setCoverImageError] = useState<string | null>(null);
@@ -280,38 +333,45 @@ export function CartaSettingsPage() {
         ...categories.flatMap((category) => products.filter((product) => product.categoryId === category.id).map((product) => product.id)),
         ...products.filter((product) => !product.categoryId).map((product) => product.id),
       ];
+      const productsWithPriceChanges = products.filter(
+        (product) => (savedCartaPrices[product.id] ?? null) !== product.cartaPrice
+      );
       try {
-        await cartaService.upsertCartaSettings({
-          storeId,
-          enabled: publication.enabled,
-          listedInStorefront: publication.listedInStorefront,
-          title: values.title || null,
-          subtitle: values.subtitle || null,
-          templateKey: values.templateKey,
-          navigationMode: values.navigationMode,
-          showCategoryDescriptions: values.showCategoryDescriptions,
-          categoryOrder: categories.map((category) => category.id),
-          productOrder,
-          coverLayout: values.coverLayout,
-          coverProductIds: values.coverProductIds,
-          coverImageUrl: values.coverImageUrl,
-          coverBackgroundImageUrl: values.coverBackgroundImageUrl,
-          showLogo: values.showLogo,
-          showProductDescriptions: values.showProductDescriptions,
-          categoryHeadingAlignment: values.categoryHeadingAlignment,
-          productImageMode: values.productImageMode,
-          categoryImageSelections: Object.fromEntries(
-            Object.entries(values.categoryImageSelections).filter(([categoryId]) => categories.some((category) => category.id === categoryId))
-          ),
-          categoryImagePositions: Object.fromEntries(
-            Object.entries(values.categoryImagePositions).filter(([categoryId]) => categories.some((category) => category.id === categoryId))
-          ),
-          categoryImageSizes: Object.fromEntries(
-            Object.entries(values.categoryImageSizes).filter(([categoryId]) => categories.some((category) => category.id === categoryId))
-          ),
-        });
+        await Promise.all([
+          cartaService.upsertCartaSettings({
+            storeId,
+            enabled: publication.enabled,
+            listedInStorefront: publication.listedInStorefront,
+            title: values.title || null,
+            subtitle: values.subtitle || null,
+            templateKey: values.templateKey,
+            navigationMode: values.navigationMode,
+            showCategoryDescriptions: values.showCategoryDescriptions,
+            categoryOrder: categories.map((category) => category.id),
+            productOrder,
+            coverLayout: values.coverLayout,
+            coverProductIds: values.coverProductIds,
+            coverImageUrl: values.coverImageUrl,
+            coverBackgroundImageUrl: values.coverBackgroundImageUrl,
+            showLogo: values.showLogo,
+            showProductDescriptions: values.showProductDescriptions,
+            categoryHeadingAlignment: values.categoryHeadingAlignment,
+            productImageMode: values.productImageMode,
+            categoryImageSelections: Object.fromEntries(
+              Object.entries(values.categoryImageSelections).filter(([categoryId]) => categories.some((category) => category.id === categoryId))
+            ),
+            categoryImagePositions: Object.fromEntries(
+              Object.entries(values.categoryImagePositions).filter(([categoryId]) => categories.some((category) => category.id === categoryId))
+            ),
+            categoryImageSizes: Object.fromEntries(
+              Object.entries(values.categoryImageSizes).filter(([categoryId]) => categories.some((category) => category.id === categoryId))
+            ),
+          }),
+          ...productsWithPriceChanges.map((product) => productsService.updateProductCartaPrice(product.id, product.cartaPrice)),
+        ]);
         formik.resetForm({ values: { ...values, ...publication } });
         setSavedPublication(publication);
+        setSavedCartaPrices(Object.fromEntries(products.map((product) => [product.id, product.cartaPrice])));
         setOrderDirty(false);
         notify.success('Carta digital guardada y actualizada');
       } catch (error) {
@@ -386,7 +446,12 @@ export function CartaSettingsPage() {
           ...product,
           mainImageUrl: primaryImageByProduct.get(product.id) ?? product.mainImageUrl,
         }));
-        setProducts(sortBySavedOrder(productsWithGalleryImages, settings?.productOrder ?? []));
+        const sortedProducts = sortBySavedOrder(productsWithGalleryImages, settings?.productOrder ?? []);
+        setProducts(sortedProducts);
+        setSavedCartaPrices(Object.fromEntries(sortedProducts.map((product) => [product.id, product.cartaPrice])));
+        setCartaPriceDrafts(Object.fromEntries(
+          sortedProducts.map((product) => [product.id, String(product.cartaPrice ?? product.regularPrice)])
+        ));
       } catch (error) {
         notify.fromError(error);
       } finally {
@@ -468,9 +533,64 @@ export function CartaSettingsPage() {
     setOrderDirty(true);
   }
 
+  function handleUncategorizedProductDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const currentUncategorized = products.filter((product) => !product.categoryId);
+    const oldIndex = currentUncategorized.findIndex((product) => product.id === active.id);
+    const newIndex = currentUncategorized.findIndex((product) => product.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(currentUncategorized, oldIndex, newIndex);
+    let replacementIndex = 0;
+    setProducts((current) => current.map((product) => (
+      !product.categoryId ? reordered[replacementIndex++] : product
+    )));
+    setOrderDirty(true);
+  }
+
+  function handleCartaPriceChange(productId: string, value: string) {
+    setCartaPriceDrafts((current) => ({ ...current, [productId]: value }));
+    if (value.trim() === '') return;
+    const parsedValue = Number(value);
+    if (!Number.isFinite(parsedValue) || parsedValue < 0) return;
+    setProducts((current) => current.map((product) => (
+      product.id === productId ? { ...product, cartaPrice: parsedValue } : product
+    )));
+  }
+
+  function handleCartaPriceBlur(productId: string) {
+    const product = products.find((item) => item.id === productId);
+    if (!product) return;
+    const draft = cartaPriceDrafts[productId]?.trim() ?? '';
+    const parsedValue = Number(draft);
+    if (draft !== '' && Number.isFinite(parsedValue) && parsedValue >= 0) {
+      setProducts((current) => current.map((item) => (
+        item.id === productId ? { ...item, cartaPrice: parsedValue } : item
+      )));
+      setCartaPriceDrafts((current) => ({ ...current, [productId]: String(parsedValue) }));
+      return;
+    }
+    setCartaPriceDrafts((current) => ({
+      ...current,
+      [productId]: String(product.cartaPrice ?? product.regularPrice),
+    }));
+  }
+
+  function handleCartaPriceReset(productId: string) {
+    const product = products.find((item) => item.id === productId);
+    if (!product) return;
+    setProducts((current) => current.map((item) => (
+      item.id === productId ? { ...item, cartaPrice: null } : item
+    )));
+    setCartaPriceDrafts((current) => ({ ...current, [productId]: String(product.regularPrice) }));
+  }
+
   const publicationDirty = publication.enabled !== savedPublication.enabled
     || publication.listedInStorefront !== savedPublication.listedInStorefront;
-  const hasUnsavedChanges = formik.dirty || orderDirty || publicationDirty;
+  const cartaPriceDirty = products.some(
+    (product) => (savedCartaPrices[product.id] ?? null) !== product.cartaPrice
+  );
+  const hasUnsavedChanges = formik.dirty || orderDirty || publicationDirty || cartaPriceDirty;
   const categoriesLoadFailed = loadIssues.includes('No se pudieron cargar las categorías.');
   const productsLoadFailed = loadIssues.includes('No se pudieron cargar los productos.');
   const uncategorized = products.filter((product) => !product.categoryId);
@@ -641,7 +761,7 @@ export function CartaSettingsPage() {
           <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,650px)_minmax(0,1fr)]">
             <section>
               <Card><CardBody>
-                <div className="mb-5"><h2 className="text-base font-bold text-gray-900">Orden de la carta</h2><p className="mt-1 text-sm leading-6 text-gray-500">Arrastra categorías y abre cada una para ordenar sus platos. Este orden solo afecta la carta digital.</p></div>
+                <div className="mb-5"><h2 className="text-base font-bold text-gray-900">Categorías, platos y precios</h2><p className="mt-1 text-sm leading-6 text-gray-500">Arrastra para ordenar y abre cada categoría para editar el precio exclusivo de la carta. Ningún cambio de precio afecta el ecommerce.</p></div>
                 {categories.length === 0 ? (categoriesLoadFailed
                   ? <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-5 text-center"><p className="text-sm font-semibold text-amber-800">No fue posible cargar las categorías</p><p className="mt-1 text-xs text-amber-700">Tus categorías no se han eliminado. Recarga el editor para volver a consultarlas.</p></div>
                   : <EmptyState icon={<UtensilsCrossed className="h-12 w-12" />} title="Aún no tienes categorías" description="Crea categorías de producto para organizar tu carta digital." />) : (
@@ -661,17 +781,43 @@ export function CartaSettingsPage() {
                               setProducts((current) => current.map((product) => product.categoryId === category.id ? reordered[replacementIndex++] : product));
                               setOrderDirty(true);
                             }}
+                            priceDrafts={cartaPriceDrafts}
+                            onCartaPriceChange={handleCartaPriceChange}
+                            onCartaPriceBlur={handleCartaPriceBlur}
+                            onCartaPriceReset={handleCartaPriceReset}
                           />
                         ))}
                       </div>
                     </SortableContext>
                   </DndContext>
                 )}
-                {uncategorized.length > 0 && <div className="mt-4 rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-4"><p className="text-sm font-semibold text-gray-700">Sin categoría ({uncategorized.length})</p><p className="mt-1 text-xs leading-5 text-gray-500">Estos platos aparecerán al final, dentro de “Otros”. Asígnales una categoría desde Productos para ubicarlos en otra sección.</p></div>}
+                {uncategorized.length > 0 && (
+                  <div className="mt-4 rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-4">
+                    <p className="text-sm font-semibold text-gray-700">Sin categoría ({uncategorized.length})</p>
+                    <p className="mt-1 text-xs leading-5 text-gray-500">Estos platos aparecerán al final, dentro de “Otros”. También puedes editar aquí su precio exclusivo de carta.</p>
+                    <DndContext sensors={sensors} onDragEnd={handleUncategorizedProductDragEnd}>
+                      <SortableContext items={uncategorized.map((product) => product.id)} strategy={verticalListSortingStrategy}>
+                        <div className="mt-3 space-y-2">
+                          {uncategorized.map((product) => (
+                            <SortableProductRow
+                              key={product.id}
+                              product={product}
+                              currency={currency}
+                              priceDrafts={cartaPriceDrafts}
+                              onCartaPriceChange={handleCartaPriceChange}
+                              onCartaPriceBlur={handleCartaPriceBlur}
+                              onCartaPriceReset={handleCartaPriceReset}
+                            />
+                          ))}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                  </div>
+                )}
               </CardBody></Card>
             </section>
             <section className="min-w-0 xl:sticky xl:top-0">
-              <div className="mb-3"><h2 className="text-sm font-bold text-gray-900">Resultado del orden</h2><p className="mt-0.5 text-xs text-gray-500">La previsualización cambia mientras arrastras.</p></div>
+              <div className="mb-3"><h2 className="text-sm font-bold text-gray-900">Resultado en la carta</h2><p className="mt-0.5 text-xs text-gray-500">La previsualización cambia al ordenar o editar precios.</p></div>
               {previewPage.categories.length > 0 && <CartaPreviewFrame page={previewPage} theme={theme} device={previewDevice} onDeviceChange={setPreviewDevice} />}
             </section>
           </div>

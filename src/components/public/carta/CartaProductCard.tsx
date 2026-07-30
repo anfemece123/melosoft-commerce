@@ -46,7 +46,7 @@ export function CartaProductCard({ product, currency, theme, variant = 'signatur
           <span className={`shrink-0 font-black ${compact ? 'text-xs' : 'text-sm'}`} style={{ color: theme.primary }}>{price}</span>
         </div>
         {showDescription && product.shortDescription && (
-          <p className={`mt-1.5 max-w-xl ${compact ? 'line-clamp-2 text-[11px] leading-4' : 'text-xs leading-5 sm:text-sm'}`} style={{ color: theme.mutedText }}>{product.shortDescription}</p>
+          <p data-carta-product-description className={`mt-1.5 line-clamp-4 max-w-xl ${compact ? 'text-[11px] leading-4' : 'text-xs leading-5 sm:text-sm'}`} style={{ color: theme.mutedText }}>{product.shortDescription}</p>
         )}
       </article>
     );
@@ -54,7 +54,7 @@ export function CartaProductCard({ product, currency, theme, variant = 'signatur
 
   if (variant === 'gallery') {
     return (
-      <article className="group relative pt-3 text-center">
+      <article className="group relative text-center sm:pt-1">
         <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-t-[45%]">
           <StorefrontMediaFrame
             src={product.imageUrl}
@@ -71,7 +71,7 @@ export function CartaProductCard({ product, currency, theme, variant = 'signatur
           </span>
           <div className="absolute inset-x-0 bottom-0 p-4 text-white sm:p-6">
             <h3 className="text-base font-black leading-tight drop-shadow-sm sm:text-xl">{product.name}</h3>
-            {showDescription && product.shortDescription && <p className="mt-1.5 line-clamp-2 text-[11px] leading-4 text-white/80 sm:text-sm sm:leading-5">{product.shortDescription}</p>}
+            {showDescription && product.shortDescription && <p data-carta-product-description className="mt-1.5 line-clamp-4 text-[11px] leading-4 text-white/80 sm:text-sm sm:leading-5">{product.shortDescription}</p>}
           </div>
         </div>
       </article>
@@ -80,7 +80,7 @@ export function CartaProductCard({ product, currency, theme, variant = 'signatur
 
   if (variant === 'minimal') {
     return (
-      <article className="group grid min-h-28 grid-cols-[104px_minmax(0,1fr)] items-center gap-4 border-b py-4 sm:grid-cols-[124px_minmax(0,1fr)] sm:gap-5" style={{ borderColor: theme.border }}>
+      <article className="group grid min-h-28 grid-cols-[104px_minmax(0,1fr)] items-center gap-3 border-b py-2 sm:grid-cols-[124px_minmax(0,1fr)] sm:gap-5 sm:py-3" style={{ borderColor: theme.border }}>
         <StorefrontMediaFrame
           src={product.imageUrl}
           alt={product.name}
@@ -90,19 +90,19 @@ export function CartaProductCard({ product, currency, theme, variant = 'signatur
           imageClassName="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
           pngImageClassName="h-full w-full object-contain p-2 drop-shadow-[0_10px_14px_rgba(15,23,42,0.12)] transition-transform duration-500 group-hover:scale-[1.04]"
         />
-        <div className="flex min-w-0 flex-col justify-center py-3">
+        <div className="flex min-w-0 flex-col justify-center py-1 sm:py-2">
           <div className="flex items-start justify-between gap-3">
             <h3 className="font-extrabold leading-5" style={{ color: theme.text }}>{product.name}</h3>
             <span className="shrink-0 text-sm font-black" style={{ color: theme.primary }}>{price}</span>
           </div>
-          {showDescription && product.shortDescription && <p className="mt-1.5 line-clamp-2 text-xs leading-5" style={{ color: theme.mutedText }}>{product.shortDescription}</p>}
+          {showDescription && product.shortDescription && <p data-carta-product-description className="mt-1.5 line-clamp-4 text-xs leading-5" style={{ color: theme.mutedText }}>{product.shortDescription}</p>}
         </div>
       </article>
     );
   }
 
   return (
-    <article className="group grid min-h-44 grid-cols-[42%_minmax(0,1fr)] items-center gap-5 py-4 sm:gap-7">
+    <article className="group grid grid-cols-[42%_minmax(0,1fr)] items-center gap-3 py-1 sm:min-h-40 sm:gap-6 sm:py-3">
       <StorefrontMediaFrame
         src={product.imageUrl}
         alt={product.name}
@@ -112,9 +112,9 @@ export function CartaProductCard({ product, currency, theme, variant = 'signatur
         imageClassName="h-full w-full object-cover transition-transform duration-[600ms] ease-out group-hover:scale-[1.04]"
         pngImageClassName="h-full w-full object-contain p-3 drop-shadow-[0_14px_18px_rgba(15,23,42,0.14)] transition-transform duration-[600ms] ease-out group-hover:scale-[1.04]"
       />
-      <div className="flex min-w-0 flex-col justify-center py-4 pr-2 sm:pr-5">
+      <div className="flex min-w-0 flex-col justify-center py-1 pr-2 sm:py-3 sm:pr-5">
         <h3 className="text-lg font-extrabold leading-tight" style={{ color: theme.text }}>{product.name}</h3>
-        {showDescription && product.shortDescription && <p className="mt-2 line-clamp-3 text-xs leading-5 sm:text-sm" style={{ color: theme.mutedText }}>{product.shortDescription}</p>}
+        {showDescription && product.shortDescription && <p data-carta-product-description className="mt-2 line-clamp-4 text-xs leading-5 sm:text-sm" style={{ color: theme.mutedText }}>{product.shortDescription}</p>}
         <p className="mt-4 text-base font-black" style={{ color: theme.primary }}>{price}</p>
       </div>
     </article>

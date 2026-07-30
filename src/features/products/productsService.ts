@@ -400,6 +400,12 @@ export const productsService = {
     return mapProductRowToProduct(data);
   },
 
+  /** Updates only the optional price used by Carta digital. The ecommerce
+   * regular/sale prices are intentionally left untouched. */
+  async updateProductCartaPrice(id: string, cartaPrice: number | null): Promise<Product> {
+    return productsService.updateProduct(id, { cartaPrice });
+  },
+
   /** Persists an explicit full order (drag-and-drop can move a product
    * more than one position at once) — assigns sort_order = index for
    * every id in `orderedIds`. */

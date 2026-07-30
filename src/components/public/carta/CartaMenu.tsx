@@ -98,24 +98,26 @@ function CartaCover({ page, theme }: { page: PublicCartaPage; theme: StorefrontT
 
   return (
     <header
-      className="relative isolate mb-5 overflow-hidden rounded-b-[2rem] px-4 py-10 text-center sm:mb-8 sm:rounded-b-[3rem] sm:px-6 sm:py-16"
+      data-carta-cover
+      className="relative isolate overflow-hidden px-4 py-10 text-center sm:mb-8 sm:rounded-b-[3rem] sm:px-6 sm:py-16"
       style={{ background: headerBackground, boxShadow: `0 20px 50px ${withAlpha(theme.text, 0.06)}` }}
     >
       {page.coverBackgroundImageUrl && (
         <>
-          <img
-            data-carta-cover-background
-            src={page.coverBackgroundImageUrl}
-            alt=""
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 h-full w-full object-cover object-center"
-          />
+          <div data-carta-cover-background-frame className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+            <img
+              data-carta-cover-background
+              src={page.coverBackgroundImageUrl}
+              alt=""
+              className="block h-full w-full origin-top scale-125 object-cover object-top sm:origin-center sm:scale-110 sm:object-center"
+            />
+          </div>
           <div
             className="pointer-events-none absolute inset-0"
             style={{
               background: [
                 `linear-gradient(${headerGradientDirection}, ${withAlpha(gradientAccent, coverAccentOpacity)} 0%, transparent 58%)`,
-                `linear-gradient(180deg, ${withAlpha(theme.background, 0.9)} 0%, ${withAlpha(theme.background, 0.78)} 50%, ${withAlpha(theme.background, 0.92)} 100%)`,
+                `linear-gradient(180deg, ${withAlpha(theme.background, 0.74)} 0%, ${withAlpha(theme.background, 0.64)} 50%, ${withAlpha(theme.background, 0.7)} 100%)`,
               ].join(', '),
             }}
           />
@@ -300,14 +302,14 @@ function CategorySection({ category, index, page, theme }: { category: PublicCar
             <div className="mx-auto grid w-full max-w-4xl grid-cols-1 gap-x-10 md:grid-cols-2">{productCards}</div>
           )
         ) : (
-          <div className={`relative ${
+          <div data-carta-products-grid className={`relative ${
             !showProductImages
               ? 'grid grid-cols-1 gap-x-10 md:grid-cols-2'
               : page.templateKey === 'gallery'
-                ? 'grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3'
+                ? 'grid grid-cols-1 gap-1.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3'
                 : page.templateKey === 'minimal'
-                  ? 'grid grid-cols-1 gap-4 lg:grid-cols-2'
-                  : 'grid grid-cols-1 gap-5 md:grid-cols-2'
+                  ? 'grid grid-cols-1 gap-0 lg:grid-cols-2 lg:gap-x-6'
+                  : 'grid grid-cols-1 gap-0 md:grid-cols-2 md:gap-x-6 md:gap-y-1'
           }`}>
             {productCards}
           </div>
@@ -351,32 +353,32 @@ export function CartaMenu({ page, theme, preview = false }: CartaMenuProps) {
     >
       <CartaCover page={page} theme={theme} />
 
-      {categories.length > 1 && (
+      {categories.length > 0 && (
         <nav
           aria-label="Categorías de la carta"
-          className="sticky top-0 z-20 border-y backdrop-blur-xl"
-          style={{
-            backgroundColor: withAlpha(theme.background, 0.9),
-            borderColor: theme.border,
-          }}
+          className="pointer-events-none sticky top-0 z-30"
         >
-          <div className={`no-scrollbar mx-auto flex w-full ${STOREFRONT_CONTAINER_CLASS} gap-2 overflow-x-auto px-4 py-3 sm:px-6`}>
-            {categories.map((category, index) => {
-              const active = index === safeActiveIndex;
-              return (
-                <button
-                  key={category.id ?? 'uncategorized'}
-                  type="button"
-                  onClick={() => selectCategory(index)}
-                  className="shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition-all"
-                  style={active
-                    ? { backgroundColor: theme.primary, borderColor: theme.primary, color: '#fff', boxShadow: `0 8px 24px ${withAlpha(theme.primary, 0.24)}` }
-                    : { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text }}
-                >
-                  {category.name}
-                </button>
-              );
-            })}
+          <div className={`no-scrollbar pointer-events-auto mx-auto w-full ${STOREFRONT_CONTAINER_CLASS} overflow-x-auto px-4 py-3 sm:px-6`}>
+            <div data-carta-category-strip className="flex w-max min-w-full justify-center gap-2">
+              {categories.map((category, index) => {
+                const active = index === safeActiveIndex;
+                return (
+                  <button
+                    key={category.id ?? 'uncategorized'}
+                    type="button"
+                    onClick={() => selectCategory(index)}
+                    className="shrink-0 rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition-all"
+                    style={active
+                      ? { backgroundColor: theme.primary, borderColor: theme.primary, color: '#fff', boxShadow: `0 8px 24px ${withAlpha(theme.primary, 0.24)}` }
+                      : theme.mode === 'dark'
+                        ? { backgroundColor: withAlpha(theme.text, 0.94), borderColor: withAlpha(theme.text, 0.94), color: theme.background }
+                        : { backgroundColor: theme.surface, borderColor: theme.border, color: theme.text }}
+                  >
+                    {category.name}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </nav>
       )}

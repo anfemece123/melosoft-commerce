@@ -1,17 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
 import { UtensilsCrossed } from 'lucide-react';
 import { cartaService } from '@/features/carta/cartaService';
 import type { PublicCartaPage } from '@/features/carta/carta.types';
-import type { StorefrontTheme } from '@/components/public/storefront/storefrontTheme';
+import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import { CartaMenu } from '@/components/public/carta/CartaMenu';
-import type { PublicStorePage } from '@/types/common.types';
-
-interface CartaOutletContext {
-  storeSlug: string | null;
-  branding: PublicStorePage | null;
-  theme: StorefrontTheme;
-}
+import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
 
 /** Sets/restores a robots noindex tag while `active` is true. Only used
  * here (unlisted cartas shouldn't be indexed) — kept local rather than
@@ -37,29 +30,36 @@ function useNoIndex(active: boolean) {
 }
 
 export function StoreCartaPage() {
-  const { storeSlug, branding, theme } = useOutletContext<CartaOutletContext>();
-  const [page, setPage] = useState<PublicCartaPage | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { storeSlug, branding } = usePublicStoreBranding();
+  const theme = buildStorefrontTheme({
+    mode: branding?.themeMode ?? null,
+    primaryColor: branding?.primaryColor ?? null,
+    secondaryColor: branding?.secondaryColor ?? null,
+    accentColor: branding?.accentColor ?? null,
+    backgroundColor: branding?.backgroundColor ?? null,
+    textColor: branding?.textColor ?? null,
+    buttonRadius: branding?.buttonRadius ?? null,
+  });
+  const [result, setResult] = useState<{ storeSlug: string; page: PublicCartaPage | null } | null>(null);
 
   useEffect(() => {
-    if (!storeSlug) {
-      setLoading(false);
-      return;
-    }
+    if (!storeSlug) return;
     let cancelled = false;
-    setLoading(true);
     cartaService.getPublicCarta(storeSlug)
       .then((data) => {
         if (cancelled) return;
-        setPage(data);
+        setResult({ storeSlug, page: data });
       })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+      .catch(() => {
+        if (!cancelled) setResult({ storeSlug, page: null });
       });
     return () => {
       cancelled = true;
     };
   }, [storeSlug]);
+
+  const loading = Boolean(storeSlug && result?.storeSlug !== storeSlug);
+  const page = result?.storeSlug === storeSlug ? result.page : null;
 
   useNoIndex(!branding?.cartaListed);
 

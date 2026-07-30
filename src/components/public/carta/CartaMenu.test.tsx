@@ -75,6 +75,31 @@ describe('CartaMenu', () => {
     expect((screen.getByRole('button', { name: /Siguiente/i }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('shows a sticky category strip and jumps directly to a selected category', () => {
+    render(<CartaMenu page={page} theme={theme} />);
+
+    const navigation = screen.getByRole('navigation', { name: /Categorías de la carta/i });
+    expect(navigation.className).toContain('sticky');
+    expect(navigation.className).toContain('top-0');
+    expect(navigation.className).not.toContain('backdrop-blur');
+    expect(navigation.hasAttribute('style')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Fuertes' }));
+
+    expect(screen.getByText('Lomo de la casa')).toBeTruthy();
+    expect(screen.queryByText('Croquetas')).toBeNull();
+  });
+
+  it('keeps the category strip visible even when the carta has only one category', () => {
+    render(<CartaMenu page={{ ...page, navigationMode: 'continuous', categories: [page.categories[0]] }} theme={theme} />);
+
+    expect(screen.getByRole('navigation', { name: /Categorías de la carta/i })).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Entradas' })).toHaveLength(1);
+    const strip = document.querySelector('[data-carta-category-strip]');
+    expect(strip?.className).toContain('min-w-full');
+    expect(strip?.className).toContain('justify-center');
+    expect(strip?.className).toContain('w-max');
+  });
+
   it('does not print automatic system labels or decorative numbering', () => {
     render(<CartaMenu page={{ ...page, title: null, navigationMode: 'continuous' }} theme={theme} />);
 
@@ -137,6 +162,15 @@ describe('CartaMenu', () => {
     expect(screen.queryByRole('img', { name: 'Croquetas' })).toBeNull();
   });
 
+  it('does not accumulate large gaps between products in the per-product image mode', () => {
+    render(<CartaMenu page={{ ...page, navigationMode: 'continuous', productImageMode: 'all' }} theme={theme} />);
+
+    const productGrids = Array.from(document.querySelectorAll('[data-carta-products-grid]'));
+    expect(productGrids.length).toBeGreaterThan(0);
+    expect(productGrids.every((grid) => grid.className.includes('gap-0'))).toBe(true);
+    expect(productGrids.every((grid) => !grid.className.includes('gap-5'))).toBe(true);
+  });
+
   it('keeps a right-side category image smaller and right-aligned on mobile', () => {
     const category = {
       ...page.categories[0],
@@ -179,7 +213,27 @@ describe('CartaMenu', () => {
       coverBackgroundImageUrl: 'https://example.com/cover-background.jpg',
     }} theme={theme} />);
 
-    expect(document.querySelector('[data-carta-cover-background]')?.getAttribute('src')).toBe('https://example.com/cover-background.jpg');
+    const background = document.querySelector('[data-carta-cover-background]');
+    expect(background?.getAttribute('src')).toBe('https://example.com/cover-background.jpg');
+    expect(background?.parentElement?.hasAttribute('data-carta-cover-background-frame')).toBe(true);
+    expect(background?.parentElement?.className).toContain('absolute inset-0');
+    expect(background?.className).toContain('scale-125');
+    expect(background?.className).toContain('origin-top');
+    expect(background?.className).toContain('sm:scale-110');
+  });
+
+  it('keeps the cover background edge-to-edge at its lower mobile boundary', () => {
+    render(<CartaMenu page={{
+      ...page,
+      navigationMode: 'continuous',
+      coverBackgroundImageUrl: 'https://example.com/cover-background.jpg',
+    }} theme={theme} />);
+
+    const mobileCoverClasses = document.querySelector('[data-carta-cover]')?.className.split(' ') ?? [];
+    expect(mobileCoverClasses).not.toContain('mb-5');
+    expect(mobileCoverClasses).not.toContain('rounded-b-[2rem]');
+    expect(mobileCoverClasses).toContain('sm:mb-8');
+    expect(mobileCoverClasses).toContain('sm:rounded-b-[3rem]');
   });
 
   it('does not add a duplicated footer separator below the last category', () => {
