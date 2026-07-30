@@ -89,6 +89,32 @@ describe('CartaMenu', () => {
     expect(screen.queryByText('Croquetas')).toBeNull();
   });
 
+  it('filters dishes by name, description, or category without being limited by pagination', () => {
+    render(<CartaMenu page={page} theme={theme} />);
+
+    const search = screen.getByRole('searchbox', { name: /Buscar platos o categorías/i });
+    fireEvent.change(search, { target: { value: 'salsa' } });
+
+    expect(screen.getByText('Lomo de la casa')).toBeTruthy();
+    expect(screen.queryByText('Croquetas')).toBeNull();
+    expect(screen.getByRole('status').textContent).toBe('1 plato encontrado');
+    expect(screen.queryByRole('button', { name: /Siguiente/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Limpiar búsqueda/i }));
+    expect(screen.getByText('Croquetas')).toBeTruthy();
+    expect(screen.queryByText('Lomo de la casa')).toBeNull();
+  });
+
+  it('shows a clean empty state when no dish matches the search', () => {
+    render(<CartaMenu page={{ ...page, navigationMode: 'continuous' }} theme={theme} />);
+
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'pizza hawaiana' } });
+
+    expect(screen.getByText('No encontramos ese plato')).toBeTruthy();
+    expect(screen.getByText(/Prueba con otro nombre, ingrediente o categoría/i)).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toBe('0 platos encontrados');
+  });
+
   it('keeps the category strip visible even when the carta has only one category', () => {
     render(<CartaMenu page={{ ...page, navigationMode: 'continuous', categories: [page.categories[0]] }} theme={theme} />);
 

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, UtensilsCrossed } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, UtensilsCrossed, X } from 'lucide-react';
 import type { PublicCartaCategory, PublicCartaPage } from '@/features/carta/carta.types';
 import type { StorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import { STOREFRONT_CONTAINER_CLASS, withAlpha } from '@/components/public/storefront/storefrontTheme';
@@ -40,6 +40,13 @@ function resolveCartaGradientAccent(theme: StorefrontTheme): string {
     + Math.abs(background.green - secondary.green)
     + Math.abs(background.blue - secondary.blue);
   return difference >= 36 ? theme.secondary : theme.primary;
+}
+
+function normalizeSearchValue(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('es');
 }
 
 function BrandMark({ page, theme }: { page: PublicCartaPage; theme: StorefrontTheme }) {
@@ -321,21 +328,51 @@ function CategorySection({ category, index, page, theme }: { category: PublicCar
 
 export function CartaMenu({ page, theme, preview = false }: CartaMenuProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
   const categoryRefs = useRef(new Map<string, HTMLElement>());
   const categories = page.categories;
   const safeActiveIndex = Math.min(activeIndex, Math.max(0, categories.length - 1));
   const gradientAccent = resolveCartaGradientAccent(theme);
   const gradientOpacity = theme.mode === 'dark' ? 0.1 : 0.055;
+  const normalizedQuery = normalizeSearchValue(searchQuery.trim());
+  const matchingCategories = normalizedQuery
+    ? categories
+        .map((category) => {
+          const categoryMatches = normalizeSearchValue(category.name).includes(normalizedQuery);
+          const products = categoryMatches
+            ? category.products
+            : category.products.filter((product) => normalizeSearchValue([
+                product.name,
+                product.shortDescription ?? '',
+              ].join(' ')).includes(normalizedQuery));
+          return { ...category, products };
+        })
+        .filter((category) => category.products.length > 0)
+    : categories;
+  const searchResultCount = matchingCategories.reduce((total, category) => total + category.products.length, 0);
 
   function selectCategory(index: number) {
     setActiveIndex(index);
-    if (page.navigationMode === 'continuous') {
+
+    const navigateToCategory = () => {
+      if (page.navigationMode !== 'continuous') return;
       const id = categories[index]?.id ?? 'uncategorized';
       categoryRefs.current.get(id)?.scrollIntoView({ behavior: preview ? 'auto' : 'smooth', block: 'start' });
+    };
+
+    if (normalizedQuery) {
+      setSearchQuery('');
+      window.requestAnimationFrame(navigateToCategory);
+    } else {
+      navigateToCategory();
     }
   }
 
-  const visibleCategories = page.navigationMode === 'paginated' ? categories.slice(safeActiveIndex, safeActiveIndex + 1) : categories;
+  const visibleCategories = normalizedQuery
+    ? matchingCategories
+    : page.navigationMode === 'paginated'
+      ? categories.slice(safeActiveIndex, safeActiveIndex + 1)
+      : categories;
 
   return (
     <div
@@ -352,6 +389,55 @@ export function CartaMenu({ page, theme, preview = false }: CartaMenuProps) {
       }}
     >
       <CartaCover page={page} theme={theme} />
+
+      {categories.length > 0 && (
+        <section
+          aria-label="Buscar en la carta"
+          className={`mx-auto w-full ${STOREFRONT_CONTAINER_CLASS} px-4 pt-5 sm:px-6 sm:pt-6`}
+          data-carta-search
+        >
+          <div className="mx-auto max-w-xl">
+            <div className="relative">
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2"
+                style={{ color: theme.mutedText }}
+              />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                aria-label="Buscar platos o categorías"
+                placeholder="Buscar platos o categorías"
+                className="h-12 w-full rounded-full border bg-transparent py-3 pl-12 pr-12 text-sm font-medium outline-none transition-shadow placeholder:opacity-55 focus:ring-2 sm:h-14 sm:text-base"
+                style={{
+                  backgroundColor: theme.mode === 'dark' ? withAlpha(theme.text, 0.07) : theme.surface,
+                  borderColor: theme.border,
+                  color: theme.text,
+                  boxShadow: `0 12px 32px ${withAlpha(theme.text, theme.mode === 'dark' ? 0.08 : 0.06)}`,
+                  '--tw-ring-color': withAlpha(theme.primary, 0.34),
+                } as React.CSSProperties}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  aria-label="Limpiar búsqueda"
+                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full transition-opacity hover:opacity-75"
+                  style={{ backgroundColor: withAlpha(theme.text, 0.1), color: theme.text }}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            {normalizedQuery && (
+              <p className="mt-2 text-center text-xs font-medium" role="status" style={{ color: theme.mutedText }}>
+                {searchResultCount === 1 ? '1 plato encontrado' : `${searchResultCount} platos encontrados`}
+              </p>
+            )}
+          </div>
+        </section>
+      )}
 
       {categories.length > 0 && (
         <nav
@@ -397,7 +483,17 @@ export function CartaMenu({ page, theme, preview = false }: CartaMenuProps) {
           );
         })}
 
-        {page.navigationMode === 'paginated' && categories.length > 1 && (
+        {normalizedQuery && searchResultCount === 0 && (
+          <div className="mx-auto flex max-w-md flex-col items-center px-4 py-16 text-center sm:py-24">
+            <Search className="h-7 w-7" aria-hidden="true" style={{ color: theme.primary }} />
+            <h2 className="mt-4 text-xl font-bold" style={{ color: theme.text }}>No encontramos ese plato</h2>
+            <p className="mt-2 text-sm leading-6" style={{ color: theme.mutedText }}>
+              Prueba con otro nombre, ingrediente o categoría.
+            </p>
+          </div>
+        )}
+
+        {!normalizedQuery && page.navigationMode === 'paginated' && categories.length > 1 && (
           <div className="mt-4 flex items-center justify-between gap-3 pt-4">
             <button
               type="button"
