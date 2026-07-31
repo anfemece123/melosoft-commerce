@@ -4,6 +4,7 @@
 
 - WhatsApp, Facebook, X, LinkedIn, Slack, Telegram, Discord, Pinterest y los buscadores reciben HTML generado en Vercel con Open Graph, Twitter Cards, canonical y JSON-LD.
 - Cada empresa, producto y oferta obtiene una imagen social cuadrada de 1200×1200 en `/api/og-card`, sin texto incrustado ni recortes.
+- La SPA se publica como `app.html` para que el archivo estático no intercepte la ruta `/` antes del rewrite SEO de las empresas en Vercel.
 - Cada hostname de tienda publica su propio `/robots.txt` y `/sitemap.xml`.
 - El sitemap solo incluye empresas activas, productos públicos activos, ofertas visibles vigentes y cartas habilitadas.
 - Una empresa nueva se crea con `status = active`, por lo que aparece automáticamente en el sitemap. El caché de Vercel puede tardar hasta cinco minutos en reflejarla.
