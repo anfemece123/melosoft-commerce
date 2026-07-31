@@ -1,6 +1,6 @@
 const DEFAULT_DESCRIPTION = 'Compra en línea de forma fácil y segura.';
 const DEFAULT_BRAND_IMAGE_PATH = '/branding/melosoft-mark.png';
-const OG_CARD_LAYOUT_VERSION = 'square-media-v4';
+const OG_CARD_LAYOUT_VERSION = 'image-only-square-v5';
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
 const RESERVED_SUBDOMAINS = new Set([
   'admin', 'api', 'app', 'assets', 'auth', 'beta', 'blog', 'cdn', 'commerce',

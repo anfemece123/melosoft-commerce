@@ -68,7 +68,7 @@ function renderHtml(document: SeoDocument): string {
     <meta property="og:image:secure_url" content="${escapeHtml(document.ogImageUrl)}" />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
+    <meta property="og:image:height" content="1200" />
     <meta property="og:image:alt" content="${escapeHtml(document.heading)}" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(document.title)}" />

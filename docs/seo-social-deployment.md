@@ -3,7 +3,7 @@
 ## Qué queda automatizado
 
 - WhatsApp, Facebook, X, LinkedIn, Slack, Telegram, Discord, Pinterest y los buscadores reciben HTML generado en Vercel con Open Graph, Twitter Cards, canonical y JSON-LD.
-- Cada empresa, producto y oferta obtiene una tarjeta PNG dinámica de 1200×630 en `/api/og-card`.
+- Cada empresa, producto y oferta obtiene una imagen social cuadrada de 1200×1200 en `/api/og-card`, sin texto incrustado ni recortes.
 - Cada hostname de tienda publica su propio `/robots.txt` y `/sitemap.xml`.
 - El sitemap solo incluye empresas activas, productos públicos activos, ofertas visibles vigentes y cartas habilitadas.
 - Una empresa nueva se crea con `status = active`, por lo que aparece automáticamente en el sitemap. El caché de Vercel puede tardar hasta cinco minutos en reflejarla.
@@ -44,6 +44,6 @@ curl 'https://{empresa}.melosoftapp.com/sitemap.xml'
 curl -I 'https://{empresa}.melosoftapp.com/api/og-card?storeSlug={empresa}&routePath=/p/{producto}'
 ```
 
-La primera respuesta debe contener `og:title`, `og:description`, `og:image`, `og:url`, canonical y JSON-LD. La tercera debe responder como imagen PNG de 1200×630.
+La primera respuesta debe contener `og:title`, `og:description`, `og:image`, `og:url`, canonical y JSON-LD. La tercera debe responder como imagen PNG de 1200×1200.
 
 Para refrescar tarjetas que una red social haya almacenado previamente, usar el Sharing Debugger de Meta y solicitar **Scrape Again** después del despliegue.
