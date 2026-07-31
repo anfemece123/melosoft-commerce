@@ -1,7 +1,17 @@
 User-agent: *
+Allow: /
+Allow: /api/og-card
 Disallow: /admin
 Disallow: /login
+Disallow: /auth/
 Disallow: /set-password
-Disallow: /auth/callback
 Disallow: /access-denied
-Allow: /
+Disallow: /cart
+Disallow: /checkout
+Disallow: /payment-result
+Disallow: /s/*/cart
+Disallow: /s/*/checkout
+Disallow: /s/*/payment-result
+Disallow: /api/
+
+Sitemap: https://commerce.melosoftapp.com/sitemap.xml

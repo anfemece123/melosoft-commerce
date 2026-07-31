@@ -2,8 +2,156 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/robots.txt",
+      "destination": "/api/robots"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/sitemap"
+    },
+    {
+      "source": "/s/:storeSlug",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|meta-externalagent|meta-externalfetcher|WhatsApp|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot|Pinterestbot|Applebot|Googlebot|GoogleOther|bingbot|Bingbot|DuckDuckBot|YandexBot).*"
+        }
+      ],
+      "destination": "/api/storefront-preview?storeSlug=:storeSlug&routePath=/"
+    },
+    {
+      "source": "/s/:storeSlug/p/:productSlug",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|meta-externalagent|meta-externalfetcher|WhatsApp|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot|Pinterestbot|Applebot|Googlebot|GoogleOther|bingbot|Bingbot|DuckDuckBot|YandexBot).*"
+        }
+      ],
+      "destination": "/api/storefront-preview?storeSlug=:storeSlug&routePath=/p/:productSlug"
+    },
+    {
+      "source": "/s/:storeSlug/o/:offerSlug",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|meta-externalagent|meta-externalfetcher|WhatsApp|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot|Pinterestbot|Applebot|Googlebot|GoogleOther|bingbot|Bingbot|DuckDuckBot|YandexBot).*"
+        }
+      ],
+      "destination": "/api/storefront-preview?storeSlug=:storeSlug&routePath=/o/:offerSlug"
+    },
+    {
+      "source": "/s/:storeSlug/catalog",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|meta-externalagent|meta-externalfetcher|WhatsApp|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot|Pinterestbot|Applebot|Googlebot|GoogleOther|bingbot|Bingbot|DuckDuckBot|YandexBot).*"
+        }
+      ],
+      "destination": "/api/storefront-preview?storeSlug=:storeSlug&routePath=/catalog"
+    },
+    {
+      "source": "/s/:storeSlug/carta",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|meta-externalagent|meta-externalfetcher|WhatsApp|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot|Pinterestbot|Applebot|Googlebot|GoogleOther|bingbot|Bingbot|DuckDuckBot|YandexBot).*"
+        }
+      ],
+      "destination": "/api/storefront-preview?storeSlug=:storeSlug&routePath=/carta"
+    },
+    {
+      "source": "/s/:storeSlug/policies",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|meta-externalagent|meta-externalfetcher|WhatsApp|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot|Pinterestbot|Applebot|Googlebot|GoogleOther|bingbot|Bingbot|DuckDuckBot|YandexBot).*"
+        }
+      ],
+      "destination": "/api/storefront-preview?storeSlug=:storeSlug&routePath=/policies"
+    },
+    {
+      "source": "/p/:productSlug",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|meta-externalagent|meta-externalfetcher|WhatsApp|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot|Pinterestbot|Applebot|Googlebot|GoogleOther|bingbot|Bingbot|DuckDuckBot|YandexBot).*"
+        }
+      ],
+      "destination": "/api/storefront-preview?routePath=/p/:productSlug"
+    },
+    {
+      "source": "/o/:offerSlug",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|meta-externalagent|meta-externalfetcher|WhatsApp|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot|Pinterestbot|Applebot|Googlebot|GoogleOther|bingbot|Bingbot|DuckDuckBot|YandexBot).*"
+        }
+      ],
+      "destination": "/api/storefront-preview?routePath=/o/:offerSlug"
+    },
+    {
+      "source": "/catalog",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|meta-externalagent|meta-externalfetcher|WhatsApp|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot|Pinterestbot|Applebot|Googlebot|GoogleOther|bingbot|Bingbot|DuckDuckBot|YandexBot).*"
+        }
+      ],
+      "destination": "/api/storefront-preview?routePath=/catalog"
+    },
+    {
+      "source": "/carta",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|meta-externalagent|meta-externalfetcher|WhatsApp|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot|Pinterestbot|Applebot|Googlebot|GoogleOther|bingbot|Bingbot|DuckDuckBot|YandexBot).*"
+        }
+      ],
+      "destination": "/api/storefront-preview?routePath=/carta"
+    },
+    {
+      "source": "/policies",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|meta-externalagent|meta-externalfetcher|WhatsApp|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot|Pinterestbot|Applebot|Googlebot|GoogleOther|bingbot|Bingbot|DuckDuckBot|YandexBot).*"
+        }
+      ],
+      "destination": "/api/storefront-preview?routePath=/policies"
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|meta-externalagent|meta-externalfetcher|WhatsApp|Twitterbot|LinkedInBot|Slackbot|Discordbot|TelegramBot|Pinterestbot|Applebot|Googlebot|GoogleOther|bingbot|Bingbot|DuckDuckBot|YandexBot).*"
+        }
+      ],
+      "destination": "/api/storefront-preview?routePath=/"
+    },
+    {
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" }
+      ]
     }
   ]
 }

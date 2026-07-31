@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { MessageCircle, AlertCircle, Lock, ShoppingBag, ChevronLeft, ChevronRight, ChevronDown, Package, UtensilsCrossed } from 'lucide-react';
 import { getProductIcon } from '@/features/products/productDescriptionIcons';
 import { StorefrontActionButton } from '@/components/public/storefront/StorefrontActionButton';
@@ -66,6 +66,8 @@ import { buildCatalogItems } from '@/lib/storefront/catalogItems';
 import { useResolvedStoreSlug } from '@/lib/storefront/storefrontDomainContext';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 import { buildWhatsAppContactUrl, normalizePhoneForWhatsApp } from '@/lib/whatsapp/whatsappUrl';
+import { domainsService } from '@/features/domains/domainsService';
+import { useStorefrontPageDocumentMetadata } from '@/lib/storefront/useStorefrontDocumentMetadata';
 
 interface ProductPageCachePayload {
   product: PublicProductPage | null;
@@ -110,7 +112,7 @@ export function ProductLandingPage() {
   const { storeSlug: routeStoreSlug, productSlug } = useParams<{ storeSlug: string; productSlug: string }>();
   const storeSlug = useResolvedStoreSlug(routeStoreSlug);
   if (!storeSlug || !productSlug) return null;
-  return <ProductLandingStoreScope storeSlug={storeSlug} productSlug={productSlug} />;
+  return <ProductLandingStoreScope key={storeSlug} storeSlug={storeSlug} productSlug={productSlug} />;
 }
 
 /**
@@ -142,7 +144,6 @@ function ProductLandingStoreScope({ storeSlug, productSlug }: { storeSlug: strin
 
   useEffect(() => {
     let cancelled = false;
-    setRecommendationsLoaded(false);
     productsService.getPublicProductsByStoreSlug(storeSlug)
       .then((items) => {
         if (!cancelled) setRecommendedProductsSource(items);
@@ -228,6 +229,7 @@ function ProductLandingContent({
   const { branding: storeBranding } = usePublicStoreBranding();
   const { setRouteReady } = usePublicRouteReady();
   const { addItem } = useCart();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { selectedLocation, locations } = useSelectedLocation();
   const { requestLocationChange, confirmLocationChange, cancelLocationChange, pendingChange } =
@@ -259,14 +261,11 @@ function ProductLandingContent({
 
   useEffect(() => {
     let cancelled = false;
-    setError(null);
     // Only force the skeleton back on when we don't already have this
     // product's data (i.e. a retry after a hard failure) — a cache-hit
     // mount already rendered the right product synchronously via the
     // lazy initializers above, so this must not re-blank it while this
     // effect's background revalidation fetch is in flight.
-    if (!product) setLoading(true);
-
     async function load() {
       try {
         const data = await productsService.getPublicProductBySlug(storeSlug, productSlug);
@@ -434,6 +433,23 @@ function ProductLandingContent({
     textColor: storeBranding?.textColor,
     buttonRadius: storeBranding?.buttonRadius,
   });
+  const metadataBaseUrl = location.pathname.startsWith(`/s/${storeSlug}`)
+    ? domainsService.getPlatformStoreUrl(storeSlug)
+    : window.location.origin;
+  const metadataImage = product?.mainImageUrl || product?.logoUrl || storeBranding?.logoUrl || null;
+  const absoluteMetadataImage = metadataImage
+    ? new URL(metadataImage, window.location.origin).toString()
+    : null;
+  useStorefrontPageDocumentMetadata({
+    title: product ? `${product.productName} | ${product.storeName}` : null,
+    description: product?.shortDescription || product?.description,
+    canonicalUrl: product ? `${metadataBaseUrl.replace(/\/$/, '')}/p/${productSlug}` : null,
+    imageUrl: absoluteMetadataImage,
+    siteName: product?.storeName || storeBranding?.storeName,
+    type: 'product',
+    price: product ? getActivePrice(product.regularPrice, product.salePrice) : null,
+    currency: storeBranding?.currency || 'COP',
+  });
 
   if (loading) {
     return <StorefrontProductDetailSkeleton branding={storeBranding} storeSlug={storeSlug} />;
@@ -452,7 +468,11 @@ function ProductLandingContent({
           <div className="mt-4 flex items-center justify-center gap-4">
             <button
               type="button"
-              onClick={() => setRetryToken((token) => token + 1)}
+              onClick={() => {
+                setError(null);
+                setLoading(true);
+                setRetryToken((token) => token + 1);
+              }}
               className="text-sm font-medium hover:underline"
               style={{ color: shellTheme.primary }}
             >
