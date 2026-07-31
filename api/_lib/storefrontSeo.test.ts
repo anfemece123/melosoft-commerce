@@ -85,6 +85,32 @@ describe('storefront SEO resolver', () => {
     });
   });
 
+  it('builds branded metadata and an OG card for the main store link', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('/rpc/resolve_store_domain')) return json([]);
+      if (url.pathname.endsWith('/public_store_pages')) return json([storeRow]);
+      if (url.pathname.endsWith('/public_product_pages')) return json([]);
+      throw new Error(`Unexpected request: ${url}`);
+    }));
+
+    const request = new Request(
+      'https://commerce.melosoftapp.com/api/storefront-preview?storeSlug=cafe-central&routePath=/',
+    );
+    const document = await resolveSeoDocument(request);
+    const ogImageUrl = new URL(document?.ogImageUrl ?? 'https://invalid.example');
+
+    expect(document).not.toBeNull();
+    expect(document?.kind).toBe('store');
+    expect(document?.heading).toBe('Café Central');
+    expect(document?.description).toBe('El mejor café de la ciudad.');
+    expect(document?.canonicalUrl).toBe('https://cafe-central.melosoftapp.com');
+    expect(ogImageUrl.pathname).toBe('/api/og-card');
+    expect(ogImageUrl.searchParams.get('storeSlug')).toBe('cafe-central');
+    expect(ogImageUrl.searchParams.get('routePath')).toBe('/');
+    expect(ogImageUrl.searchParams.get('v')).toBeTruthy();
+  });
+
   it('keeps a verified custom hostname as the canonical origin', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
