@@ -4,6 +4,9 @@ import { resolveSeoDocument } from './_lib/storefrontSeo.js';
 // @vercel/og 1.x uses its WebAssembly renderer on Vercel's Edge runtime.
 export const config = { runtime: 'edge' };
 
+const ITEM_IMAGE_SIZE = 390;
+const BRAND_IMAGE_SIZE = 320;
+
 function priceLabel(value: number | null, currency: string): string | null {
   if (value === null) return null;
   try {
@@ -49,9 +52,13 @@ export default async function handler(request: Request): Promise<Response> {
           <img
             src={document.imageUrl}
             alt=""
-            width="1200"
-            height="390"
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            width={ITEM_IMAGE_SIZE}
+            height={ITEM_IMAGE_SIZE}
+            style={{
+              width: ITEM_IMAGE_SIZE,
+              height: ITEM_IMAGE_SIZE,
+              objectFit: 'contain',
+            }}
           />
         </div>
 
@@ -117,9 +124,13 @@ export default async function handler(request: Request): Promise<Response> {
           <img
             src={document.logoUrl}
             alt=""
-            width="560"
-            height="300"
-            style={{ width: 560, height: 300, objectFit: 'contain' }}
+            width={BRAND_IMAGE_SIZE}
+            height={BRAND_IMAGE_SIZE}
+            style={{
+              width: BRAND_IMAGE_SIZE,
+              height: BRAND_IMAGE_SIZE,
+              objectFit: 'contain',
+            }}
           />
         </div>
 
