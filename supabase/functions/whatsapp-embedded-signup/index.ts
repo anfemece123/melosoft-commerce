@@ -181,29 +181,11 @@ Deno.serve(async (req: Request) => {
 
   await eventLog('connect_started', `onboarding_type=${coexistence ? 'coexistence' : 'unspecified'}`);
 
-  // ── 4. Cross-tenant duplicate check, early — cheap pre-check before
-  //      spending a Meta API round trip; the real guarantee is still the
-  //      UNIQUE index + the guard inside store_whatsapp_connection_save.
-  //      Only possible here if the frontend already knows phoneNumberId —
-  //      when it doesn't (FINISH_ONLY_WABA), the same check runs again
-  //      right after it's resolved from the WABA in step 7.
-  async function rejectIfPhoneAlreadyConnected(candidatePhoneNumberId: string): Promise<Response | null> {
-    const { data: existingForPhone } = await adminClient
-      .from('store_whatsapp_connections')
-      .select('store_id')
-      .eq('phone_number_id', candidatePhoneNumberId)
-      .neq('store_id', storeId)
-      .maybeSingle();
-
-    if (!existingForPhone) return null;
-    await eventLog('duplicate_phone_rejected', 'phone_number_id already connected to another store');
-    return json({ error: 'PHONE_NUMBER_ALREADY_CONNECTED', message: 'Este número de WhatsApp ya está conectado a otra tienda de Melosoft.' }, 409, cors);
-  }
-
-  if (requestedPhoneNumberId) {
-    const rejection = await rejectIfPhoneAlreadyConnected(requestedPhoneNumberId);
-    if (rejection) return rejection;
-  }
+  // ── 4. Do not reject a browser-provided phone_number_id as a duplicate
+  //      yet. Meta/WhatsApp Business can move or disconnect a number while
+  //      our historical row remains present. Only after the OAuth code is
+  //      exchanged and Meta proves the WABA↔phone relationship do we have
+  //      enough authority to reconcile that stale local claim safely.
 
   // ── 5. Exchange the temporary code for an access token (server-side
   //      only — this is the one call that needs META_WHATSAPP_APP_SECRET) ──
@@ -312,8 +294,6 @@ Deno.serve(async (req: Request) => {
   } else if (wabaPhones.length === 1) {
     phoneNumberId = wabaPhones[0].id;
     await eventLog('phone_auto_resolved', `phone_number_id=${phoneNumberId}`);
-    const rejection = await rejectIfPhoneAlreadyConnected(phoneNumberId);
-    if (rejection) return rejection;
   } else if (wabaPhones.length === 0) {
     console.error('[whatsapp-embedded-signup] WABA has no phone numbers to resolve');
     await eventLog('connect_failed', 'no_phone_number_found_in_waba');
@@ -389,7 +369,7 @@ Deno.serve(async (req: Request) => {
   //      UNIQUE index as the final guarantee ──
   const onboardingType = isCoexistenceFlow ? 'coexistence' : 'new_number';
 
-  const { error: saveErr } = await adminClient.rpc('store_whatsapp_connection_save', {
+  const { data: rawSaveResult, error: saveErr } = await adminClient.rpc('store_whatsapp_connection_save', {
     p_store_id: storeId,
     p_meta_business_id: businessId ?? null,
     p_waba_id: wabaId,
@@ -413,6 +393,15 @@ Deno.serve(async (req: Request) => {
       cors,
     );
   }
+
+  const saveResult = rawSaveResult && typeof rawSaveResult === 'object'
+    ? rawSaveResult as Record<string, unknown>
+    : {};
+  const phoneReassigned = saveResult.phone_reassigned === true;
+  const transferredRegistrationPin = typeof saveResult.transferred_registration_pin === 'string' &&
+      isValidWhatsappRegistrationPin(saveResult.transferred_registration_pin)
+    ? saveResult.transferred_registration_pin
+    : null;
 
   // ── 11. Coexistence numbers are already registered in the WhatsApp
   //      Business mobile app. Meta explicitly requires skipping
@@ -443,6 +432,7 @@ Deno.serve(async (req: Request) => {
       displayPhoneNumber,
       verifiedName,
       onboardingType,
+      phoneReassigned,
       coexistenceStatus,
     }, 200, cors);
   }
@@ -471,7 +461,7 @@ Deno.serve(async (req: Request) => {
       isValidWhatsappRegistrationPin(rawRegistrationContext.registration_pin)
     ? rawRegistrationContext.registration_pin
     : null;
-  const registrationPin = storedRegistrationPin ?? generateWhatsappRegistrationPin();
+  const registrationPin = storedRegistrationPin ?? transferredRegistrationPin ?? generateWhatsappRegistrationPin();
   const registrationResult = await registerWhatsappPhone({
     graphApiVersion,
     phoneNumberId,
@@ -520,5 +510,6 @@ Deno.serve(async (req: Request) => {
     displayPhoneNumber,
     verifiedName,
     onboardingType,
+    phoneReassigned,
   }, 200, cors);
 });

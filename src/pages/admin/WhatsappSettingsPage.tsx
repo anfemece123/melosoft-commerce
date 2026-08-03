@@ -351,7 +351,9 @@ export function WhatsappSettingsPage() {
         coexistence: useCoexistence,
       });
       if (completion.registrationStatus === 'registered') {
-        notify.success('WhatsApp Business conectado y listo para enviar');
+        notify.success(completion.phoneReassigned
+          ? 'WhatsApp Business conectado y listo para enviar. La conexión anterior de este número en Melosoft se cerró automáticamente.'
+          : 'WhatsApp Business conectado y listo para enviar');
       } else if (completion.registrationStatus === 'requires_pin') {
         notify.warning('Número conectado. Meta solicita el PIN existente para habilitar los envíos.');
       } else if (completion.onboardingType === 'coexistence') {

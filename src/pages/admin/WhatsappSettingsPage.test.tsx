@@ -144,6 +144,40 @@ describe('WhatsappSettingsPage — Conectar WhatsApp Business button', () => {
     expect(notify.error).toHaveBeenCalledWith('La cuenta de WhatsApp Business no tiene ningún número registrado.');
   });
 
+  it('explains when a freshly verified Meta signup moved a stale Melosoft connection', async () => {
+    launchWhatsAppEmbeddedSignupMock.mockResolvedValueOnce({
+      code: 'auth-code-reassignment',
+      session: { wabaId: 'waba-current', phoneNumberId: 'phone-current', businessId: 'biz-current' },
+    });
+
+    const { WhatsappSettingsPage } = await import('./WhatsappSettingsPage');
+    const { whatsappService } = await import('@/features/whatsapp/whatsappService');
+    (whatsappService.completeEmbeddedSignup as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      connectionStatus: 'connected',
+      registrationStatus: 'registered',
+      displayPhoneNumber: '+57 318 5839777',
+      verifiedName: 'Empresa actual',
+      onboardingType: 'coexistence',
+      phoneReassigned: true,
+    });
+    const { notify } = await import('@/lib/notifications');
+
+    render(
+      <MemoryRouter initialEntries={['/admin/stores/store-1/whatsapp']}>
+        <Routes>
+          <Route path="/admin/stores/:storeId/whatsapp" element={<WhatsappSettingsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /conectar whatsapp business/i }));
+
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith(
+      'WhatsApp Business conectado y listo para enviar. La conexión anterior de este número en Melosoft se cerró automáticamente.',
+    ));
+  });
+
   // When session has code + wabaId (even without phoneNumberId
   // — the FINISH_ONLY_WABA case), the POST to whatsapp-embedded-signup
   // must actually happen. completeEmbeddedSignup is the only thing in

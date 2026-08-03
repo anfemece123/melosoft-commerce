@@ -39,6 +39,9 @@ interface EmbeddedSignupCompletionResponse {
   displayPhoneNumber: string | null;
   verifiedName: string | null;
   onboardingType: string;
+  /** True when this fresh Meta authorization replaced a stale connection
+   * held by another Melosoft store. No previous-store data is exposed. */
+  phoneReassigned?: boolean;
 }
 
 interface FunctionErrorWithContext extends Error {
