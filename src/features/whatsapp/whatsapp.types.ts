@@ -45,7 +45,8 @@ export type WhatsappNotificationStatus =
   | 'read'
   | 'failed'
   | 'invalid_recipient'
-  | 'blocked';
+  | 'blocked'
+  | 'superseded';
 
 export interface WhatsappNotification {
   id: string;

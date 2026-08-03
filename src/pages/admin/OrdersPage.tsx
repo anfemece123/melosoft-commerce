@@ -34,6 +34,14 @@ import { scrollToFirstError } from '@/hooks/useScrollToFirstFormikError';
 type DateRangeKey = 'today' | 'yesterday' | 'last7' | 'this_month' | 'custom';
 type ViewMode = 'board' | 'table';
 
+const ORDER_STATUS_PROGRESS: Partial<Record<OrderStatus, number>> = {
+  pending: 0,
+  confirmed: 1,
+  processing: 2,
+  shipped: 3,
+  delivered: 4,
+};
+
 // ── Date range helpers ────────────────────────────────────────
 
 const DATE_RANGE_OPTIONS: Array<{ key: DateRangeKey; label: string }> = [
@@ -223,6 +231,13 @@ export function OrdersPage() {
   const { refresh: refreshPendingBadge } = usePendingOrdersBadge();
 
   async function handleStatusChange(orderId: string, newStatus: OrderStatus) {
+    const previousStatus = items.find(order => order.id === orderId)?.status;
+    const previousProgress = previousStatus ? ORDER_STATUS_PROGRESS[previousStatus] : undefined;
+    const nextProgress = ORDER_STATUS_PROGRESS[newStatus];
+    const isBackwardCorrection = newStatus !== 'cancelled' &&
+      previousProgress !== undefined && nextProgress !== undefined &&
+      nextProgress < previousProgress;
+
     try {
       if (newStatus === 'cancelled') {
         // Goes through cancel_store_order so any stock the order
@@ -236,7 +251,9 @@ export function OrdersPage() {
         const updated = await ordersService.updateOrderStatus(orderId, newStatus);
         dispatch(updateOrder(updated));
       }
-      notify.success('Pedido actualizado');
+      notify.success(isBackwardCorrection
+        ? 'Pedido corregido. No se enviarán por WhatsApp avisos de estados anteriores.'
+        : 'Pedido actualizado');
       refreshPendingBadge();
     } catch {
       notify.error('No se pudo actualizar el estado del pedido');

@@ -56,6 +56,10 @@ import {
   isWhatsappOrderShipmentEvent,
   resolveWhatsappShipmentTracking,
 } from '../_shared/whatsappShipment.ts';
+import {
+  isWhatsappFulfillmentMilestoneCurrent,
+  isWhatsappFulfillmentMilestoneEvent,
+} from '../_shared/whatsappOrderNotificationRelevance.ts';
 import { readVerifiedJwtRole } from '../_shared/verifiedServiceRoleJwt.ts';
 
 const CORS_HEADERS = {
@@ -521,9 +525,63 @@ serve(async (req: Request) => {
   let retried = 0;
   let ambiguous = 0;
   let blocked = 0;
+  let superseded = 0;
 
   for (const notification of rows) {
     const nowIso = new Date().toISOString();
+
+    // The order may have changed after this row was queued (or even while it
+    // waited for the cron worker). Never send a customer-facing milestone
+    // that no longer matches the exact current state. The database trigger
+    // already cancels untouched queued rows; this second check closes the
+    // race where the worker claimed the row just before staff corrected it.
+    if (notification.order_id && isWhatsappFulfillmentMilestoneEvent(notification.event_type)) {
+      const { data: currentOrder, error: currentOrderError } = await supabase
+        .from('orders')
+        .select('status, fulfillment_method')
+        .eq('id', notification.order_id)
+        .maybeSingle();
+
+      if (currentOrderError) {
+        console.error('[send-whatsapp-notification] current order lookup failed:', currentOrderError.message);
+        await supabase.from('whatsapp_notifications').update({
+          status: 'queued',
+          locked_at: null,
+          locked_by: null,
+        }).eq('id', notification.id);
+        continue;
+      }
+
+      if (!currentOrder || !isWhatsappFulfillmentMilestoneCurrent(
+        notification.event_type,
+        currentOrder.status,
+        currentOrder.fulfillment_method,
+      )) {
+        const { error: supersedeError } = await supabase.from('whatsapp_notifications').update({
+          status: 'superseded',
+          is_permanent_failure: false,
+          failed_at: null,
+          locked_at: null,
+          locked_by: null,
+          last_error_category: 'superseded',
+          last_error_code: 'ORDER_STATUS_CHANGED',
+          last_error_message: 'Omitido automáticamente porque el pedido cambió de estado antes del envío.',
+        }).eq('id', notification.id);
+
+        if (supersedeError) {
+          console.error('[send-whatsapp-notification] supersede failed:', supersedeError.message);
+          await supabase.from('whatsapp_notifications').update({
+            status: 'queued',
+            locked_at: null,
+            locked_by: null,
+          }).eq('id', notification.id);
+          continue;
+        }
+
+        superseded++;
+        continue;
+      }
+    }
 
     // ── Per-store connection lookup — this is the entire Modelo B
     //    boundary. A row for store A can never touch store B's token or
@@ -752,5 +810,5 @@ serve(async (req: Request) => {
   // in the admin history table (WhatsappSettingsPage) per notification.
   const retriedRows = rows.filter((r) => r.attempts > 1).length;
 
-  return json({ claimed: rows.length, sent, failed, retried, ambiguous, blocked, attempts_gt_1: retriedRows });
+  return json({ claimed: rows.length, sent, failed, retried, ambiguous, blocked, superseded, attempts_gt_1: retriedRows });
 });

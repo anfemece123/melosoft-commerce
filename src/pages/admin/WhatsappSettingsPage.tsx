@@ -40,6 +40,7 @@ function StatusBadge({ status }: { status: WhatsappNotificationStatus }) {
     failed:            { label: 'Fallido',           className: 'bg-red-50 text-red-700',       icon: <XCircle className="w-3 h-3" /> },
     invalid_recipient: { label: 'Teléfono inválido', className: 'bg-amber-50 text-amber-700',   icon: <PhoneOff className="w-3 h-3" /> },
     blocked:           { label: 'Bloqueado',         className: 'bg-amber-50 text-amber-700',   icon: <ShieldAlert className="w-3 h-3" /> },
+    superseded:        { label: 'Omitido',           className: 'bg-gray-100 text-gray-600',    icon: <Ban className="w-3 h-3" /> },
   };
   const item = map[status];
   return (
@@ -966,7 +967,7 @@ export function WhatsappSettingsPage() {
                     {history.map((item) => (
                       <tr key={item.id} className="border-b border-gray-50 last:border-0">
                         <td className="px-2 py-2 whitespace-nowrap text-gray-500">
-                          {new Date(item.createdAt).toLocaleString('es-CO')}
+                          {new Date(item.queuedAt).toLocaleString('es-CO')}
                         </td>
                         <td className="px-2 py-2 text-gray-700">{EVENT_TYPE_LABELS[item.eventType] ?? item.eventType}</td>
                         <td className="px-2 py-2">
@@ -984,8 +985,14 @@ export function WhatsappSettingsPage() {
                           </div>
                         </td>
                         <td className="px-2 py-2 text-xs text-gray-400 max-w-[240px] truncate">
-                          {item.lastErrorMessage && ['failed', 'invalid_recipient', 'blocked'].includes(item.status) ? (
-                            <span className={`flex items-center gap-1 ${item.status === 'failed' ? 'text-red-500' : 'text-amber-600'}`}>
+                          {item.lastErrorMessage && ['failed', 'invalid_recipient', 'blocked', 'superseded'].includes(item.status) ? (
+                            <span className={`flex items-center gap-1 ${
+                              item.status === 'failed'
+                                ? 'text-red-500'
+                                : item.status === 'superseded'
+                                  ? 'text-gray-500'
+                                  : 'text-amber-600'
+                            }`}>
                               <Ban className="w-3 h-3 shrink-0" />
                               {item.lastErrorMessage}
                             </span>
