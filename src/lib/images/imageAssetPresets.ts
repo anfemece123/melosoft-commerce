@@ -15,11 +15,18 @@ export interface ImageAssetPreset {
   kind: ImageAssetKind;
   label: string;
   aspectRatio: number;
+  /** Quality recommendation shown to the user; it is not a hard gate. */
   minWidth: number;
   minHeight: number;
+  /** Smallest crop that remains usable for this placement. */
+  minimumCropWidth: number;
+  minimumCropHeight: number;
   recommendedWidth: number;
   recommendedHeight: number;
+  /** Maximum size accepted from the user's device before local processing. */
   maxBytes: number;
+  /** Maximum target for the optimized file that is actually uploaded. */
+  maxOutputBytes: number;
   shape: 'circle' | 'rounded';
 }
 
@@ -30,9 +37,12 @@ export const IMAGE_ASSET_PRESETS: Record<ImageAssetKind, ImageAssetPreset> = {
     aspectRatio: 1,
     minWidth: 256,
     minHeight: 256,
+    minimumCropWidth: 128,
+    minimumCropHeight: 128,
     recommendedWidth: 800,
     recommendedHeight: 800,
-    maxBytes: 6 * 1024 * 1024,
+    maxBytes: 10 * 1024 * 1024,
+    maxOutputBytes: 400 * 1024,
     shape: 'circle',
   },
   store_favicon: {
@@ -41,9 +51,12 @@ export const IMAGE_ASSET_PRESETS: Record<ImageAssetKind, ImageAssetPreset> = {
     aspectRatio: 1,
     minWidth: 64,
     minHeight: 64,
+    minimumCropWidth: 48,
+    minimumCropHeight: 48,
     recommendedWidth: 512,
     recommendedHeight: 512,
-    maxBytes: 2 * 1024 * 1024,
+    maxBytes: 5 * 1024 * 1024,
+    maxOutputBytes: 160 * 1024,
     shape: 'rounded',
   },
   store_hero: {
@@ -52,9 +65,12 @@ export const IMAGE_ASSET_PRESETS: Record<ImageAssetKind, ImageAssetPreset> = {
     aspectRatio: 1,
     minWidth: 700,
     minHeight: 700,
+    minimumCropWidth: 240,
+    minimumCropHeight: 240,
     recommendedWidth: 1400,
     recommendedHeight: 1400,
-    maxBytes: 8 * 1024 * 1024,
+    maxBytes: 12 * 1024 * 1024,
+    maxOutputBytes: 800 * 1024,
     shape: 'circle',
   },
   store_hero_badge: {
@@ -63,9 +79,12 @@ export const IMAGE_ASSET_PRESETS: Record<ImageAssetKind, ImageAssetPreset> = {
     aspectRatio: 1,
     minWidth: 240,
     minHeight: 240,
+    minimumCropWidth: 96,
+    minimumCropHeight: 96,
     recommendedWidth: 800,
     recommendedHeight: 800,
-    maxBytes: 6 * 1024 * 1024,
+    maxBytes: 8 * 1024 * 1024,
+    maxOutputBytes: 350 * 1024,
     shape: 'circle',
   },
   store_hero_background: {
@@ -74,9 +93,12 @@ export const IMAGE_ASSET_PRESETS: Record<ImageAssetKind, ImageAssetPreset> = {
     aspectRatio: 16 / 9,
     minWidth: 1200,
     minHeight: 675,
+    minimumCropWidth: 480,
+    minimumCropHeight: 270,
     recommendedWidth: 1920,
     recommendedHeight: 1080,
-    maxBytes: 10 * 1024 * 1024,
+    maxBytes: 15 * 1024 * 1024,
+    maxOutputBytes: 1200 * 1024,
     shape: 'rounded',
   },
   carta_cover: {
@@ -85,9 +107,12 @@ export const IMAGE_ASSET_PRESETS: Record<ImageAssetKind, ImageAssetPreset> = {
     aspectRatio: 16 / 9,
     minWidth: 1200,
     minHeight: 675,
+    minimumCropWidth: 480,
+    minimumCropHeight: 270,
     recommendedWidth: 1920,
     recommendedHeight: 1080,
-    maxBytes: 10 * 1024 * 1024,
+    maxBytes: 15 * 1024 * 1024,
+    maxOutputBytes: 1200 * 1024,
     shape: 'rounded',
   },
   product_image: {
@@ -96,9 +121,12 @@ export const IMAGE_ASSET_PRESETS: Record<ImageAssetKind, ImageAssetPreset> = {
     aspectRatio: 1,
     minWidth: 700,
     minHeight: 700,
+    minimumCropWidth: 240,
+    minimumCropHeight: 240,
     recommendedWidth: 1200,
     recommendedHeight: 1200,
-    maxBytes: 8 * 1024 * 1024,
+    maxBytes: 12 * 1024 * 1024,
+    maxOutputBytes: 650 * 1024,
     shape: 'rounded',
   },
   offer_hero: {
@@ -107,9 +135,12 @@ export const IMAGE_ASSET_PRESETS: Record<ImageAssetKind, ImageAssetPreset> = {
     aspectRatio: 16 / 9,
     minWidth: 1200,
     minHeight: 675,
+    minimumCropWidth: 480,
+    minimumCropHeight: 270,
     recommendedWidth: 1920,
     recommendedHeight: 1080,
-    maxBytes: 10 * 1024 * 1024,
+    maxBytes: 15 * 1024 * 1024,
+    maxOutputBytes: 1200 * 1024,
     shape: 'rounded',
   },
   home_section_image: {
@@ -118,9 +149,12 @@ export const IMAGE_ASSET_PRESETS: Record<ImageAssetKind, ImageAssetPreset> = {
     aspectRatio: 16 / 9,
     minWidth: 1200,
     minHeight: 675,
+    minimumCropWidth: 480,
+    minimumCropHeight: 270,
     recommendedWidth: 1920,
     recommendedHeight: 1080,
-    maxBytes: 8 * 1024 * 1024,
+    maxBytes: 12 * 1024 * 1024,
+    maxOutputBytes: 1000 * 1024,
     shape: 'rounded',
   },
   promo_banner_wide: {
@@ -129,9 +163,12 @@ export const IMAGE_ASSET_PRESETS: Record<ImageAssetKind, ImageAssetPreset> = {
     aspectRatio: 3,
     minWidth: 1200,
     minHeight: 400,
+    minimumCropWidth: 600,
+    minimumCropHeight: 200,
     recommendedWidth: 1800,
     recommendedHeight: 600,
-    maxBytes: 8 * 1024 * 1024,
+    maxBytes: 12 * 1024 * 1024,
+    maxOutputBytes: 1000 * 1024,
     shape: 'rounded',
   },
   promo_banner_split: {
@@ -140,9 +177,12 @@ export const IMAGE_ASSET_PRESETS: Record<ImageAssetKind, ImageAssetPreset> = {
     aspectRatio: 4 / 3,
     minWidth: 1000,
     minHeight: 750,
+    minimumCropWidth: 400,
+    minimumCropHeight: 300,
     recommendedWidth: 1600,
     recommendedHeight: 1200,
-    maxBytes: 8 * 1024 * 1024,
+    maxBytes: 12 * 1024 * 1024,
+    maxOutputBytes: 900 * 1024,
     shape: 'rounded',
   },
 };

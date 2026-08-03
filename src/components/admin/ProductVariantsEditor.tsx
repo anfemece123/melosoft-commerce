@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus, Trash2, Layers, ImagePlus, Wand2, Star, X, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -6,6 +6,7 @@ import { Select } from '@/components/ui/Select';
 import { MoneyInput } from '@/components/forms/MoneyInput';
 import { IntegerInput } from '@/components/forms/IntegerInput';
 import { StockAdjustmentModal } from '@/components/admin/StockAdjustmentModal';
+import { ImageCropDialog } from '@/components/admin/ImageCropDialog';
 import { productVariantsService, generateVariantCombinations, buildOptionSignature } from '@/features/products/productVariantsService';
 import { productsService } from '@/features/products/productsService';
 import type {
@@ -16,6 +17,8 @@ import type {
 } from '@/features/products/productVariants.types';
 import { notify } from '@/lib/notifications';
 import { scrollToFirstError } from '@/hooks/useScrollToFirstFormikError';
+import { IMAGE_ASSET_PRESETS } from '@/lib/images/imageAssetPresets';
+import { disposeLoadedImageFile, validateImageFile, type LoadedImageFile } from '@/lib/images/imageFile.utils';
 
 const OPTION_TYPE_LABELS: Record<ProductVariantOptionType, string> = {
   size: 'Talla',
@@ -179,6 +182,15 @@ interface ProductVariantsEditorProps {
   isMenu: boolean;
 }
 
+type VariantImageCropTarget =
+  | { kind: 'variant'; variantIndex: number }
+  | { kind: 'value'; optionIndex: number; valueIndex: number };
+
+interface VariantImageCropJob {
+  source: LoadedImageFile;
+  target: VariantImageCropTarget;
+}
+
 export function ProductVariantsEditor({
   storeId,
   productId,
@@ -200,8 +212,18 @@ export function ProductVariantsEditor({
   const [skuErrors, setSkuErrors] = useState<Record<number, string>>({});
   const [draftValueErrors, setDraftValueErrors] = useState<Record<number, string | undefined>>({});
   const [valueUploadTarget, setValueUploadTarget] = useState<{ optionIndex: number; valueIndex: number } | null>(null);
+  const [imageCropQueue, setImageCropQueue] = useState<VariantImageCropJob[]>([]);
+  const imageCropQueueRef = useRef<VariantImageCropJob[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const valueFileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    imageCropQueueRef.current = imageCropQueue;
+  }, [imageCropQueue]);
+
+  useEffect(() => () => {
+    imageCropQueueRef.current.forEach((job) => disposeLoadedImageFile(job.source));
+  }, []);
 
   function updateOption(index: number, patch: Partial<ProductVariantOptionDraft>) {
     onOptionsChange(options.map((option, i) => (i === index ? { ...option, ...patch } : option)));
@@ -271,38 +293,18 @@ export function ProductVariantsEditor({
     setValueUploadTarget(null);
     if (!value) return;
 
-    // Value already exists in the DB — upload immediately, same idea as
-    // exact-variant images.
-    if (value.id && productId) {
-      const existingCount = (value.images ?? []).length;
-      for (let i = 0; i < files.length; i += 1) {
-        try {
-          const image = await productVariantsService.uploadOptionValueImage(
-            storeId,
-            productId,
-            value.id,
-            files[i],
-            existingCount + i,
-            existingCount === 0 && i === 0
-          );
-          const current = options[optionIndex]?.values[valueIndex];
-          const currentImages = current?.images ?? [];
-          updateValue(optionIndex, valueIndex, { images: [...currentImages, image] });
-        } catch (err) {
-          notify.fromError(err);
-        }
+    const prepared: VariantImageCropJob[] = [];
+    for (const file of files) {
+      try {
+        prepared.push({
+          source: await validateImageFile(file, 'product_image'),
+          target: { kind: 'value', optionIndex, valueIndex },
+        });
+      } catch (error) {
+        notify.error(`${file.name}: ${error instanceof Error ? error.message : 'No se pudo preparar la imagen.'}`);
       }
-      notify.success('Imágenes actualizadas.');
-      return;
     }
-
-    // No real id yet — queue locally; uploaded right after the value is
-    // saved (see ProductFormPage), same pattern as pending variant images.
-    const previews = files.map((f) => URL.createObjectURL(f));
-    updateValue(optionIndex, valueIndex, {
-      pendingImageFiles: [...(value.pendingImageFiles ?? []), ...files],
-      pendingImagePreviewUrls: [...(value.pendingImagePreviewUrls ?? []), ...previews],
-    });
+    if (prepared.length > 0) setImageCropQueue((current) => [...current, ...prepared]);
   }
 
   async function removeSavedValueImage(optionIndex: number, valueIndex: number, imageIndex: number) {
@@ -436,30 +438,98 @@ export function ProductVariantsEditor({
   async function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file || uploadingVariantIndex === null) return;
+    if (uploadingVariantIndex === null) return;
+    if (!file) {
+      setUploadingVariantIndex(null);
+      return;
+    }
     const index = uploadingVariantIndex;
-    const variant = variants[index];
+    try {
+      const source = await validateImageFile(file, 'product_image');
+      setImageCropQueue((current) => [...current, {
+        source,
+        target: { kind: 'variant', variantIndex: index },
+      }]);
+    } catch (error) {
+      notify.fromError(error, 'No se pudo preparar la imagen.');
+      setUploadingVariantIndex(null);
+    }
+  }
 
-    // Variant already exists in the DB — upload immediately, same as before.
-    if (variant.id && productId) {
+  async function saveCroppedImage(job: VariantImageCropJob, file: File) {
+    if (job.target.kind === 'variant') {
+      const index = job.target.variantIndex;
+      const variant = variants[index];
+      if (!variant) {
+        setUploadingVariantIndex(null);
+        return;
+      }
       try {
-        const image = await productVariantsService.uploadVariantImage(storeId, productId, variant.id, file, 0, true);
-        updateVariant(index, { imageUrl: image.imageUrl, pendingImageFile: null, pendingImagePreviewUrl: null });
-        notify.success('Imagen de variante actualizada.');
-      } catch (err) {
-        notify.fromError(err);
+        if (variant.id && productId) {
+          const image = await productVariantsService.uploadVariantImage(
+            storeId,
+            productId,
+            variant.id,
+            file,
+            0,
+            true,
+          );
+          updateVariant(index, {
+            imageUrl: image.imageUrl,
+            pendingImageFile: null,
+            pendingImagePreviewUrl: null,
+          });
+          notify.success('Imagen de variante optimizada y actualizada.');
+        } else {
+          if (variant.pendingImagePreviewUrl) URL.revokeObjectURL(variant.pendingImagePreviewUrl);
+          updateVariant(index, {
+            pendingImageFile: file,
+            pendingImagePreviewUrl: URL.createObjectURL(file),
+          });
+        }
+      } catch (error) {
+        notify.fromError(error);
       } finally {
         setUploadingVariantIndex(null);
       }
       return;
     }
 
-    // No real variant id yet (new product, or a new row added while
-    // editing) — keep the file locally with a preview; it's uploaded and
-    // attached to the real variant right after the product is saved.
-    if (variant.pendingImagePreviewUrl) URL.revokeObjectURL(variant.pendingImagePreviewUrl);
-    updateVariant(index, { pendingImageFile: file, pendingImagePreviewUrl: URL.createObjectURL(file) });
-    setUploadingVariantIndex(null);
+    const { optionIndex, valueIndex } = job.target;
+    const value = options[optionIndex]?.values[valueIndex];
+    if (!value) return;
+    try {
+      if (value.id && productId) {
+        const existingImages = value.images ?? [];
+        const image = await productVariantsService.uploadOptionValueImage(
+          storeId,
+          productId,
+          value.id,
+          file,
+          existingImages.length,
+          existingImages.length === 0,
+        );
+        updateValue(optionIndex, valueIndex, { images: [...existingImages, image] });
+        notify.success('Imagen optimizada y agregada.');
+      } else {
+        updateValue(optionIndex, valueIndex, {
+          pendingImageFiles: [...(value.pendingImageFiles ?? []), file],
+          pendingImagePreviewUrls: [
+            ...(value.pendingImagePreviewUrls ?? []),
+            URL.createObjectURL(file),
+          ],
+        });
+      }
+    } catch (error) {
+      notify.fromError(error);
+    }
+  }
+
+  function discardActiveCrop() {
+    const activeJob = imageCropQueue[0];
+    if (activeJob?.target.kind === 'variant') setUploadingVariantIndex(null);
+    disposeLoadedImageFile(activeJob?.source);
+    setImageCropQueue((current) => current.slice(1));
   }
 
   const stockModalVariant = stockModalIndex !== null ? variants[stockModalIndex] : null;
@@ -961,14 +1031,34 @@ export function ProductVariantsEditor({
         </>
       )}
 
-      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => void handleFileSelected(e)} />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/avif"
+        className="hidden"
+        onChange={(e) => void handleFileSelected(e)}
+      />
       <input
         ref={valueFileInputRef}
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp,image/avif"
         multiple
         className="hidden"
         onChange={(e) => void handleValueFilesSelected(e)}
+      />
+
+      <ImageCropDialog
+        open={imageCropQueue.length > 0}
+        file={imageCropQueue[0]?.source ?? null}
+        preset={IMAGE_ASSET_PRESETS.product_image}
+        onCancel={discardActiveCrop}
+        onConfirm={async (file) => {
+          const activeJob = imageCropQueue[0];
+          if (!activeJob) return;
+          await saveCroppedImage(activeJob, file);
+          disposeLoadedImageFile(activeJob.source);
+          setImageCropQueue((current) => current.slice(1));
+        }}
       />
 
       {stockModalVariant && stockModalVariant.id && productId ? (

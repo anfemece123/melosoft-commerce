@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { assertImageReadyForUpload } from '@/lib/images/imageFile.utils';
 import type { Offer, OfferInsert, OfferUpdate } from './offers.types';
 import type { PublicOfferPage, StoreCampaignOffer, CampaignOfferSession } from '@/types/common.types';
 import {
@@ -132,14 +133,15 @@ export const offersService = {
     offerId: string,
     file: File
   ): Promise<string> {
+    assertImageReadyForUpload(file, 'offer_hero');
     const ext = file.name.split('.').pop() ?? 'jpg';
     const path = `${ownerId}/stores/${storeId}/offers/${offerId}/hero.${ext}`;
     const { error: uploadError } = await supabase.storage
       .from('store-assets')
-      .upload(path, file, { upsert: true });
+      .upload(path, file, { upsert: true, contentType: file.type, cacheControl: '31536000' });
     if (uploadError) throw new Error(uploadError.message);
     const { data } = supabase.storage.from('store-assets').getPublicUrl(path);
-    return data.publicUrl;
+    return `${data.publicUrl}?v=${crypto.randomUUID()}`;
   },
 
   async archiveOffer(id: string): Promise<Offer> {

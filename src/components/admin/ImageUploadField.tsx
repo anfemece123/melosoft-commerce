@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ImagePlus, Loader2, RotateCcw, Trash2 } from 'lucide-react';
 import { ImageCropDialog } from './ImageCropDialog';
@@ -8,6 +8,7 @@ import {
 } from '@/lib/images/imageAssetPresets';
 import {
   getImageAssetPreset,
+  disposeLoadedImageFile,
   validateImageFile,
   type LoadedImageFile,
 } from '@/lib/images/imageFile.utils';
@@ -48,6 +49,8 @@ export function ImageUploadField({
   const [localError, setLocalError] = useState<string | null>(null);
   const preset = getImageAssetPreset(assetKind);
 
+  useEffect(() => () => disposeLoadedImageFile(cropSource), [cropSource]);
+
   async function handleRawFile(file: File | null) {
     if (!file) return;
     try {
@@ -85,7 +88,8 @@ export function ImageUploadField({
               <button
                 type="button"
                 onClick={() => inputRef.current?.click()}
-                className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+                disabled={uploading}
+                className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
                 {uploading ? 'Subiendo...' : 'Subir imagen'}
@@ -108,7 +112,7 @@ export function ImageUploadField({
               id={id}
               ref={inputRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp"
+              accept="image/png,image/jpeg,image/webp,image/avif"
               className="hidden"
               onChange={(event) => {
                 void handleRawFile(event.target.files?.[0] ?? null);
@@ -117,7 +121,10 @@ export function ImageUploadField({
             />
 
             <p className="mt-2 text-xs text-gray-500">
-              {hint ?? `Usa ${preset.recommendedWidth}x${preset.recommendedHeight}px. Máximo ${formatBytes(preset.maxBytes)}.`}
+              {hint ?? 'Puedes usar una imagen vertical, horizontal o cuadrada; podrás elegir el recorte antes de subirla.'}
+            </p>
+            <p className="mt-1 text-xs text-gray-400">
+              JPG, PNG, WebP o AVIF hasta {formatBytes(preset.maxBytes)}. Se optimiza automáticamente antes de guardar.
             </p>
             {(error || localError) && <p className="mt-1 text-xs text-red-600">{error ?? localError}</p>}
           </div>

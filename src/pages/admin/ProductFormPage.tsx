@@ -58,7 +58,7 @@ import type { ProductImage } from '@/features/products/products.types';
 import type { ProductDescriptionSection, PublicStoreCategory, PublicStoreCollection } from '@/types/common.types';
 import type { StoreFacet } from '@/features/facets/facets.types';
 import { IMAGE_ASSET_PRESETS } from '@/lib/images/imageAssetPresets';
-import { type LoadedImageFile, validateImageFile } from '@/lib/images/imageFile.utils';
+import { disposeLoadedImageFile, type LoadedImageFile, validateImageFile } from '@/lib/images/imageFile.utils';
 
 const MAX_IMAGES = 5;
 
@@ -198,6 +198,7 @@ export function ProductFormPage() {
   const [confirmDeleteImage, setConfirmDeleteImage] = useState<ProductImage | null>(null);
   const [cropQueue, setCropQueue] = useState<LoadedImageFile[]>([]);
   const [activeCrop, setActiveCrop] = useState<LoadedImageFile | null>(null);
+  const cropSourcesRef = useRef<LoadedImageFile[]>([]);
   const [optionGroups, setOptionGroups] = useState<ProductOptionGroupDraft[]>([]);
   const [hasVariants, setHasVariants] = useState(false);
   const [showVariantsAsCards, setShowVariantsAsCards] = useState(false);
@@ -713,6 +714,14 @@ export function ProductFormPage() {
   }, [activeCrop, cropQueue]);
 
   useEffect(() => {
+    cropSourcesRef.current = [...cropQueue, ...(activeCrop ? [activeCrop] : [])];
+  }, [activeCrop, cropQueue]);
+
+  useEffect(() => () => {
+    cropSourcesRef.current.forEach(disposeLoadedImageFile);
+  }, []);
+
+  useEffect(() => {
     if (!storeId) return;
     Promise.all([
       locationsService.getStoreLocations(storeId),
@@ -822,6 +831,7 @@ export function ProductFormPage() {
     const preview = URL.createObjectURL(file);
     setPendingFiles((prev) => [...prev, file]);
     setPendingPreviews((prev) => [...prev, preview]);
+    disposeLoadedImageFile(activeCrop);
     setActiveCrop(null);
   }
 
@@ -1138,7 +1148,7 @@ export function ProductFormPage() {
                   <span className="text-xs text-gray-400">Subir</span>
                   <input
                     type="file"
-                    accept="image/jpeg,image/png,image/webp"
+                    accept="image/jpeg,image/png,image/webp,image/avif"
                     multiple
                     className="hidden"
                     onChange={handleFileSelect}
@@ -1635,7 +1645,10 @@ export function ProductFormPage() {
         open={activeCrop !== null}
         file={activeCrop}
         preset={IMAGE_ASSET_PRESETS.product_image}
-        onCancel={() => setActiveCrop(null)}
+        onCancel={() => {
+          disposeLoadedImageFile(activeCrop);
+          setActiveCrop(null);
+        }}
         onConfirm={appendPendingFile}
       />
 

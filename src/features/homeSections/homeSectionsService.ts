@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { assertImageReadyForUpload } from '@/lib/images/imageFile.utils';
 import type { PublicHomeSection, PublicHomeSectionItem } from '@/types/common.types';
 import {
   mapStoreHomeSectionRowToStoreHomeSection,
@@ -220,13 +221,14 @@ export const homeSectionsService = {
   },
 
   async uploadHomeSectionImage(storeId: string, sectionId: string, file: File): Promise<string> {
+    assertImageReadyForUpload(file, 'home_section_image');
     const ownerId = await getOwnerId();
     const ext = (file.name.split('.').pop() ?? 'png').toLowerCase();
     const storagePath = `${ownerId}/stores/${storeId}/home/${sectionId}/image-${crypto.randomUUID()}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
       .from('store-assets')
-      .upload(storagePath, file, { upsert: false, contentType: file.type });
+      .upload(storagePath, file, { upsert: false, contentType: file.type, cacheControl: '31536000' });
     if (uploadError) throw new Error(uploadError.message);
 
     const {

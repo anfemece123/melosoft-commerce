@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { assertImageReadyForUpload } from '@/lib/images/imageFile.utils';
 import type { Product, ProductInsert, ProductUpdate, ProductImage, ProductCountStats } from './products.types';
 import type { ProductFacetValue, ProductCollectionAssignment, PublicProductImage, PublicProductPage } from '@/types/common.types';
 import type { PublicProductImageRow, PublicProductPageRow } from '@/types/database.types';
@@ -543,6 +544,7 @@ export const productsService = {
     sortOrder: number,
     isPrimary: boolean
   ): Promise<ProductImage> {
+    assertImageReadyForUpload(file, 'product_image');
     const ownerId = await getOwnerId();
     const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase();
     const uuid = crypto.randomUUID();
@@ -550,7 +552,7 @@ export const productsService = {
 
     const { error: uploadError } = await supabase.storage
       .from('store-assets')
-      .upload(storagePath, file, { upsert: false, contentType: file.type });
+      .upload(storagePath, file, { upsert: false, contentType: file.type, cacheControl: '31536000' });
     if (uploadError) throw new Error(uploadError.message);
 
     const { data: { publicUrl } } = supabase.storage

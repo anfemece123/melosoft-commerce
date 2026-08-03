@@ -1,4 +1,6 @@
 import { supabase } from '@/lib/supabase';
+import { assertImageReadyForUpload } from '@/lib/images/imageFile.utils';
+import type { ImageAssetKind } from '@/lib/images/imageAssetPresets';
 import type {
   Store,
   StoreInsert,
@@ -188,21 +190,31 @@ export const storesService = {
     file: File,
     assetKind: 'logo' | 'favicon' | 'hero-image' | 'hero-background' | 'hero-badge' | 'carta-cover' | 'carta-cover-background'
   ): Promise<string> {
+    const presetByAssetKind: Record<typeof assetKind, ImageAssetKind> = {
+      logo: 'store_logo',
+      favicon: 'store_favicon',
+      'hero-image': 'store_hero',
+      'hero-background': 'store_hero_background',
+      'hero-badge': 'store_hero_badge',
+      'carta-cover': 'carta_cover',
+      'carta-cover-background': 'store_hero_background',
+    };
+    assertImageReadyForUpload(file, presetByAssetKind[assetKind]);
     const ownerId = await getOwnerId();
     const ext = (file.name.split('.').pop() ?? 'png').toLowerCase();
     const safeStoreKey = storeKey.trim().toLowerCase().replace(/[^a-z0-9-_/]/g, '-') || 'draft';
-    const storagePath = `${ownerId}/stores/${safeStoreKey}/branding/${assetKind}-${crypto.randomUUID()}.${ext}`;
+    const storagePath = `${ownerId}/stores/${safeStoreKey}/branding/${assetKind}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
       .from('store-assets')
-      .upload(storagePath, file, { upsert: false, contentType: file.type });
+      .upload(storagePath, file, { upsert: true, contentType: file.type, cacheControl: '31536000' });
     if (uploadError) throw new Error(uploadError.message);
 
     const { data: { publicUrl } } = supabase.storage
       .from('store-assets')
       .getPublicUrl(storagePath);
 
-    return publicUrl;
+    return `${publicUrl}?v=${crypto.randomUUID()}`;
   },
 
   async archiveStore(id: string): Promise<Store> {

@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { assertImageReadyForUpload } from '@/lib/images/imageFile.utils';
 import type {
   ProductVariantOptionRow,
   ProductVariantOptionRowInsert,
@@ -450,34 +451,64 @@ export const productVariantsService = {
     sortOrder: number,
     isPrimary: boolean
   ): Promise<ProductImage> {
+    assertImageReadyForUpload(file, 'product_image');
     const ownerId = await getOwnerId();
     const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase();
-    const uuid = crypto.randomUUID();
-    const storagePath = `${ownerId}/stores/${storeId}/products/${productId}/${uuid}.${ext}`;
+    const storagePath = `${ownerId}/stores/${storeId}/products/${productId}/variants/${variantId}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
       .from('store-assets')
-      .upload(storagePath, file, { upsert: false, contentType: file.type });
+      .upload(storagePath, file, { upsert: true, contentType: file.type, cacheControl: '31536000' });
     if (uploadError) throw new Error(uploadError.message);
 
     const { data: { publicUrl } } = supabase.storage.from('store-assets').getPublicUrl(storagePath);
-
-    const { data, error } = await supabase
+    const versionedPublicUrl = `${publicUrl}?v=${crypto.randomUUID()}`;
+    const { data: existingRows, error: existingError } = await supabase
       .from('product_images')
-      .insert({
-        store_id: storeId,
-        product_id: productId,
-        variant_id: variantId,
-        owner_id: ownerId,
-        image_url: publicUrl,
-        storage_path: storagePath,
-        sort_order: sortOrder,
-        is_primary: isPrimary,
-      })
-      .select()
-      .single();
+      .select('*')
+      .eq('variant_id', variantId)
+      .order('created_at', { ascending: true });
+    if (existingError) throw new Error(existingError.message);
+
+    const imagePayload = {
+      store_id: storeId,
+      product_id: productId,
+      variant_id: variantId,
+      owner_id: ownerId,
+      image_url: versionedPublicUrl,
+      storage_path: storagePath,
+      sort_order: sortOrder,
+      is_primary: isPrimary,
+    };
+    const primaryExistingRow = existingRows?.[0];
+    const writeQuery = primaryExistingRow
+      ? supabase.from('product_images').update(imagePayload).eq('id', primaryExistingRow.id)
+      : supabase.from('product_images').insert(imagePayload);
+    const { data, error } = await writeQuery.select().single();
     if (error) throw new Error(error.message);
     if (!data) throw new Error('No data returned after variant image insert');
+
+    const duplicateIds = (existingRows ?? []).slice(1).map((row) => row.id);
+    if (duplicateIds.length > 0) {
+      const { error: duplicateDeleteError } = await supabase
+        .from('product_images')
+        .delete()
+        .in('id', duplicateIds);
+      if (duplicateDeleteError) {
+        console.error('[Imágenes] No se pudieron limpiar registros duplicados de la variante.', duplicateDeleteError);
+      }
+    }
+
+    const obsoleteStoragePaths = Array.from(new Set(
+      (existingRows ?? [])
+        .map((row) => row.storage_path)
+        .filter((path): path is string => Boolean(path && path !== storagePath)),
+    ));
+    if (obsoleteStoragePaths.length > 0) {
+      const { error: cleanupError } = await supabase.storage.from('store-assets').remove(obsoleteStoragePaths);
+      if (cleanupError) console.error('[Imágenes] No se pudieron limpiar archivos antiguos de la variante.', cleanupError);
+    }
+
     return mapProductImageRowToProductImage(data);
   },
 
@@ -493,6 +524,7 @@ export const productVariantsService = {
     sortOrder: number,
     isPrimary: boolean
   ): Promise<ProductImage> {
+    assertImageReadyForUpload(file, 'product_image');
     const ownerId = await getOwnerId();
     const ext = (file.name.split('.').pop() ?? 'jpg').toLowerCase();
     const uuid = crypto.randomUUID();
@@ -500,7 +532,7 @@ export const productVariantsService = {
 
     const { error: uploadError } = await supabase.storage
       .from('store-assets')
-      .upload(storagePath, file, { upsert: false, contentType: file.type });
+      .upload(storagePath, file, { upsert: false, contentType: file.type, cacheControl: '31536000' });
     if (uploadError) throw new Error(uploadError.message);
 
     const { data: { publicUrl } } = supabase.storage.from('store-assets').getPublicUrl(storagePath);
