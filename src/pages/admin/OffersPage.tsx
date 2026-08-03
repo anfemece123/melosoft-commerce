@@ -24,7 +24,6 @@ import { computeOfferUIStatus } from '@/lib/offers/offerStatus.utils';
 import type { Offer } from '@/features/offers/offers.types';
 import type { Store } from '@/features/stores/stores.types';
 import type { BadgeVariant } from '@/types/common.types';
-import type { StoreDomain } from '@/features/domains/domains.types';
 import { domainsService } from '@/features/domains/domainsService';
 
 type FilterTab = 'all' | 'active' | 'scheduled' | 'draft' | 'paused' | 'expired' | 'archived';
@@ -58,7 +57,6 @@ export function OffersPage() {
   const [tab, setTab] = useState<FilterTab>('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [confirmArchive, setConfirmArchive] = useState<Offer | null>(null);
-  const [domains, setDomains] = useState<StoreDomain[]>([]);
 
   const isMenu = currentCommerceSettings?.catalogType === 'menu';
   const entityLabel = isMenu ? 'campañas del menú' : 'campañas de producto';
@@ -87,19 +85,6 @@ export function OffersPage() {
     }
     void load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId]);
-
-  useEffect(() => {
-    if (!storeId) return;
-    let cancelled = false;
-    domainsService.list(storeId)
-      .then((loaded) => {
-        if (!cancelled) setDomains(loaded);
-      })
-      .catch(() => {
-        if (!cancelled) setDomains([]);
-      });
-    return () => { cancelled = true; };
   }, [storeId]);
 
   function getUIStatus(offer: Offer) {
@@ -177,7 +162,7 @@ export function OffersPage() {
       notify.error('No se pudo obtener el link. Recarga la página.');
       return;
     }
-    const url = `${domainsService.getStorePublicUrl(storeData.slug, domains)}/o/${offer.slug}`;
+    const url = `${domainsService.getPlatformStoreUrl(storeData.slug)}/o/${offer.slug}`;
     navigator.clipboard.writeText(url).then(
       () => notify.success('Link copiado al portapapeles'),
       () => {

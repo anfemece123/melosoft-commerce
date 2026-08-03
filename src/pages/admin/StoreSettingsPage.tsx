@@ -18,7 +18,6 @@ import { MoneyInput } from '@/components/forms/MoneyInput';
 import { PhoneInput } from '@/components/forms/PhoneInput';
 import { StoreLogoField } from '@/components/admin/StoreLogoField';
 import { StoreFaviconField } from '@/components/admin/StoreFaviconField';
-import { StoreDomainSettings } from '@/components/admin/StoreDomainSettings';
 import { StoreHeroSlideEditor, type EditableStoreHeroSlide } from '@/components/admin/StoreHeroSlideEditor';
 import { HeaderNavigationEditor } from '@/components/admin/HeaderNavigationEditor';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
@@ -49,7 +48,6 @@ import { buildStorefrontTheme } from '@/components/public/storefront/storefrontT
 import { WhatsappLogoIcon } from '@/components/public/storefront/WhatsappLogoIcon';
 import { AdminPanelTabs } from '@/components/admin/AdminPanelTabs';
 import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
-import { isPlatformAdmin } from '@/utils/permissions';
 import { sanitizePhoneInput } from '@/lib/phone/phoneValidation';
 import { clearCachedPublicStoreBranding } from '@/lib/storefront/publicStoreBrandingCache';
 
@@ -210,7 +208,6 @@ type SettingsSection =
   | 'commerce'
   | 'theme'
   | 'header'
-  | 'domain'
   | 'policies'
   | 'payments'
   | 'whatsapp';
@@ -362,8 +359,6 @@ export function StoreSettingsPage() {
   });
 
   const currentStore = useAppSelector((s) => s.stores.current);
-  const currentLimits = useAppSelector((s) => s.stores.currentLimits);
-  const profile = useAppSelector((s) => s.auth.profile);
   const currentCommerceSettings = useAppSelector((s) => s.stores.currentCommerceSettings);
   const derivedBusinessCategory = mapBusinessTypeToBusinessCategory(currentStore?.businessType);
 
@@ -833,7 +828,6 @@ export function StoreSettingsPage() {
     { key: 'commerce', label: 'Configuración comercial' },
     { key: 'theme', label: 'Tema y apariencia' },
     { key: 'header', label: 'Header público' },
-    { key: 'domain', label: 'Dominio' },
     { key: 'policies', label: 'Políticas' },
     { key: 'payments', label: 'Pagos' },
     { key: 'whatsapp', label: 'WhatsApp' },
@@ -1194,14 +1188,6 @@ export function StoreSettingsPage() {
           </CardBody>
         </Card>
         )}
-
-        {activeSection === 'domain' && storeId && currentStore ? (
-          <StoreDomainSettings
-            storeId={storeId}
-            storeSlug={currentStore.slug}
-            canUseCustomDomain={Boolean(currentLimits?.canUseCustomDomain) || isPlatformAdmin(profile)}
-          />
-        ) : null}
 
         {activeSection === 'hero' && (
         <Card>

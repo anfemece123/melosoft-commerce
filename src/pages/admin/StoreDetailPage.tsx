@@ -20,7 +20,6 @@ import { productsService } from '@/features/products/productsService';
 import { isPlatformAdmin, canManageStore, canManageStoreMembers } from '@/utils/permissions';
 import type { ProductCountStats } from '@/features/products/products.types';
 import { domainsService } from '@/features/domains/domainsService';
-import type { StoreDomain } from '@/features/domains/domains.types';
 
 const CATALOG_TYPE_LABELS: Record<string, string> = {
   menu: 'Menú / Restaurante',
@@ -56,7 +55,6 @@ export function StoreDetailPage() {
   const dispatch = useAppDispatch();
   const [copied, setCopied] = useState(false);
   const [productStats, setProductStats] = useState<ProductCountStats | null>(null);
-  const [domains, setDomains] = useState<StoreDomain[]>([]);
 
   const profile = useAppSelector(selectAuthProfile);
   const myMemberships = useAppSelector(selectMyMemberships);
@@ -87,22 +85,9 @@ export function StoreDetailPage() {
     void load();
   }, [storeId, dispatch]);
 
-  useEffect(() => {
-    if (!storeId) return;
-    let cancelled = false;
-    domainsService.list(storeId)
-      .then((loaded) => {
-        if (!cancelled) setDomains(loaded);
-      })
-      .catch(() => {
-        if (!cancelled) setDomains([]);
-      });
-    return () => { cancelled = true; };
-  }, [storeId]);
-
   if (!store) return <LoadingScreen label="Cargando empresa…" />;
 
-  const publicUrl = domainsService.getStorePublicUrl(store.slug, domains);
+  const publicUrl = domainsService.getPlatformStoreUrl(store.slug);
 
   async function handleCopy() {
     try {
@@ -392,7 +377,6 @@ export function StoreDetailPage() {
                   { label: 'Staff', value: currentLimits.maxStaff },
                   { label: 'Ofertas activas', value: currentLimits.maxActiveOffers },
                   { label: 'Pagos Wompi', value: currentLimits.canUsePayments ? 'Habilitado' : 'No' },
-                  { label: 'Dominio propio', value: currentLimits.canUseCustomDomain ? 'Sí' : 'No' },
                   { label: 'Tema avanzado', value: currentLimits.canUseAdvancedTheme ? 'Sí' : 'No' },
                 ].map(({ label, value }) => (
                   <div key={label}>

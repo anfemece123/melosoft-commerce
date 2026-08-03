@@ -45,7 +45,6 @@ import { notify } from '@/lib/notifications';
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import type { CartaProductImagePosition, PublicCartaCategory, PublicCartaPage } from '@/features/carta/carta.types';
 import type { Store, StoreTheme } from '@/features/stores/stores.types';
-import type { StoreDomain } from '@/features/domains/domains.types';
 import type { PublicStoreCategory } from '@/types/common.types';
 import type { Product } from '@/features/products/products.types';
 
@@ -354,7 +353,6 @@ export function CartaSettingsPage() {
   const storeFromState = useAppSelector((state) => state.stores.current);
   const [storeData, setStoreData] = useState<Store | null>(storeFromState);
   const [storeTheme, setStoreTheme] = useState<StoreTheme | null>(null);
-  const [domains, setDomains] = useState<StoreDomain[]>([]);
   const [categories, setCategories] = useState<PublicStoreCategory[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
@@ -452,11 +450,10 @@ export function CartaSettingsPage() {
       }
 
       try {
-        const [settings, storeResult, themeResult, domainsResult, categoriesResult, productsResult, productImagesResult] = await Promise.all([
+        const [settings, storeResult, themeResult, categoriesResult, productsResult, productImagesResult] = await Promise.all([
           safely('No se pudieron cargar los ajustes guardados.', cartaService.getCartaSettings(storeId!), null),
           safely('No se pudo cargar la información de la tienda.', storeFromState?.id === storeId ? Promise.resolve(storeFromState) : storesService.getStoreById(storeId!), storeFromState?.id === storeId ? storeFromState : null),
           safely('No se pudo cargar el tema; se muestran colores predeterminados.', storesService.getStoreTheme(storeId!), null),
-          safely('No se pudieron cargar los dominios.', domainsService.list(storeId!), [] as StoreDomain[]),
           safely('No se pudieron cargar las categorías.', categoriesService.getStoreCategories(storeId!), [] as PublicStoreCategory[]),
           safely('No se pudieron cargar los productos.', productsService.getCartaProductsByStore(storeId!), [] as Product[]),
           safely('No se pudieron cargar las imágenes de galería; se usarán las imágenes principales.', productsService.getProductImagesByStore(storeId!), []),
@@ -494,7 +491,6 @@ export function CartaSettingsPage() {
         setSavedPublication(publicationValues);
         setStoreData(storeResult);
         setStoreTheme(themeResult);
-        setDomains(domainsResult);
         setCategories(sortBySavedOrder(categoriesResult, settings?.categoryOrder ?? []));
         const primaryImageByProduct = new Map<string, string>();
         for (const image of productImagesResult) {
@@ -522,7 +518,7 @@ export function CartaSettingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
 
-  const publicUrl = storeData ? `${domainsService.getStorePublicUrl(storeData.slug, domains)}/carta` : null;
+  const publicUrl = storeData ? `${domainsService.getPlatformStoreUrl(storeData.slug)}/carta` : null;
   const theme = useMemo(() => buildStorefrontTheme({
     mode: storeTheme?.mode,
     primaryColor: storeTheme?.primaryColor,
