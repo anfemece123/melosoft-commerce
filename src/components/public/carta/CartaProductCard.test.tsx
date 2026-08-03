@@ -66,4 +66,33 @@ describe('CartaProductCard descriptions', () => {
       expect(article?.className).toContain('grid-cols-[minmax(0,1fr)_');
     }
   );
+
+  it('renders Editorial as a clean split composition instead of an overlay card', () => {
+    const { container } = render(
+      <CartaProductCard product={product} currency="COP" theme={theme} variant="gallery" />
+    );
+
+    const article = container.querySelector('[data-carta-editorial-product="true"]');
+    expect(article?.getAttribute('data-carta-product-image-position')).toBe('left');
+    expect(article?.className).toContain('border-b');
+    expect(article?.className).not.toContain('rounded-2xl');
+    expect(article?.className).not.toContain('overflow-hidden');
+    expect(container.querySelector('.bg-gradient-to-t')).toBeNull();
+  });
+
+  it('keeps transparent PNG dishes floating without a visible image frame in Editorial', () => {
+    const { container } = render(
+      <CartaProductCard
+        product={{ ...product, imageUrl: 'https://example.com/dish.png?version=2' }}
+        currency="COP"
+        theme={theme}
+        variant="gallery"
+      />
+    );
+
+    const imageFrame = container.querySelector('img')?.parentElement;
+    expect(imageFrame?.className).toContain('rounded-none');
+    expect(imageFrame?.className).toContain('!overflow-visible');
+    expect(imageFrame?.getAttribute('style')).toBeNull();
+  });
 });

@@ -22,3 +22,82 @@ body {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* Carta motion system: intentionally limited to compositor-friendly
+   opacity/transform changes. Elements animate once when observed. */
+@keyframes carta-cover-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes carta-section-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes carta-product-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 7px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+[data-carta-motion='ready'] [data-carta-cover-content] {
+  animation: carta-cover-enter 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+[data-carta-motion='ready'] [data-carta-reveal]:not([data-carta-visible='true']) {
+  opacity: 0;
+  transform: translate3d(0, 10px, 0);
+}
+
+[data-carta-motion='ready'] [data-carta-reveal][data-carta-visible='true'] {
+  animation: carta-section-enter 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+[data-carta-motion='ready'] [data-carta-reveal][data-carta-visible='true'] [data-carta-product-reveal] {
+  animation: carta-product-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--carta-reveal-delay, 0ms);
+}
+
+[data-carta-product-reveal] {
+  min-width: 0;
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  [data-carta-motion='ready'] [data-carta-category-media] {
+    transition: transform 260ms ease-out;
+  }
+
+  [data-carta-motion='ready'] [data-carta-category-media]:hover {
+    transform: translate3d(0, -3px, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-carta-cover-content],
+  [data-carta-reveal],
+  [data-carta-product-reveal],
+  [data-carta-category-media] {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}

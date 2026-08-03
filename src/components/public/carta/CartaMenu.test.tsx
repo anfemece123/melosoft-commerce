@@ -119,16 +119,70 @@ describe('CartaMenu', () => {
     expect(navigation.getAttribute('data-carta-category-nav-stuck')).toBe('false');
     expect(navigation.className).not.toContain('backdrop-blur-xl');
 
+    const sentinel = document.querySelector('[data-carta-category-sentinel]') as Element;
     act(() => {
       observerCallback?.([{
         boundingClientRect: { top: -1 } as DOMRectReadOnly,
         isIntersecting: false,
+        target: sentinel,
       } as IntersectionObserverEntry], observerInstance as IntersectionObserver);
     });
 
     expect(navigation.getAttribute('data-carta-category-nav-stuck')).toBe('true');
     expect(navigation.className).toContain('backdrop-blur-xl');
     expect(navigation.getAttribute('style')).toContain('linear-gradient');
+  });
+
+  it('reveals categories once with short staggered product delays and no animation library', () => {
+    let observerCallback: IntersectionObserverCallback | undefined;
+    let observerInstance: IntersectionObserver | undefined;
+    class IntersectionObserverMock {
+      readonly root = null;
+      readonly rootMargin = '0px';
+      readonly thresholds = [0];
+      disconnect = vi.fn();
+      observe = vi.fn();
+      takeRecords = vi.fn(() => []);
+      unobserve = vi.fn();
+
+      constructor(callback: IntersectionObserverCallback) {
+        observerCallback = callback;
+        observerInstance = this as unknown as IntersectionObserver;
+      }
+    }
+    vi.stubGlobal('IntersectionObserver', IntersectionObserverMock);
+    const animatedPage: PublicCartaPage = {
+      ...page,
+      navigationMode: 'continuous',
+      categories: [{
+        ...page.categories[0],
+        products: [
+          page.categories[0].products[0],
+          { ...page.categories[0].products[0], id: 'one-b', name: 'Croquetas de queso', sortOrder: 1 },
+        ],
+      }],
+    };
+
+    render(<CartaMenu page={animatedPage} theme={theme} />);
+
+    const carta = document.querySelector('[data-carta-motion]');
+    const category = document.querySelector('[data-carta-reveal]') as Element;
+    expect(carta?.getAttribute('data-carta-motion')).toBe('ready');
+    expect(category.getAttribute('data-carta-visible')).toBeNull();
+
+    act(() => {
+      observerCallback?.([{
+        boundingClientRect: { top: 100 } as DOMRectReadOnly,
+        isIntersecting: true,
+        target: category,
+      } as IntersectionObserverEntry], observerInstance as IntersectionObserver);
+    });
+
+    expect(category.getAttribute('data-carta-visible')).toBe('true');
+    expect(observerInstance?.unobserve).toHaveBeenCalledWith(category);
+    const productDelays = Array.from(document.querySelectorAll<HTMLElement>('[data-carta-product-reveal]'))
+      .map((product) => product.style.getPropertyValue('--carta-reveal-delay'));
+    expect(productDelays).toEqual(['0ms', '45ms']);
   });
 
   it('filters dishes by name, description, or category without being limited by pagination', () => {
@@ -264,6 +318,39 @@ describe('CartaMenu', () => {
 
     expect(screen.getByRole('img', { name: 'Croquetas' }).closest('article')?.getAttribute('data-carta-product-image-position')).toBe('right');
     expect(screen.getByRole('img', { name: 'Lomo de la casa' }).closest('article')?.getAttribute('data-carta-product-image-position')).toBe('left');
+  });
+
+  it('turns the former gallery mode into an ordered Editorial layout', () => {
+    const editorialPage: PublicCartaPage = {
+      ...page,
+      templateKey: 'gallery',
+      navigationMode: 'continuous',
+      productImagePositions: {},
+      categories: [{
+        ...page.categories[0],
+        imageUrl: 'https://example.com/category.jpg',
+        products: [
+          { ...page.categories[0].products[0], imageUrl: 'https://example.com/croquetas.jpg' },
+          {
+            id: 'soup',
+            name: 'Sopa de la casa',
+            shortDescription: 'Cremosa y preparada al momento',
+            imageUrl: 'https://example.com/soup.jpg',
+            price: 16000,
+            sortOrder: 1,
+          },
+        ],
+      }],
+    };
+
+    render(<CartaMenu page={editorialPage} theme={theme} />);
+
+    expect(document.querySelector('[data-carta-editorial-heading]')).not.toBeNull();
+    expect(screen.getByRole('img', { name: 'Croquetas' }).closest('article')?.getAttribute('data-carta-product-image-position')).toBe('left');
+    expect(screen.getByRole('img', { name: 'Sopa de la casa' }).closest('article')?.getAttribute('data-carta-product-image-position')).toBe('left');
+    expect(document.querySelector('[data-carta-products-grid]')?.className).toContain('lg:grid-cols-2');
+    expect(document.querySelector('[data-carta-products-grid]')?.className).not.toContain('lg:grid-cols-3');
+    expect(document.querySelector('[data-carta-editorial-heading]')?.className).not.toContain('min-h-52');
   });
 
   it('does not accumulate large gaps between products in the per-product image mode', () => {

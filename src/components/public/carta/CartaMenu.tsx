@@ -88,14 +88,14 @@ function CartaCover({ page, theme }: { page: PublicCartaPage; theme: StorefrontT
   const titleClassName = isMinimal
     ? 'text-3xl font-bold tracking-tight sm:text-5xl'
     : isGallery
-      ? 'text-4xl font-black tracking-[-0.035em] sm:text-7xl'
+      ? 'text-4xl font-black tracking-[-0.045em] sm:text-6xl'
       : 'text-4xl font-black tracking-[-0.05em] sm:text-6xl';
   const imageFrameClassName = isMinimal
     ? 'aspect-[4/3] max-w-2xl rounded-[2rem] sm:aspect-[16/7]'
     : isGallery
-      ? 'aspect-[4/3] max-w-2xl rounded-t-[42%] rounded-b-[2.5rem] sm:aspect-[16/10]'
+      ? 'aspect-[4/3] max-w-3xl rounded-[2rem] sm:aspect-[16/8] sm:rounded-[2.75rem]'
       : 'aspect-square max-w-md rounded-[42%]';
-  const headerGradientDirection = isGallery ? '180deg' : isMinimal ? '160deg' : '135deg';
+  const headerGradientDirection = isGallery ? '145deg' : isMinimal ? '160deg' : '135deg';
   const gradientAccent = resolveCartaGradientAccent(theme);
   const coverAccentOpacity = theme.mode === 'dark' ? 0.12 : 0.07;
   const headerBackground = [
@@ -130,7 +130,7 @@ function CartaCover({ page, theme }: { page: PublicCartaPage; theme: StorefrontT
           />
         </>
       )}
-      <div className={`relative z-10 mx-auto flex w-full ${STOREFRONT_CONTAINER_CLASS} flex-col items-center`}>
+      <div data-carta-cover-content className={`relative z-10 mx-auto flex w-full ${STOREFRONT_CONTAINER_CLASS} flex-col items-center`}>
         <BrandMark page={page} theme={theme} />
         <p className={`${page.showLogo ? 'mt-4' : ''} text-sm font-bold uppercase tracking-[0.16em]`} style={{ color: theme.mutedText }}>{page.storeName}</p>
         {title && <h1 className={`mt-4 ${titleClassName}`} style={{ color: theme.text }}>{title}</h1>}
@@ -147,12 +147,10 @@ function CartaCover({ page, theme }: { page: PublicCartaPage; theme: StorefrontT
 
 function CategoryHeading({
   category,
-  categoryImageUrl,
   page,
   theme,
 }: {
   category: PublicCartaCategory;
-  categoryImageUrl: string | null;
   page: PublicCartaPage;
   theme: StorefrontTheme;
 }) {
@@ -169,20 +167,30 @@ function CategoryHeading({
     );
   }
 
-  if (page.templateKey === 'gallery' && categoryImageUrl) {
+  const centered = page.categoryHeadingAlignment === 'center';
+
+  if (page.templateKey === 'gallery') {
     return (
-      <div className="relative mb-6 min-h-52 overflow-hidden rounded-[2rem] sm:min-h-64" style={{ boxShadow: `0 22px 60px ${theme.shadow}` }}>
-        <img src={categoryImageUrl} alt={category.name} className="absolute inset-0 h-full w-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
-        <div className="relative flex min-h-52 flex-col justify-end p-6 text-white sm:min-h-64 sm:p-9">
-          <h2 className="text-3xl font-black sm:text-5xl">{category.name}</h2>
-          {page.showCategoryDescriptions && category.description && <p className="mt-2 max-w-xl text-sm leading-6 text-white/80">{category.description}</p>}
-        </div>
+      <div data-carta-editorial-heading className={`mb-5 sm:mb-7 ${centered ? 'text-center' : ''}`}>
+        <h2 className="text-3xl font-black tracking-[-0.035em] sm:text-5xl" style={{ color: theme.text }}>{category.name}</h2>
+        {page.showCategoryDescriptions && category.description && (
+          <p className={`mt-1.5 text-sm leading-6 ${centered ? 'mx-auto max-w-xl' : 'max-w-2xl'}`} style={{ color: theme.mutedText }}>
+            {category.description}
+          </p>
+        )}
+        <div
+          aria-hidden="true"
+          className={`mt-3 h-px w-16 sm:mt-4 sm:w-20 ${centered ? 'mx-auto' : ''}`}
+          style={{
+            background: centered
+              ? `linear-gradient(90deg, transparent, ${theme.primary}, transparent)`
+              : `linear-gradient(90deg, ${theme.primary}, ${withAlpha(theme.primary, 0.12)})`,
+          }}
+        />
       </div>
     );
   }
 
-  const centered = page.categoryHeadingAlignment === 'center';
   return (
     <div className={`mb-6 ${centered ? 'text-center' : ''}`}>
       <h2 className="text-3xl font-black tracking-tight sm:text-4xl" style={{ color: theme.text }}>{category.name}</h2>
@@ -217,13 +225,12 @@ function CategorySection({ category, index, page, theme }: { category: PublicCar
   const productImageMode = category.id ? page.categoryImageModes[category.id] ?? page.productImageMode : page.productImageMode;
   const showProductImages = productImageMode === 'all';
   const categoryImageUrl = resolveCategoryImageUrl(category, page, productImageMode);
-  const headingImageUrl = productImageMode === 'all' ? categoryImageUrl : null;
   const categoryImagePosition = category.id ? page.categoryImagePositions[category.id] ?? 'beside_right' : 'beside_right';
   const categoryImageSize = category.id ? page.categoryImageSizes[category.id] ?? 'medium' : 'medium';
   const imageBesideProducts = categoryImagePosition === 'beside_left' || categoryImagePosition === 'beside_right';
   const categoryImageIsPng = isLikelyPngAsset(categoryImageUrl);
   const editorialImageShape = page.templateKey === 'gallery'
-    ? 'rounded-t-[45%] rounded-b-[1.75rem]'
+    ? 'rounded-[30%]'
     : page.templateKey === 'minimal'
       ? 'rounded-[1.5rem]'
       : 'rounded-[36%]';
@@ -254,6 +261,7 @@ function CategorySection({ category, index, page, theme }: { category: PublicCar
         : 'grid-cols-[132px_minmax(0,1fr)] sm:grid-cols-[160px_minmax(0,1fr)] lg:grid-cols-[200px_minmax(0,1fr)]';
   const renderCategoryImage = (beside: boolean) => categoryImageUrl ? (
     <figure
+      data-carta-category-media
       data-category-image-position={categoryImagePosition}
       data-category-image-size={categoryImageSize}
       data-category-image-format={categoryImageIsPng ? 'floating-png' : 'photo'}
@@ -273,29 +281,35 @@ function CategorySection({ category, index, page, theme }: { category: PublicCar
       )}
     </figure>
   ) : null;
-  const productCards = category.products.map((product) => (
-    <CartaProductCard
+  const productCards = category.products.map((product, productIndex) => (
+    <div
       key={product.id}
-      product={product}
-      currency={page.currency}
-      theme={theme}
-      variant={cardStyle}
-      showDescription={page.showProductDescriptions}
-      showImage={showProductImages}
-      compact={productImageMode === 'first_per_category' && imageBesideProducts && Boolean(categoryImageUrl)}
-      imagePosition={page.productImagePositions[product.id]}
-    />
+      data-carta-product-reveal
+      style={{ '--carta-reveal-delay': `${Math.min(productIndex, 6) * 45}ms` } as React.CSSProperties}
+    >
+      <CartaProductCard
+        product={product}
+        currency={page.currency}
+        theme={theme}
+        variant={cardStyle}
+        showDescription={page.showProductDescriptions}
+        showImage={showProductImages}
+        compact={productImageMode === 'first_per_category' && imageBesideProducts && Boolean(categoryImageUrl)}
+        imagePosition={page.productImagePositions[product.id]}
+      />
+    </div>
   ));
   return (
     <section
       data-carta-category={category.id ?? 'uncategorized'}
+      data-carta-reveal
       className={`relative isolate scroll-mt-24 overflow-hidden pt-0 ${isSignature ? 'pb-6 sm:pb-8 lg:pb-9' : 'pb-5 sm:pb-6'}`}
     >
       <div className="relative z-10">
         {productImageMode === 'first_per_category' && categoryImagePosition === 'above_heading' && (
           <div className="mb-7 sm:mb-9">{renderCategoryImage(false)}</div>
         )}
-        <CategoryHeading category={category} categoryImageUrl={headingImageUrl} page={page} theme={theme} />
+        <CategoryHeading category={category} page={page} theme={theme} />
         {productImageMode === 'first_per_category' && categoryImagePosition === 'below_heading' && (
           <div className="mb-7 sm:mb-9">{renderCategoryImage(false)}</div>
         )}
@@ -315,7 +329,7 @@ function CategorySection({ category, index, page, theme }: { category: PublicCar
             !showProductImages
               ? 'grid grid-cols-1 gap-x-10 md:grid-cols-2'
               : page.templateKey === 'gallery'
-                ? 'grid grid-cols-1 gap-1.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3'
+                ? 'grid grid-cols-1 gap-0 lg:grid-cols-2 lg:gap-x-10'
                 : page.templateKey === 'minimal'
                   ? 'grid grid-cols-1 gap-0 lg:grid-cols-2 lg:gap-x-6'
                   : 'grid grid-cols-1 gap-0 md:grid-cols-2 md:gap-x-6 md:gap-y-1'
@@ -334,6 +348,7 @@ export function CartaMenu({ page, theme, preview = false }: CartaMenuProps) {
   const [categoryNavStuck, setCategoryNavStuck] = useState(false);
   const categoryRefs = useRef(new Map<string, HTMLElement>());
   const categoryNavSentinelRef = useRef<HTMLDivElement>(null);
+  const cartaRootRef = useRef<HTMLDivElement>(null);
   const categories = page.categories;
   const safeActiveIndex = Math.min(activeIndex, Math.max(0, categories.length - 1));
   const gradientAccent = resolveCartaGradientAccent(theme);
@@ -354,18 +369,37 @@ export function CartaMenu({ page, theme, preview = false }: CartaMenuProps) {
         .filter((category) => category.products.length > 0)
     : categories;
   const searchResultCount = matchingCategories.reduce((total, category) => total + category.products.length, 0);
+  const motionEnabled = !preview
+    && typeof IntersectionObserver !== 'undefined'
+    && (typeof window.matchMedia !== 'function' || !window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
   useEffect(() => {
     const sentinel = categoryNavSentinelRef.current;
-    if (!sentinel || typeof IntersectionObserver === 'undefined') return undefined;
+    const cartaRoot = cartaRootRef.current;
+    if (!sentinel || !cartaRoot || typeof IntersectionObserver === 'undefined') return undefined;
 
-    const observer = new IntersectionObserver(([entry]) => {
-      setCategoryNavStuck(!entry.isIntersecting && entry.boundingClientRect.top < 0);
-    }, { threshold: 0 });
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const target = entry.target as HTMLElement;
+        if (target.hasAttribute('data-carta-category-sentinel')) {
+          setCategoryNavStuck(!entry.isIntersecting && entry.boundingClientRect.top < 0);
+          continue;
+        }
+        if (entry.isIntersecting && target.hasAttribute('data-carta-reveal')) {
+          target.setAttribute('data-carta-visible', 'true');
+          observer.unobserve(target);
+        }
+      }
+    }, { threshold: 0, rootMargin: '0px 0px -6% 0px' });
 
     observer.observe(sentinel);
+    if (motionEnabled) {
+      cartaRoot.querySelectorAll<HTMLElement>('[data-carta-reveal]').forEach((section) => {
+        if (section.getAttribute('data-carta-visible') !== 'true') observer.observe(section);
+      });
+    }
     return () => observer.disconnect();
-  }, []);
+  }, [categories, motionEnabled, normalizedQuery, page.navigationMode, safeActiveIndex]);
 
   function selectCategory(index: number) {
     setActiveIndex(index);
@@ -392,7 +426,9 @@ export function CartaMenu({ page, theme, preview = false }: CartaMenuProps) {
 
   return (
     <div
+      ref={cartaRootRef}
       className="min-h-screen"
+      data-carta-motion={motionEnabled ? 'ready' : 'off'}
       data-carta-gradient-color={gradientAccent}
       style={{
         backgroundColor: theme.background,
@@ -478,7 +514,7 @@ export function CartaMenu({ page, theme, preview = false }: CartaMenuProps) {
                       key={category.id ?? 'uncategorized'}
                       type="button"
                       onClick={() => selectCategory(index)}
-                      className="shrink-0 rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition-all"
+                      className="shrink-0 rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition-[background-color,border-color,color,box-shadow,transform] duration-200 active:scale-[0.98] motion-reduce:transition-none"
                       style={active
                         ? { backgroundColor: theme.primary, borderColor: theme.primary, color: '#fff', boxShadow: `0 8px 24px ${withAlpha(theme.primary, 0.24)}` }
                         : theme.mode === 'dark'

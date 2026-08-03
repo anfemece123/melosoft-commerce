@@ -3,6 +3,7 @@ import type { CartaProductImagePosition, CartaTemplateKey, PublicCartaProduct } 
 import type { StorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import { StorefrontMediaFrame } from '@/components/public/storefront/StorefrontMediaFrame';
 import { withAlpha } from '@/components/public/storefront/storefrontTheme';
+import { isLikelyPngAsset } from '@/lib/images/imageFormat';
 import { formatCurrency } from '@/utils/formatCurrency';
 
 interface CartaProductCardProps {
@@ -33,18 +34,28 @@ export function CartaProductCard({ product, currency, theme, variant = 'signatur
   const price = formatCurrency(product.price, 'es-CO', currency);
   const fallback = <DishImageFallback theme={theme} />;
   const hasVisibleImage = showImage && Boolean(product.imageUrl);
-  const imageOnRight = imagePosition === 'right';
+  const resolvedImagePosition = imagePosition ?? 'left';
+  const imageOnRight = resolvedImagePosition === 'right';
+  const imageIsPng = isLikelyPngAsset(product.imageUrl);
 
   if (!hasVisibleImage) {
     return (
       <article
-        className={`border-b ${compact ? 'py-3 sm:py-4' : `py-4 sm:py-5 ${variant === 'gallery' ? 'sm:py-6' : ''}`}`}
+        data-carta-editorial-product={variant === 'gallery' ? 'true' : undefined}
+        className={`border-b ${compact ? 'py-3 sm:py-4' : 'py-4 sm:py-5'}`}
         style={{ borderColor: theme.border }}
       >
-        <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
-          <h3 className={`${variant === 'gallery' ? `${compact ? 'text-sm' : 'text-base'} font-black uppercase tracking-[0.04em]` : `${compact ? 'text-sm' : ''} font-extrabold`} min-w-0 flex-[1_1_110px] leading-5`} style={{ color: theme.text }}>
+        <div className="flex items-baseline gap-2.5">
+          <h3 className={`${variant === 'gallery' ? `${compact ? 'text-sm' : 'text-base sm:text-lg'} font-black tracking-tight` : `${compact ? 'text-sm' : ''} font-extrabold`} min-w-0 leading-5`} style={{ color: theme.text }}>
             {product.name}
           </h3>
+          {variant === 'gallery' && (
+            <span
+              aria-hidden="true"
+              className="min-w-4 flex-1 self-center border-t border-dashed opacity-70"
+              style={{ borderColor: theme.border }}
+            />
+          )}
           <span className={`shrink-0 font-black ${compact ? 'text-xs' : 'text-sm'}`} style={{ color: theme.primary }}>{price}</span>
         </div>
         {showDescription && product.shortDescription && (
@@ -54,54 +65,40 @@ export function CartaProductCard({ product, currency, theme, variant = 'signatur
     );
   }
 
-  if (variant === 'gallery' && imagePosition) {
-    return (
-      <article
-        data-carta-product-image-position={imagePosition}
-        className={`group grid min-h-36 overflow-hidden rounded-2xl border ${imageOnRight ? 'grid-cols-[minmax(0,1fr)_42%]' : 'grid-cols-[42%_minmax(0,1fr)]'}`}
-        style={{ backgroundColor: withAlpha(theme.surface, 0.7), borderColor: theme.border }}
-      >
-        <StorefrontMediaFrame
-          src={product.imageUrl}
-          alt={product.name}
-          fallback={fallback}
-          aspectClassName="h-full min-h-36 w-full"
-          roundedClassName="rounded-none"
-          className={imageOnRight ? 'order-2' : 'order-1'}
-          style={{ backgroundColor: theme.surfaceAlt }}
-          imageClassName="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
-          pngImageClassName="h-full w-full object-contain p-3 drop-shadow-[0_14px_18px_rgba(15,23,42,0.14)] transition-transform duration-700 ease-out group-hover:scale-[1.04]"
-        />
-        <div className={`flex min-w-0 flex-col justify-center p-4 text-left ${imageOnRight ? 'order-1' : 'order-2'}`}>
-          <h3 className="text-sm font-black uppercase leading-tight tracking-[0.03em]" style={{ color: theme.text }}>{product.name}</h3>
-          {showDescription && product.shortDescription && <p data-carta-product-description className="mt-1.5 line-clamp-4 text-[11px] leading-4" style={{ color: theme.mutedText }}>{product.shortDescription}</p>}
-          <span className="mt-3 text-sm font-black" style={{ color: theme.primary }}>{price}</span>
-        </div>
-      </article>
-    );
-  }
-
   if (variant === 'gallery') {
     return (
-      <article data-carta-product-image-position="default" className="group relative text-center sm:pt-1">
-        <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-t-[45%]">
+      <article
+        data-carta-editorial-product="true"
+        data-carta-product-image-position={resolvedImagePosition}
+        className={`group grid min-h-36 items-center gap-3 border-b py-3 sm:min-h-44 sm:gap-6 sm:py-5 ${
+          imageOnRight
+            ? 'grid-cols-[minmax(0,1fr)_40%] sm:grid-cols-[minmax(0,1fr)_44%]'
+            : 'grid-cols-[40%_minmax(0,1fr)] sm:grid-cols-[44%_minmax(0,1fr)]'
+        }`}
+        style={{ borderColor: theme.border }}
+      >
+        <div className={`relative isolate px-1 sm:px-3 ${imageOnRight ? 'order-2' : 'order-1'}`}>
           <StorefrontMediaFrame
             src={product.imageUrl}
             alt={product.name}
             fallback={fallback}
-            aspectClassName="aspect-[4/5] sm:aspect-[4/3]"
-            roundedClassName="rounded-t-[45%]"
-            imageClassName="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
-            pngImageClassName="h-full w-full object-contain p-3 drop-shadow-[0_16px_20px_rgba(15,23,42,0.16)] transition-transform duration-700 ease-out group-hover:scale-[1.04]"
+            aspectClassName="aspect-square w-full"
+            roundedClassName={imageIsPng ? 'rounded-none' : 'rounded-[30%]'}
+            className={imageIsPng ? '!overflow-visible' : ''}
+            style={imageIsPng ? undefined : { backgroundColor: theme.surfaceAlt, boxShadow: `0 18px 42px ${theme.shadow}` }}
+            imageClassName="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.035]"
+            pngImageClassName="h-full w-full object-contain p-1 drop-shadow-[0_16px_20px_rgba(15,23,42,0.18)] transition-transform duration-500 ease-out group-hover:-translate-y-1 group-hover:scale-[1.025]"
           />
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/5 to-transparent" />
-          <span className="absolute right-2.5 top-2.5 rounded-full px-2.5 py-1.5 text-[11px] font-black text-white shadow-lg sm:right-4 sm:top-4 sm:px-3 sm:text-sm" style={{ backgroundColor: theme.primary }}>
-            {price}
-          </span>
-          <div className="absolute inset-x-0 bottom-0 p-4 text-white sm:p-6">
-            <h3 className="text-base font-black leading-tight drop-shadow-sm sm:text-xl">{product.name}</h3>
-            {showDescription && product.shortDescription && <p data-carta-product-description className="mt-1.5 line-clamp-4 text-[11px] leading-4 text-white/80 sm:text-sm sm:leading-5">{product.shortDescription}</p>}
-          </div>
+        </div>
+        <div className={`flex min-w-0 flex-col justify-center py-1 text-left sm:py-3 ${imageOnRight ? 'order-1 pl-1 sm:pl-4' : 'order-2 pr-1 sm:pr-4'}`}>
+          <span aria-hidden="true" className="mb-3 h-0.5 w-8 rounded-full sm:mb-4 sm:w-10" style={{ backgroundColor: theme.primary }} />
+          <h3 className="text-base font-black leading-tight tracking-tight sm:text-xl" style={{ color: theme.text }}>{product.name}</h3>
+          {showDescription && product.shortDescription && (
+            <p data-carta-product-description className="mt-1.5 line-clamp-4 text-[11px] leading-4 sm:mt-2 sm:text-sm sm:leading-5" style={{ color: theme.mutedText }}>
+              {product.shortDescription}
+            </p>
+          )}
+          <p className="mt-3 text-sm font-black sm:mt-4 sm:text-base" style={{ color: theme.primary }}>{price}</p>
         </div>
       </article>
     );

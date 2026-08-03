@@ -1,4 +1,4 @@
-import { Check, Images, LayoutList, Sparkles } from 'lucide-react';
+import { BookOpenText, Check, LayoutList, Sparkles } from 'lucide-react';
 import type { CartaNavigationMode, CartaTemplateKey } from '@/features/carta/carta.types';
 
 const TEMPLATES: Array<{
@@ -7,22 +7,34 @@ const TEMPLATES: Array<{
   description: string;
   icon: typeof Sparkles;
 }> = [
-  { key: 'signature', name: 'Firma', description: 'Editorial, elegante y con platos destacados.', icon: Sparkles },
-  { key: 'gallery', name: 'Galería', description: 'Fotográfica, dinámica y muy visual.', icon: Images },
+  { key: 'signature', name: 'Firma', description: 'Elegante, equilibrada y con imágenes protagonistas.', icon: Sparkles },
+  { key: 'gallery', name: 'Editorial', description: 'Imagen y descripción ordenadas, con un estilo limpio de revista.', icon: BookOpenText },
   { key: 'minimal', name: 'Esencial', description: 'Limpia, rápida y fácil de recorrer.', icon: LayoutList },
 ];
 
 function TemplateMiniature({ template }: { template: CartaTemplateKey }) {
   if (template === 'gallery') {
     return (
-      <div className="grid h-24 grid-cols-3 gap-1.5 rounded-xl bg-slate-100 p-2">
-        <div className="col-span-3 h-4 rounded bg-indigo-200" />
-        <div className="rounded bg-indigo-500/75" />
-        <div className="rounded bg-violet-400/75" />
-        <div className="rounded bg-sky-400/75" />
-        <div className="h-2 rounded bg-slate-300" />
-        <div className="h-2 rounded bg-slate-300" />
-        <div className="h-2 rounded bg-slate-300" />
+      <div className="h-24 overflow-hidden rounded-xl bg-slate-50 p-2.5">
+        <div className="mb-2 flex items-center gap-1.5">
+          <div className="h-2 w-8 rounded bg-slate-700" />
+          <div className="h-px flex-1 bg-indigo-300" />
+        </div>
+        <div className="grid grid-cols-[30%_1fr] items-center gap-2 border-b border-slate-200 pb-1.5">
+          <div className="aspect-square rounded-[30%] bg-indigo-500/80" />
+          <div>
+            <div className="h-1.5 w-4/5 rounded bg-slate-600" />
+            <div className="mt-1 h-1 w-full rounded bg-slate-300" />
+            <div className="mt-1 h-1.5 w-7 rounded bg-indigo-400" />
+          </div>
+        </div>
+        <div className="mt-1.5 grid grid-cols-[30%_1fr] items-center gap-2">
+          <div className="aspect-square rounded-[30%] bg-violet-400/75" />
+          <div>
+            <div className="h-1.5 w-3/4 rounded bg-slate-600" />
+            <div className="mt-1 h-1 w-full rounded bg-slate-300" />
+          </div>
+        </div>
       </div>
     );
   }
