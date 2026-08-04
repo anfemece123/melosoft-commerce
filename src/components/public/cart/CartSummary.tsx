@@ -10,7 +10,7 @@ interface CartSummaryProps {
   totalPrice: number;
   unavailableItems: CartItem[];
   onRemoveUnavailable: () => void;
-  paymentSelector: ReactNode;
+  paymentMethodsNotice: ReactNode;
   hasAnyPaymentMethod: boolean;
   onViewCart?: () => void;
   onContinue: () => void;
@@ -23,7 +23,7 @@ export function CartSummary({
   totalPrice,
   unavailableItems,
   onRemoveUnavailable,
-  paymentSelector,
+  paymentMethodsNotice,
   hasAnyPaymentMethod,
   onViewCart,
   onContinue,
@@ -76,7 +76,7 @@ export function CartSummary({
           {formatCurrency(totalPrice, 'es-CO', currency)}
         </span>
       </div>
-      {paymentSelector}
+      {paymentMethodsNotice}
       <div className="grid gap-2">
         {onViewCart && (
           <button

@@ -9,7 +9,7 @@ import { useEffect, useState, type MouseEvent } from 'react';
 import { productAvailabilityService } from '@/features/products/productAvailabilityService';
 import { CartItemsList } from '@/components/public/cart/CartItemsList';
 import { CartEmptyState } from '@/components/public/cart/CartEmptyState';
-import { CheckoutPaymentSelector } from '@/components/public/cart/CheckoutPaymentSelector';
+import { CartPaymentMethodsNotice } from '@/components/public/cart/CartPaymentMethodsNotice';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { canUseWebOrders, type PublicCommerceConfig } from '@/lib/commerce/commerceConfig.utils';
 import { CartRecommendationsSection } from '@/components/public/cart/CartRecommendationsSection';
@@ -88,7 +88,6 @@ export function StoreCartPage() {
   const showCartButton = canUseWebOrders(commerceConfig);
   const showCod = currentBranding.cashOnDeliveryEnabled !== false;
   const showOnline = currentBranding.onlineCheckoutEnabled === true;
-  const showPaymentChoice = showCod && showOnline;
   const showShippingRules = hasShippingRuleConfigured({
     localDeliveryBaseFee: currentBranding.localDeliveryBaseFee,
     localDeliveryFreeFrom: currentBranding.localDeliveryFreeFrom,
@@ -205,12 +204,10 @@ export function StoreCartPage() {
 
             <div className="mt-4 space-y-3">
               {(showCod || showOnline) ? (
-                <CheckoutPaymentSelector
+                <CartPaymentMethodsNotice
                   theme={theme}
-                  showPaymentChoice={showPaymentChoice}
+                  showCashOnDelivery={showCod}
                   showOnline={showOnline}
-                  paymentChoice={showOnline && !showCod ? 'online' : 'cash_on_delivery'}
-                  onChange={() => undefined}
                 />
               ) : (
                 <div

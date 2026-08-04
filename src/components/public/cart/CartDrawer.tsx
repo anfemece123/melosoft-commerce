@@ -9,7 +9,7 @@ import { withAlpha } from '../storefront/storefrontTheme';
 import { CartDrawerHeader } from './CartDrawerHeader';
 import { CartItemsList } from './CartItemsList';
 import { CartSummary } from './CartSummary';
-import { CheckoutPaymentSelector } from './CheckoutPaymentSelector';
+import { CartPaymentMethodsNotice } from './CartPaymentMethodsNotice';
 import { CheckoutLocationSelector } from './CheckoutLocationSelector';
 import { CheckoutCustomerForm } from './CheckoutCustomerForm';
 import { CheckoutActions } from './CheckoutActions';
@@ -75,9 +75,8 @@ export function CartDrawer({
     setStep,
     orderResult,
     paymentChoice,
-    setPaymentChoice,
+    showCod,
     showOnline,
-    showPaymentChoice,
     hasAnyPaymentMethod,
     availableFulfillmentMethods,
     hasFulfillmentChoice,
@@ -182,18 +181,16 @@ export function CartDrawer({
                 totalPrice={totalPrice}
                 unavailableItems={unavailableItems}
                 onRemoveUnavailable={handleRemoveUnavailable}
-                paymentSelector={
+                paymentMethodsNotice={
                   <div className="space-y-3">
                     <OrderingStatusNotice />
-                  {hasAnyPaymentMethod ? (
-                    <CheckoutPaymentSelector
-                      theme={theme}
-                      showPaymentChoice={showPaymentChoice}
-                      showOnline={showOnline}
-                      paymentChoice={paymentChoice}
-                      onChange={setPaymentChoice}
-                    />
-                  ) : null}
+                    {hasAnyPaymentMethod ? (
+                      <CartPaymentMethodsNotice
+                        theme={theme}
+                        showCashOnDelivery={showCod}
+                        showOnline={showOnline}
+                      />
+                    ) : null}
                   </div>
                 }
                 hasAnyPaymentMethod={hasAnyPaymentMethod}

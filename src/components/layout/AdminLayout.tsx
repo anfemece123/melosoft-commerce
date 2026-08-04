@@ -7,7 +7,6 @@ import {
   Settings,
   LayoutTemplate,
   Package,
-  Tag,
   ShoppingCart,
   CreditCard,
   MapPin,
@@ -32,6 +31,7 @@ import { PendingOrdersBadgeProvider } from '@/features/orders/PendingOrdersBadge
 import { usePendingOrdersBadge } from '@/features/orders/usePendingOrdersBadge';
 import { domainsService } from '@/features/domains/domainsService';
 import { MelosoftBrand } from '@/components/ui/MelosoftBrand';
+import { AdminStoreIdentityMark } from './AdminStoreIdentityMark';
 
 interface NavItem {
   label: string;
@@ -77,6 +77,7 @@ function AdminLayoutContent() {
 
   const storeName = currentStore?.name ?? 'Mi Tienda';
   const storeSlug = currentStore?.slug;
+  const storeLogoUrl = currentStore?.logoUrl;
 
   // Reads from PendingOrdersBadgeProvider — no storeId param needed here
   const { pendingCount, hasOverduePending } = usePendingOrdersBadge();
@@ -100,7 +101,6 @@ function AdminLayoutContent() {
     { label: 'Sucursales', to: `/admin/stores/${storeId}/locations`, icon: <MapPin className="w-5 h-5" /> },
     { label: 'Productos', to: `/admin/stores/${storeId}/products`, icon: <Package className="w-5 h-5" /> },
     { label: 'Carta digital', to: `/admin/stores/${storeId}/carta`, icon: <UtensilsCrossed className="w-5 h-5" /> },
-    { label: 'Ofertas', to: `/admin/stores/${storeId}/offers`, icon: <Tag className="w-5 h-5" /> },
     {
       label: 'Pedidos',
       to: `/admin/stores/${storeId}/orders`,
@@ -156,14 +156,18 @@ function AdminLayoutContent() {
         {/* Logo / Store identity */}
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-gray-200 px-4">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="h-9 w-9 shrink-0 overflow-hidden rounded-xl bg-slate-700 shadow-sm ring-1 ring-black/5">
-              <MelosoftBrand
-                variant="mark"
-                alt=""
-                aria-hidden="true"
-                className="h-full w-full scale-[1.55] object-cover"
-              />
-            </div>
+            {isAdmin ? (
+              <div className="h-9 w-9 shrink-0 overflow-hidden rounded-xl bg-slate-700 shadow-sm ring-1 ring-black/5">
+                <MelosoftBrand
+                  variant="mark"
+                  alt=""
+                  aria-hidden="true"
+                  className="h-full w-full scale-[1.55] object-cover"
+                />
+              </div>
+            ) : (
+              <AdminStoreIdentityMark storeName={storeName} logoUrl={storeLogoUrl} />
+            )}
             <div className="flex min-w-0 flex-col leading-tight">
               {isAdmin ? (
                 <>
@@ -296,6 +300,15 @@ function AdminLayoutContent() {
           >
             <Menu className="w-5 h-5" />
           </button>
+
+          {!isAdmin && (
+            <div className="flex min-w-0 items-center gap-2 lg:hidden">
+              <AdminStoreIdentityMark storeName={storeName} logoUrl={storeLogoUrl} size="sm" />
+              <span className="max-w-40 truncate text-sm font-semibold text-gray-900">
+                {storeName}
+              </span>
+            </div>
+          )}
 
           <div className="flex-1" />
 
