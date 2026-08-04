@@ -99,4 +99,13 @@ describe('Brevo order email templates', () => {
     expect(email.html).toContain('LISTO PARA RECOGER');
     expect(email.text).toContain('Recogida en tienda');
   });
+
+  it('includes a safe verified-review invitation in the delivered email', () => {
+    const email = renderOrderEmail(makeEmailData({
+      eventType: 'customer_order_delivered',
+      reviewUrl: 'https://commerce.melosoftapp.com/review/00000000-0000-4000-8000-000000000000',
+    }));
+    expect(email.html).toContain('Compartir mi opinión');
+    expect(email.text).toContain('Comparte tu opinión:');
+  });
 });

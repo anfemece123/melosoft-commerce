@@ -50,6 +50,8 @@ import { AdminPanelTabs } from '@/components/admin/AdminPanelTabs';
 import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { sanitizePhoneInput } from '@/lib/phone/phoneValidation';
 import { clearCachedPublicStoreBranding } from '@/lib/storefront/publicStoreBrandingCache';
+import { heroCtaTargetNeedsEntity, isSafeHeroCustomUrl } from '@/lib/storefront/heroCta';
+import { getCatalogLabel } from '@/lib/commerce/commerceConfig.utils';
 
 
 const CATALOG_TYPE_LABELS: Record<string, string> = {
@@ -308,6 +310,9 @@ function createDefaultHeroSlide(sortOrder: number, store?: Store | null): Editab
       sortOrder === 1
         ? store?.heroCtaLabel ?? getDefaultHeroCta(store?.businessVertical ?? null)
         : getDefaultHeroCta(store?.businessVertical ?? null),
+    ctaTargetType: 'catalog',
+    ctaTargetId: null,
+    ctaTargetUrl: null,
     mainImageUrl: sortOrder === 1 ? store?.heroImageUrl ?? null : null,
     backgroundImageUrl: sortOrder === 1 ? store?.heroBackgroundImageUrl ?? null : null,
     badgeImageUrl: null,
@@ -439,6 +444,9 @@ export function StoreSettingsPage() {
               title: slide.title ?? '',
               subtitle: slide.subtitle ?? '',
               ctaLabel: slide.ctaLabel ?? 'Ver menú',
+              ctaTargetType: slide.ctaTargetType,
+              ctaTargetId: slide.ctaTargetId,
+              ctaTargetUrl: slide.ctaTargetUrl,
               mainImageUrl: slide.mainImageUrl,
               backgroundImageUrl: slide.backgroundImageUrl,
               badgeImageUrl: slide.badgeImageUrl,
@@ -980,6 +988,20 @@ export function StoreSettingsPage() {
   async function handleHeroSave() {
     if (!storeId || !currentStore) return;
 
+    const invalidTargetSlide = heroSlides.find((slide) => slide.showCta && (
+      (heroCtaTargetNeedsEntity(slide.ctaTargetType) && !slide.ctaTargetId)
+      || (slide.ctaTargetType === 'custom' && !isSafeHeroCustomUrl(slide.ctaTargetUrl))
+    ));
+    if (invalidTargetSlide) {
+      setActiveHeroSlideId(invalidTargetSlide.id);
+      const message = invalidTargetSlide.ctaTargetType === 'custom'
+        ? 'Escribe un enlace válido para el botón de la portada.'
+        : 'Selecciona el destino específico del botón de la portada.';
+      setHeroStatus(message);
+      notify.warning(message);
+      return;
+    }
+
     setHeroSaving(true);
     setHeroStatus(null);
 
@@ -999,6 +1021,9 @@ export function StoreSettingsPage() {
           title: slide.title.trim() || null,
           subtitle: slide.subtitle.trim() || null,
           ctaLabel: slide.ctaLabel.trim() || null,
+          ctaTargetType: slide.ctaTargetType,
+          ctaTargetId: slide.ctaTargetId,
+          ctaTargetUrl: slide.ctaTargetUrl?.trim() || null,
           mainImageUrl: slide.mainImageUrl ?? null,
           backgroundImageUrl: slide.backgroundImageUrl ?? null,
           badgeImageUrl: slide.badgeImageUrl ?? null,
@@ -1023,9 +1048,11 @@ export function StoreSettingsPage() {
       notify.success('Portada guardada.');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al guardar la portada';
-      const normalizedMessage = /hero_enabled|store_hero_slides/i.test(message)
-        ? 'La configuración avanzada de portada requiere aplicar la migración 019_storefront_hero_carousel.sql en Supabase.'
-        : message;
+      const normalizedMessage = /cta_target_/i.test(message)
+        ? 'Los destinos del botón requieren aplicar la migración 138_storefront_hero_cta_destinations.sql en Supabase.'
+        : /hero_enabled|store_hero_slides/i.test(message)
+          ? 'La configuración avanzada de portada requiere aplicar la migración 019_storefront_hero_carousel.sql en Supabase.'
+          : message;
       setHeroStatus(normalizedMessage);
       notify.fromError(err, 'No se pudo guardar la portada.');
     } finally {
@@ -1189,7 +1216,7 @@ export function StoreSettingsPage() {
         </Card>
         )}
 
-        {activeSection === 'hero' && (
+        {activeSection === 'hero' && storeId && (
         <Card>
           <CardBody>
             <div className="mb-5 flex items-center gap-3">
@@ -1254,7 +1281,6 @@ export function StoreSettingsPage() {
 
               {activeHeroSlide ? (
                 <StoreHeroSlideEditor
-                  key={activeHeroSlide.id}
                   slide={activeHeroSlide}
                   onChange={(nextSlide) => updateHeroSlide(activeHeroSlide.id, () => nextSlide)}
                   onRemove={heroSlides.length > 1 ? () => removeHeroSlide(activeHeroSlide.id) : undefined}
@@ -1270,6 +1296,20 @@ export function StoreSettingsPage() {
                   previewTheme={heroPreviewTheme}
                   storeName={currentStore?.name ?? 'Mi tienda'}
                   logoUrl={currentStore?.logoUrl ?? null}
+                  storeId={storeId}
+                  catalogLabel={getCatalogLabel({
+                    catalogType: currentCommerceSettings?.catalogType ?? null,
+                    commerceMode: currentCommerceSettings?.commerceMode ?? null,
+                    allowsPickup: currentCommerceSettings?.allowsPickup ?? false,
+                    allowsLocalDelivery: currentCommerceSettings?.allowsLocalDelivery ?? false,
+                    allowsNationalShipping: currentCommerceSettings?.allowsNationalShipping ?? false,
+                    whatsappCheckoutEnabled: currentCommerceSettings?.whatsappCheckoutEnabled ?? false,
+                    webOrderEnabled: currentCommerceSettings?.webOrderEnabled ?? false,
+                    cashOnDeliveryEnabled: currentCommerceSettings?.cashOnDeliveryEnabled ?? false,
+                    onlineCheckoutEnabled: currentCommerceSettings?.onlineCheckoutEnabled ?? false,
+                    localDeliveryNotes: currentCommerceSettings?.localDeliveryNotes ?? null,
+                    shippingNotes: currentCommerceSettings?.shippingNotes ?? null,
+                  })}
                 />
               ) : null}
 
@@ -2263,12 +2303,12 @@ function HeaderSettingsSection({
     {
       value: 'catalog_link',
       label: 'Enlace al catálogo',
-      description: 'Muestra un link directo a la página de todos los productos.',
+      description: 'Un enlace principal que despliega categorías y colecciones al pasar el mouse.',
     },
     {
       value: 'categories',
       label: 'Por categorías',
-      description: 'Muestra un link por cada categoría de producto activa.',
+      description: 'Cada categoría principal puede desplegar subcategorías y atributos relacionados.',
     },
     {
       value: 'custom',
@@ -2449,6 +2489,10 @@ function HeaderSettingsSection({
                 </button>
               ))}
             </div>
+            <p className="mt-2 text-xs leading-5 text-gray-500">
+              En computador, las opciones relacionadas aparecen en un panel al acercar el mouse o usar el teclado.
+              En celular se organizan automáticamente como secciones desplegables.
+            </p>
           </div>
 
           {settings.menuMode === 'custom' && (

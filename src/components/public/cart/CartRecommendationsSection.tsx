@@ -8,6 +8,7 @@ import type { PublicProductPage } from '@/types/common.types';
 import { buildCatalogItems } from '@/lib/storefront/catalogItems';
 
 interface CartRecommendationsSectionProps {
+  className?: string;
   theme: StorefrontTheme;
   storeSlug: string;
   currency: string;
@@ -19,6 +20,7 @@ interface CartRecommendationsSectionProps {
 }
 
 export function CartRecommendationsSection({
+  className,
   theme,
   storeSlug,
   currency,
@@ -85,10 +87,11 @@ export function CartRecommendationsSection({
     () => buildCatalogItems(products.filter((product) => !excludedIdsSet.has(product.productId))).slice(0, 4),
     [products, excludedIdsSet]
   );
+  const sectionClassName = `${className ?? 'mt-16'} border-t pt-10`;
 
   if (!loaded) {
     return (
-      <section className="mt-16 border-t pt-10" style={{ borderColor: theme.border }}>
+      <section className={sectionClassName} style={{ borderColor: theme.border }}>
         <div className="mb-6">
           <Skeleton className="h-3 w-40 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
         </div>
@@ -100,7 +103,7 @@ export function CartRecommendationsSection({
   if (items.length === 0) return null;
 
   return (
-    <section className="mt-16 border-t pt-10" style={{ borderColor: theme.border }}>
+    <section className={sectionClassName} style={{ borderColor: theme.border }}>
       <div className="mb-6 flex items-end justify-between gap-4">
         <div>
           <p

@@ -27,9 +27,12 @@ import { ProductsLayout } from '@/pages/admin/products/ProductsLayout';
 import { ProductCategoriesPage } from '@/pages/admin/products/ProductCategoriesPage';
 import { ProductCollectionsPage } from '@/pages/admin/products/ProductCollectionsPage';
 import { ProductFiltersPage } from '@/pages/admin/products/ProductFiltersPage';
+import { RestaurantMerchandisingPage } from '@/pages/admin/products/RestaurantMerchandisingPage';
+import { CatalogOrderingPage } from '@/pages/admin/products/CatalogOrderingPage';
 import { OrdersPage } from '@/pages/admin/OrdersPage';
 import { PaymentsPage } from '@/pages/admin/PaymentsPage';
 import { WhatsappSettingsPage } from '@/pages/admin/WhatsappSettingsPage';
+import { ReviewsPage } from '@/pages/admin/ReviewsPage';
 import { PlatformWhatsappConnectionsPage } from '@/pages/admin/PlatformWhatsappConnectionsPage';
 import { MyStoresPage } from '@/pages/admin/MyStoresPage';
 import { StoreHomePage } from '@/pages/public/StoreHomePage';
@@ -41,6 +44,7 @@ import { OfferLandingPage } from '@/pages/public/OfferLandingPage';
 import { StorePoliciesPage } from '@/pages/public/StorePoliciesPage';
 import { StoreCartaPage } from '@/pages/public/StoreCartaPage';
 import { PaymentResultPage } from '@/pages/public/PaymentResultPage';
+import { ReviewInvitationPage } from '@/pages/public/ReviewInvitationPage';
 import { AccessDeniedPage } from '@/pages/AccessDeniedPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 
@@ -86,6 +90,8 @@ export function AppRouter() {
                 <Route path="/admin/stores/:storeId/products" element={<ProductsLayout />}>
                   <Route index element={<ProductsPage />} />
                   <Route path="categories" element={<ProductCategoriesPage />} />
+                  <Route path="order" element={<CatalogOrderingPage />} />
+                  <Route path="merchandising" element={<RestaurantMerchandisingPage />} />
                   <Route path="collections" element={<ProductCollectionsPage />} />
                   <Route path="filters" element={<ProductFiltersPage />} />
                 </Route>
@@ -102,6 +108,7 @@ export function AppRouter() {
                 />
                 <Route path="/admin/stores/:storeId/orders" element={<OrdersPage />} />
                 <Route path="/admin/stores/:storeId/payments" element={<PaymentsPage />} />
+                <Route path="/admin/stores/:storeId/reviews" element={<ReviewsPage />} />
                 <Route path="/admin/stores/:storeId/whatsapp" element={<WhatsappSettingsPage />} />
               </Route>
             </Route>
@@ -110,6 +117,7 @@ export function AppRouter() {
 
         {/* Public store pages */}
         <Route element={<PublicLayout />}>
+          <Route path="/review/:token" element={<ReviewInvitationPage />} />
           <Route path="/s/:storeSlug" element={<StoreHomePage />} />
           <Route path="/s/:storeSlug/catalog" element={<StoreCatalogPage />} />
           <Route path="/s/:storeSlug/cart" element={<StoreCartPage />} />

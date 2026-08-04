@@ -1,7 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useFormik } from 'formik';
-import { ArrowLeft, Upload, X, Clock, MapPin, Layers, AlertCircle } from 'lucide-react';
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  rectSortingStrategy,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { ArrowLeft, Upload, X, Clock, MapPin, Layers, AlertCircle, GripVertical } from 'lucide-react';
 import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
 import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -61,6 +78,67 @@ import { IMAGE_ASSET_PRESETS } from '@/lib/images/imageAssetPresets';
 import { disposeLoadedImageFile, type LoadedImageFile, validateImageFile } from '@/lib/images/imageFile.utils';
 
 const MAX_IMAGES = 5;
+
+type ProductGalleryItem =
+  | { key: string; kind: 'existing'; image: ProductImage }
+  | { key: string; kind: 'pending'; file: File; previewUrl: string };
+
+function SortableProductGalleryImage({
+  item,
+  index,
+  deleting,
+  onDeleteExisting,
+  onDeletePending,
+}: {
+  item: ProductGalleryItem;
+  index: number;
+  deleting: boolean;
+  onDeleteExisting: (image: ProductImage) => void;
+  onDeletePending: (key: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.key });
+  const imageUrl = item.kind === 'existing' ? item.image.imageUrl : item.previewUrl;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`group relative aspect-square overflow-hidden rounded-xl bg-gray-100 shadow-sm ring-1 ring-gray-200 ${isDragging ? 'z-20 opacity-70 shadow-xl' : ''}`}
+    >
+      <img src={imageUrl} alt={`Imagen ${index + 1} del producto`} className="h-full w-full object-cover" />
+      <button
+        type="button"
+        className="absolute left-1.5 top-1.5 flex h-7 w-7 touch-none cursor-grab items-center justify-center rounded-lg bg-white/95 text-gray-700 shadow active:cursor-grabbing"
+        aria-label={`Mover imagen ${index + 1}`}
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={() => item.kind === 'existing' ? onDeleteExisting(item.image) : onDeletePending(item.key)}
+        disabled={deleting}
+        className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-lg bg-red-500 text-white shadow transition-opacity focus:opacity-100 disabled:opacity-60 sm:opacity-0 sm:group-hover:opacity-100"
+        aria-label={`Eliminar imagen ${index + 1}`}
+      >
+        {deleting ? (
+          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+        ) : (
+          <X className="h-3.5 w-3.5" />
+        )}
+      </button>
+      <span className={`absolute bottom-1.5 left-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white shadow ${index === 0 ? 'bg-indigo-600' : 'bg-black/60'}`}>
+        {index === 0 ? 'Principal' : `Posición ${index + 1}`}
+      </span>
+      {item.kind === 'pending' ? (
+        <span className="absolute bottom-1.5 right-1.5 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-semibold text-white shadow">
+          Por subir
+        </span>
+      ) : null}
+    </div>
+  );
+}
 
 const DISCOUNT_MODES: { value: DiscountMode; label: string }[] = [
   { value: 'none', label: 'Sin descuento' },
@@ -189,9 +267,8 @@ export function ProductFormPage() {
     isMenu,
   });
 
-  const [existingImages, setExistingImages] = useState<ProductImage[]>([]);
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const [pendingPreviews, setPendingPreviews] = useState<string[]>([]);
+  const [galleryItems, setGalleryItems] = useState<ProductGalleryItem[]>([]);
+  const galleryItemsRef = useRef<ProductGalleryItem[]>([]);
   const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
   const [loadingProduct, setLoadingProduct] = useState(isEditing);
   const [productNotFound, setProductNotFound] = useState(false);
@@ -215,6 +292,20 @@ export function ProductFormPage() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedCollectionIds, setSelectedCollectionIds] = useState<string[]>([]);
   const [selectedFacetValueIds, setSelectedFacetValueIds] = useState<string[]>([]);
+  const gallerySensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  useEffect(() => {
+    galleryItemsRef.current = galleryItems;
+  }, [galleryItems]);
+
+  useEffect(() => () => {
+    galleryItemsRef.current.forEach((item) => {
+      if (item.kind === 'pending') URL.revokeObjectURL(item.previewUrl);
+    });
+  }, []);
 
   const defaultProductType = isMenu ? 'menu_item' : 'physical_product';
   const entitySingular = labels.entityName;
@@ -335,28 +426,34 @@ export function ProductFormPage() {
           ? await productsService.updateProduct(productId, basePayload)
           : await productsService.createProduct({ ...basePayload, stock: 0 });
 
-        // Upload pending images sequentially so errors are per-file
-        let firstUploadedUrl: string | null = null;
-        for (let i = 0; i < pendingFiles.length; i++) {
+        // Upload new files in their visual positions, then persist the full
+        // mixed existing/new order atomically. Position zero is always the
+        // primary image and also becomes products.main_image_url.
+        const savedImageByGalleryKey = new Map<string, ProductImage>();
+        for (const item of galleryItems) {
+          if (item.kind === 'existing') savedImageByGalleryKey.set(item.key, item.image);
+        }
+        for (let index = 0; index < galleryItems.length; index += 1) {
+          const item = galleryItems[index];
+          if (item.kind !== 'pending') continue;
           try {
-            const img = await productsService.uploadProductImage(
+            const image = await productsService.uploadProductImage(
               storeId,
               saved.id,
-              pendingFiles[i],
-              existingImages.length + i,
-              existingImages.length === 0 && i === 0
+              item.file,
+              index,
+              index === 0,
             );
-            if (i === 0 && existingImages.length === 0) firstUploadedUrl = img.imageUrl;
-          } catch (imgErr) {
-            notify.error(
-              `No se pudo subir "${pendingFiles[i].name}": ${mapSupabaseError(imgErr)}`
-            );
+            savedImageByGalleryKey.set(item.key, image);
+          } catch (imageError) {
+            notify.error(`No se pudo subir "${item.file.name}": ${mapSupabaseError(imageError)}`);
           }
         }
 
-        if (!isEditing && firstUploadedUrl) {
-          await productsService.updateProduct(saved.id, { mainImageUrl: firstUploadedUrl });
-        }
+        const orderedImageIds = galleryItems
+          .map((item) => savedImageByGalleryKey.get(item.key)?.id)
+          .filter((id): id is string => Boolean(id));
+        await productsService.reorderProductImages(saved.id, orderedImageIds);
 
         await productsService.setProductCollections(saved.id, selectedCollectionIds);
         await facetsService.setProductFacetValues(saved.id, selectedFacetValueIds);
@@ -653,7 +750,11 @@ export function ProductFormPage() {
           specialInstructionsMaxLength: product.specialInstructionsMaxLength ?? 180,
         });
         setCurrentStock(product.stock);
-        setExistingImages(images);
+        setGalleryItems(images.map((image) => ({
+          key: `existing:${image.id}`,
+          kind: 'existing' as const,
+          image,
+        })));
         setDescriptionSections(product.descriptionSections ?? []);
         setSelectedCategoryId(product.categoryId);
         setSelectedCollectionIds(product.collections.map((collection) => collection.id));
@@ -798,8 +899,8 @@ export function ProductFormPage() {
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
-    const total = existingImages.length + pendingFiles.length + files.length;
-    const allowed = files.slice(0, MAX_IMAGES - existingImages.length - pendingFiles.length);
+    const total = galleryItems.length + files.length;
+    const allowed = files.slice(0, MAX_IMAGES - galleryItems.length);
     if (total > MAX_IMAGES) {
       notify.warning(`Solo puedes subir hasta ${MAX_IMAGES} imágenes por ${entitySingular}.`);
     }
@@ -821,18 +922,33 @@ export function ProductFormPage() {
     e.target.value = '';
   }
 
-  function removePendingFile(index: number) {
-    URL.revokeObjectURL(pendingPreviews[index]);
-    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
-    setPendingPreviews((prev) => prev.filter((_, i) => i !== index));
+  function removePendingFile(key: string) {
+    const item = galleryItems.find((candidate) => candidate.key === key);
+    if (item?.kind === 'pending') URL.revokeObjectURL(item.previewUrl);
+    setGalleryItems((current) => current.filter((candidate) => candidate.key !== key));
   }
 
   function appendPendingFile(file: File) {
     const preview = URL.createObjectURL(file);
-    setPendingFiles((prev) => [...prev, file]);
-    setPendingPreviews((prev) => [...prev, preview]);
+    setGalleryItems((current) => [...current, {
+      key: `pending:${crypto.randomUUID()}`,
+      kind: 'pending',
+      file,
+      previewUrl: preview,
+    }]);
     disposeLoadedImageFile(activeCrop);
     setActiveCrop(null);
+  }
+
+  function handleGalleryDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setGalleryItems((current) => {
+      const oldIndex = current.findIndex((item) => item.key === active.id);
+      const newIndex = current.findIndex((item) => item.key === over.id);
+      if (oldIndex < 0 || newIndex < 0) return current;
+      return arrayMove(current, oldIndex, newIndex);
+    });
   }
 
   async function handleDeleteExistingConfirmed(image: ProductImage) {
@@ -840,7 +956,20 @@ export function ProductFormPage() {
     setConfirmDeleteImage(null);
     try {
       await productsService.deleteProductImage(image.id, image.storagePath);
-      setExistingImages((prev) => prev.filter((img) => img.id !== image.id));
+      const remainingItems = galleryItems.filter(
+        (item) => item.kind !== 'existing' || item.image.id !== image.id,
+      );
+      setGalleryItems(remainingItems);
+      if (productId) {
+        const remainingExistingIds = remainingItems.flatMap((item) => (
+          item.kind === 'existing' ? [item.image.id] : []
+        ));
+        try {
+          await productsService.reorderProductImages(productId, remainingExistingIds);
+        } catch (orderError) {
+          notify.fromError(orderError, 'La imagen se eliminó, pero no se pudo actualizar la principal. Guarda el producto para reintentarlo.');
+        }
+      }
       notify.success('Imagen eliminada.');
     } catch (err) {
       notify.fromError(err);
@@ -849,7 +978,7 @@ export function ProductFormPage() {
     }
   }
 
-  const totalImages = existingImages.length + pendingFiles.length;
+  const totalImages = galleryItems.length;
 
   if (loadingProduct) {
     return (
@@ -1093,69 +1222,44 @@ export function ProductFormPage() {
             </div>
 
             <p className="mb-4 text-xs text-gray-500">
-              Máximo {MAX_IMAGES} imágenes.
+              Máximo {MAX_IMAGES} imágenes. Arrastra desde el control de cada foto para ordenarlas;
+              la primera siempre será la principal. El orden se confirma al guardar el producto.
             </p>
 
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
-              {existingImages.map((img) => (
-                <div
-                  key={img.id}
-                  className="relative aspect-square overflow-hidden rounded-lg bg-gray-100 group"
-                >
-                  <img src={img.imageUrl} alt="" className="h-full w-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDeleteImage(img)}
-                    disabled={deletingImageId === img.id}
-                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                  >
-                    {deletingImageId === img.id ? (
-                      <div className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    ) : (
-                      <X className="h-3 w-3" />
-                    )}
-                  </button>
-                  {img.isPrimary && (
-                    <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 text-xs text-white">
-                      Principal
-                    </span>
+            <DndContext
+              sensors={gallerySensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleGalleryDragEnd}
+            >
+              <SortableContext items={galleryItems.map((item) => item.key)} strategy={rectSortingStrategy}>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+                  {galleryItems.map((item, index) => (
+                    <SortableProductGalleryImage
+                      key={item.key}
+                      item={item}
+                      index={index}
+                      deleting={item.kind === 'existing' && deletingImageId === item.image.id}
+                      onDeleteExisting={setConfirmDeleteImage}
+                      onDeletePending={removePendingFile}
+                    />
+                  ))}
+
+                  {totalImages < MAX_IMAGES && (
+                    <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-200 transition-colors hover:border-indigo-400 hover:bg-indigo-50/50">
+                      <Upload className="mb-1 h-5 w-5 text-gray-400" />
+                      <span className="text-xs text-gray-400">Subir</span>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/avif"
+                        multiple
+                        className="hidden"
+                        onChange={handleFileSelect}
+                      />
+                    </label>
                   )}
                 </div>
-              ))}
-
-              {pendingPreviews.map((url, i) => (
-                <div
-                  key={url}
-                  className="relative aspect-square overflow-hidden rounded-lg bg-gray-100 group"
-                >
-                  <img src={url} alt="" className="h-full w-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => removePendingFile(i)}
-                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                  <span className="absolute bottom-1 left-1 rounded bg-amber-500/80 px-1 text-xs text-white">
-                    Por subir
-                  </span>
-                </div>
-              ))}
-
-              {totalImages < MAX_IMAGES && (
-                <label className="flex aspect-square cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-200 transition-colors hover:border-indigo-400 hover:bg-indigo-50/50">
-                  <Upload className="mb-1 h-5 w-5 text-gray-400" />
-                  <span className="text-xs text-gray-400">Subir</span>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/avif"
-                    multiple
-                    className="hidden"
-                    onChange={handleFileSelect}
-                  />
-                </label>
-              )}
-            </div>
+              </SortableContext>
+            </DndContext>
           </CardBody>
         </Card>
 

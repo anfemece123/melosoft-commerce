@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { StorefrontHeader } from './StorefrontHeader';
 import { buildStorefrontTheme } from './storefrontTheme';
@@ -64,5 +64,67 @@ describe('StorefrontHeader custom navigation', () => {
 
     expect(screen.getByRole('link', { name: 'Para mujer' }).getAttribute('href'))
       .toBe('/s/demo/catalog?f_genero=mujer');
+  });
+
+  it('opens the complete category navigation from the main catalog link', () => {
+    const categoryTree = [{
+      id: 'food',
+      storeId: 'store-1',
+      storeSlug: 'demo',
+      name: 'Comidas',
+      slug: 'comidas',
+      description: 'Platos principales',
+      parentId: null,
+      imageUrl: 'https://example.com/food.webp',
+      color: null,
+      sortOrder: 0,
+      showInMenu: true,
+      children: [{
+        id: 'burgers',
+        storeId: 'store-1',
+        storeSlug: 'demo',
+        name: 'Hamburguesas',
+        slug: 'hamburguesas',
+        description: null,
+        parentId: 'food',
+        imageUrl: 'https://example.com/burgers.webp',
+        color: null,
+        sortOrder: 0,
+        showInMenu: true,
+      }],
+    }];
+
+    render(
+      <MemoryRouter initialEntries={['/s/demo']}>
+        <StorefrontHeader
+          theme={buildStorefrontTheme({})}
+          storeName="Demo"
+          storeSlug="demo"
+          logoUrl={null}
+          catalogType="menu"
+          headerSettings={{ ...DEFAULT_HEADER_SETTINGS, showHomeLink: false }}
+          categories={categoryTree}
+          catalogMeta={{ ...catalogMeta, categories: categoryTree, categoryTree }}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.focus(screen.getByRole('link', { name: /menú/i }));
+
+    const megaMenu = screen.getByRole('region', { name: 'Explorar Menú' });
+    expect(megaMenu.getAttribute('data-layout')).toBe('overlay');
+    expect(megaMenu.className).toContain('absolute');
+    expect(megaMenu.className).toContain('top-full');
+    expect(megaMenu.className).not.toContain('border-t');
+    expect(megaMenu.textContent).not.toContain('Categorías de');
+    expect(megaMenu.querySelector('img[src="https://example.com/food.webp"]')).not.toBeNull();
+    expect(megaMenu.querySelector('img[src="https://example.com/burgers.webp"]')).not.toBeNull();
+    expect(screen.getByRole('link', { name: /comidas/i }).getAttribute('href'))
+      .toBe('/s/demo/catalog?cat=comidas');
+    expect(screen.getByRole('link', { name: 'Hamburguesas' }).getAttribute('href'))
+      .toBe('/s/demo/catalog?cat=comidas&sub=hamburguesas');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('region', { name: 'Explorar Menú' })).toBeNull();
   });
 });

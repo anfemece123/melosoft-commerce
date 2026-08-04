@@ -141,6 +141,7 @@ async function sendWithBrevo(params: {
   notification: EmailNotificationRow;
   order: OrderRow;
   store: StoreRow;
+  reviewUrl?: string | null;
 }): Promise<{ ok: true; messageId: string } | { ok: false; error: ClassifiedError }> {
   const { notification, order, store } = params;
   const items: OrderEmailItem[] = (order.order_items ?? []).map((item) => ({
@@ -178,6 +179,7 @@ async function sendWithBrevo(params: {
     trackingNumber: order.tracking_number,
     trackingUrl: order.tracking_url,
     estimatedDeliveryAt: order.estimated_delivery_at,
+    reviewUrl: params.reviewUrl ?? null,
     items,
   };
   const rendered = renderOrderEmail(data);
@@ -315,6 +317,22 @@ serve(async (req: Request) => {
       if (isEmail(ownerProfile?.email)) store = { ...store, support_email: ownerProfile.email };
     }
 
+    let reviewUrl: string | null = null;
+    if (notification.event_type === 'customer_order_delivered') {
+      const { data: invitation } = await supabase
+        .from('review_invitations')
+        .select('token, store_id')
+        .eq('order_id', notification.order_id)
+        .maybeSingle();
+      const { data: reviewSettings } = invitation?.store_id
+        ? await supabase.from('store_review_settings').select('mode').eq('store_id', invitation.store_id).maybeSingle()
+        : { data: null };
+      if (invitation?.token && (reviewSettings?.mode === 'public' || reviewSettings?.mode === 'collect_only')) {
+        const appUrl = (Deno.env.get('PUBLIC_SITE_URL')?.trim() || 'https://commerce.melosoftapp.com').replace(/\/$/, '');
+        reviewUrl = `${appUrl}/review/${invitation.token}`;
+      }
+    }
+
     const result = await sendWithBrevo({
       apiKey,
       senderEmail,
@@ -322,6 +340,7 @@ serve(async (req: Request) => {
       notification,
       order: orderData as unknown as OrderRow,
       store,
+      reviewUrl,
     });
     if (result.ok) {
       await supabase.from('email_notifications').update({

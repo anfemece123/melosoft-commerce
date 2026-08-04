@@ -1,8 +1,9 @@
 import type { ButtonHTMLAttributes, CSSProperties, MouseEventHandler, ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import type { StorefrontTheme } from './storefrontTheme';
 
 type StorefrontActionButtonVariant = 'primary' | 'outline' | 'whatsapp';
-type StorefrontActionButtonElement = 'a' | 'button' | 'div';
+type StorefrontActionButtonElement = 'a' | 'button' | 'div' | 'link';
 
 interface StorefrontActionButtonProps {
   theme: StorefrontTheme;
@@ -10,6 +11,7 @@ interface StorefrontActionButtonProps {
   variant?: StorefrontActionButtonVariant;
   as?: StorefrontActionButtonElement;
   href?: string;
+  to?: string;
   target?: string;
   rel?: string;
   className?: string;
@@ -24,6 +26,7 @@ export function StorefrontActionButton({
   variant = 'primary',
   as = 'button',
   href,
+  to,
   target,
   rel,
   className = '',
@@ -64,6 +67,19 @@ export function StorefrontActionButton({
       >
         {children}
       </a>
+    );
+  }
+
+  if (Component === 'link') {
+    return (
+      <Link
+        to={to ?? href ?? '/'}
+        onClick={onClick as MouseEventHandler<HTMLAnchorElement> | undefined}
+        className={baseClassName}
+        style={style}
+      >
+        {children}
+      </Link>
     );
   }
 

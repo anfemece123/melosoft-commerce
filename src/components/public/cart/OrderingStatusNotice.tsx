@@ -1,30 +1,23 @@
-import { CheckCircle2, Clock3, PauseCircle } from 'lucide-react';
+import { Clock3, PauseCircle } from 'lucide-react';
 import { useSelectedLocation } from '@/lib/locations/locationContext';
-import type { StorefrontTheme } from '../storefront/storefrontTheme';
 
-export function OrderingStatusNotice({
-  theme,
-  showWhenOpen = true,
-}: {
-  theme: StorefrontTheme;
-  showWhenOpen?: boolean;
-}) {
+export function OrderingStatusNotice() {
   const { orderStatus, scheduleLoading } = useSelectedLocation();
 
-  if (!scheduleLoading && orderStatus?.isAcceptingOrders && !showWhenOpen) return null;
-
   const isOpen = orderStatus?.isAcceptingOrders === true;
+  // A healthy/open state does not need to consume visual space. Keep this
+  // component only for actionable states: validation, pause or closure.
+  if (!scheduleLoading && isOpen) return null;
+
   const isPaused = orderStatus?.statusCode === 'paused';
-  const Icon = isOpen ? CheckCircle2 : isPaused ? PauseCircle : Clock3;
-  const color = isOpen ? theme.primary : '#b45309';
-  const backgroundColor = isOpen ? `${theme.primary}12` : '#f59e0b1a';
+  const Icon = isPaused ? PauseCircle : Clock3;
+  const color = '#b45309';
+  const backgroundColor = '#f59e0b1a';
   const label = scheduleLoading
     ? 'Validando disponibilidad de pedidos…'
-    : isOpen
-      ? 'Pedidos disponibles'
-      : isPaused
-        ? 'Los pedidos están pausados temporalmente.'
-        : 'La tienda no está recibiendo pedidos en este momento.';
+    : isPaused
+      ? 'Los pedidos están pausados temporalmente.'
+      : 'La tienda no está recibiendo pedidos en este momento.';
 
   return (
     <div

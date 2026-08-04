@@ -103,6 +103,7 @@ interface PublicOptionItemRow {
   product_id: string;
   label: string;
   description: string | null;
+  image_url: string | null;
   price_delta: number;
   is_default: boolean;
   sort_order: number;
@@ -144,6 +145,7 @@ async function fetchPublicOptionGroups(productId: string): Promise<PublicProduct
       id: row.id,
       label: row.label,
       description: row.description,
+      imageUrl: row.image_url,
       priceDelta: Number(row.price_delta),
       isDefault: row.is_default,
       sortOrder: row.sort_order,

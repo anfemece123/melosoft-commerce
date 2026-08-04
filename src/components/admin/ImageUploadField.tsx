@@ -27,6 +27,12 @@ interface ImageUploadFieldProps {
   clearLabel?: string;
   clearAction?: 'remove' | 'reset';
   labelAdornment?: ReactNode;
+  secondaryAction?: {
+    label: string;
+    icon?: ReactNode;
+    onClick: () => void;
+    disabled?: boolean;
+  };
 }
 
 export function ImageUploadField({
@@ -43,6 +49,7 @@ export function ImageUploadField({
   clearLabel = 'Quitar',
   clearAction = 'remove',
   labelAdornment,
+  secondaryAction,
 }: ImageUploadFieldProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [cropSource, setCropSource] = useState<LoadedImageFile | null>(null);
@@ -94,6 +101,17 @@ export function ImageUploadField({
                 {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
                 {uploading ? 'Subiendo...' : 'Subir imagen'}
               </button>
+              {secondaryAction ? (
+                <button
+                  type="button"
+                  onClick={secondaryAction.onClick}
+                  disabled={uploading || secondaryAction.disabled}
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {secondaryAction.icon}
+                  {secondaryAction.label}
+                </button>
+              ) : null}
               {previewUrl && onClear && (
                 <button
                   type="button"

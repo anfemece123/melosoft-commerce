@@ -3,6 +3,32 @@ import { formatCurrency } from '@/utils/formatCurrency';
 
 export type ProductOptionSelections = Record<string, string[]>;
 
+export function applyLocationAvailabilityToProductOptions(
+  groups: PublicProductOptionGroup[],
+  unavailableProductIds: ReadonlySet<string>,
+): PublicProductOptionGroup[] {
+  if (unavailableProductIds.size === 0) return groups;
+  return groups.map((group) => ({
+    ...group,
+    items: group.items.map((item) => item.linkedProductId && unavailableProductIds.has(item.linkedProductId)
+      ? { ...item, isAvailable: false, unavailableReason: 'No disponible en esta sede' }
+      : item),
+  }));
+}
+
+export function buildProductOptionSelectionsFromCart(
+  groups: PublicProductOptionGroup[],
+  customizations: SelectedProductOptionItem[],
+): ProductOptionSelections {
+  const selectedIds = new Set(customizations.map((item) => item.optionItemId));
+  return groups.reduce<ProductOptionSelections>((selections, group) => {
+    selections[group.id] = group.items
+      .filter((item) => selectedIds.has(item.id))
+      .map((item) => item.id);
+    return selections;
+  }, {});
+}
+
 export function buildInitialProductOptionSelections(groups: PublicProductOptionGroup[]): ProductOptionSelections {
   return groups.reduce<ProductOptionSelections>((acc, group) => {
     const defaults = group.items.filter((item) => item.isDefault && item.isAvailable).map((item) => item.id);
@@ -22,16 +48,20 @@ export function toggleProductOptionSelection(
 ): ProductOptionSelections {
   const current = selections[group.id] ?? [];
   const item = group.items.find((candidate) => candidate.id === itemId);
-  if (!item?.isAvailable) return selections;
+  if (!item) return selections;
 
   if (group.selectionType === 'single') {
-    return { ...selections, [group.id]: current[0] === itemId ? [] : [itemId] };
+    if (current[0] === itemId) return { ...selections, [group.id]: [] };
+    if (!item.isAvailable) return selections;
+    return { ...selections, [group.id]: [itemId] };
   }
 
   const exists = current.includes(itemId);
   if (exists) {
     return { ...selections, [group.id]: current.filter((value) => value !== itemId) };
   }
+
+  if (!item.isAvailable) return selections;
 
   if (group.maxSelect !== null && current.length >= group.maxSelect) {
     return selections;

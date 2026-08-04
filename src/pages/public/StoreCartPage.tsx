@@ -21,6 +21,9 @@ import { getFulfillmentMethodLabel } from '@/lib/orders/fulfillmentLabels';
 import { useResolvedStoreSlug } from '@/lib/storefront/storefrontDomainContext';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 import { OrderingStatusNotice } from '@/components/public/cart/OrderingStatusNotice';
+import { CartUpsellSection } from '@/components/public/cart/CartUpsellSection';
+
+const EMPTY_UNAVAILABLE_PRODUCT_IDS = new Set<string>();
 
 export function StoreCartPage() {
   const { storeSlug: routeStoreSlug } = useParams<{ storeSlug: string }>();
@@ -29,10 +32,35 @@ export function StoreCartPage() {
   const { branding } = usePublicStoreBranding();
   const { items, totalItems, totalPrice, updateQuantity, removeItem, addItem } = useCart();
   const { selectedLocation, orderStatus, scheduleLoading } = useSelectedLocation();
-  const [unavailableIds, setUnavailableIds] = useState<Set<string>>(new Set());
+  const [locationAvailability, setLocationAvailability] = useState<{
+    storeId: string;
+    locationId: string;
+    unavailableIds: Set<string>;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!branding?.storeId || !selectedLocation) return;
+    let cancelled = false;
+    const storeId = branding.storeId;
+    const locationId = selectedLocation.locationId;
+    void productAvailabilityService
+      .getUnavailableProductIds(storeId, locationId)
+      .then((ids) => {
+        if (!cancelled) setLocationAvailability({ storeId, locationId, unavailableIds: ids });
+      })
+      .catch(() => {
+        if (!cancelled) setLocationAvailability({ storeId, locationId, unavailableIds: new Set() });
+      });
+    return () => { cancelled = true; };
+  }, [branding?.storeId, selectedLocation]);
 
   if (!storeSlug || !branding) return null;
   const currentBranding = branding;
+  const unavailableIds = selectedLocation
+    && locationAvailability?.storeId === currentBranding.storeId
+    && locationAvailability.locationId === selectedLocation.locationId
+    ? locationAvailability.unavailableIds
+    : EMPTY_UNAVAILABLE_PRODUCT_IDS;
 
   const theme = buildStorefrontTheme({
     mode: currentBranding.themeMode,
@@ -68,26 +96,15 @@ export function StoreCartPage() {
     nationalShippingFreeFrom: currentBranding.nationalShippingFreeFrom,
   });
 
-  useEffect(() => {
-    if (!currentBranding.storeId || !selectedLocation) {
-      setUnavailableIds(new Set());
-      return;
-    }
-    productAvailabilityService
-      .getUnavailableProductIds(currentBranding.storeId, selectedLocation.locationId)
-      .then((ids) => setUnavailableIds(ids))
-      .catch(() => setUnavailableIds(new Set()));
-  }, [currentBranding.storeId, selectedLocation]);
-
-  function handleAddRecommendedProduct(event: MouseEvent<HTMLElement>, product: PublicProductPage) {
-    event.preventDefault();
-    event.stopPropagation();
+  function addRecommendedProduct(product: PublicProductPage) {
     const added = addItem({
       productId: product.productId,
       storeId: currentBranding.storeId,
       productSlug: product.productSlug,
       productName: product.productName,
       productType: product.productType,
+      categoryId: product.categoryId,
+      categoryName: product.categoryName,
       imageUrl: product.mainImageUrl,
       unitPrice: getActivePrice(product.regularPrice, product.salePrice),
       customizationNotes: null,
@@ -107,6 +124,12 @@ export function StoreCartPage() {
     notify.cartSuccess(`"${product.productName}" agregado al pedido`);
   }
 
+  function handleAddRecommendedProduct(event: MouseEvent<HTMLElement>, product: PublicProductPage) {
+    event.preventDefault();
+    event.stopPropagation();
+    addRecommendedProduct(product);
+  }
+
   const unavailableItems = items.filter((item) => unavailableIds.has(item.productId));
 
   return (
@@ -120,7 +143,7 @@ export function StoreCartPage() {
       />
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <section className="space-y-5">
+        <section className="space-y-5 lg:col-start-1 lg:row-start-1">
           <div className="space-y-2">
             <p className="text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: theme.mutedText }}>
               Carrito
@@ -150,25 +173,21 @@ export function StoreCartPage() {
                   Agregar más
                 </Link>
               </div>
-              <CartItemsList items={items} theme={theme} currency={currentBranding.currency} onUpdateQuantity={updateQuantity} onRemove={removeItem} />
+              <CartItemsList
+                items={items}
+                theme={theme}
+                currency={currentBranding.currency}
+                onUpdateQuantity={updateQuantity}
+                onRemove={removeItem}
+                onEdit={(item) => void navigate(buildStorefrontPath(storeSlug, `/p/${item.productSlug}`), {
+                  state: { editCartLineId: item.lineId, returnTo: 'cart' },
+                })}
+              />
             </div>
-          )}
-
-          {items.length > 0 && (
-            <CartRecommendationsSection
-              theme={theme}
-              storeSlug={storeSlug}
-              currency={currentBranding.currency}
-              isMenu={currentBranding.catalogType === 'menu'}
-              excludedProductIds={items.map((item) => item.productId)}
-              unavailableProductIds={unavailableIds}
-              showCartButton={showCartButton}
-              onAddToCart={handleAddRecommendedProduct}
-            />
           )}
         </section>
 
-        <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+        <aside className="space-y-4 lg:sticky lg:top-24 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start">
           <div className="rounded-[2rem] border p-5" style={{ borderColor: theme.border, backgroundColor: theme.surface }}>
             <p className="text-sm font-semibold" style={{ color: theme.text }}>
               Resumen del pedido
@@ -249,7 +268,7 @@ export function StoreCartPage() {
                 </div>
               )}
 
-              <OrderingStatusNotice theme={theme} />
+              <OrderingStatusNotice />
 
               <button
                 type="button"
@@ -261,9 +280,32 @@ export function StoreCartPage() {
                 Continuar con el pedido
                 <ChevronRight className="h-4 w-4" />
               </button>
+
+              <CartUpsellSection
+                theme={theme}
+                storeSlug={storeSlug}
+                currency={currentBranding.currency}
+                productIds={items.map((item) => item.productId)}
+                unavailableProductIds={unavailableIds}
+                onAdd={addRecommendedProduct}
+              />
             </div>
           </div>
         </aside>
+
+        {items.length > 0 && (
+          <CartRecommendationsSection
+            className="mt-0 lg:col-start-1 lg:row-start-2"
+            theme={theme}
+            storeSlug={storeSlug}
+            currency={currentBranding.currency}
+            isMenu={currentBranding.catalogType === 'menu'}
+            excludedProductIds={items.map((item) => item.productId)}
+            unavailableProductIds={unavailableIds}
+            showCartButton={showCartButton}
+            onAddToCart={handleAddRecommendedProduct}
+          />
+        )}
       </div>
     </main>
   );

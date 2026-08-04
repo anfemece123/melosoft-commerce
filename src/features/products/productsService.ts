@@ -1,13 +1,23 @@
 import { supabase } from '@/lib/supabase';
 import { assertImageReadyForUpload } from '@/lib/images/imageFile.utils';
-import type { Product, ProductInsert, ProductUpdate, ProductImage, ProductCountStats } from './products.types';
-import type { ProductFacetValue, ProductCollectionAssignment, PublicProductImage, PublicProductPage } from '@/types/common.types';
+import type {
+  Product,
+  ProductInsert,
+  ProductUpdate,
+  ProductImage,
+  ProductCountStats,
+  ProductImageCandidatePage,
+  ProductLinkOption,
+} from './products.types';
+import type { ProductFacetValue, ProductCollectionAssignment, PublicCatalogNavigationProduct, PublicProductImage, PublicProductPage } from '@/types/common.types';
 import type { PublicProductImageRow, PublicProductPageRow } from '@/types/database.types';
+import { reviewsService } from '@/features/reviews/reviewsService';
 import {
   mapProductRowToProduct,
   mapProductInsertToRow,
   mapProductUpdateToRow,
   mapPublicProductPageRowToPublicProductPage,
+  mapPublicCatalogNavigationProductRow,
   mapProductImageRowToProductImage,
 } from './products.mapper';
 
@@ -177,6 +187,34 @@ async function attachPublicImages(products: PublicProductPage[]): Promise<Public
   });
 }
 
+async function attachPublicStorefrontData(products: PublicProductPage[]): Promise<PublicProductPage[]> {
+  const withImages = await attachPublicImages(products);
+  const storeSlug = withImages[0]?.storeSlug;
+  if (!storeSlug || withImages.length === 0) return withImages;
+  try {
+    const [config, summaries] = await Promise.all([
+      reviewsService.getPublicConfig(storeSlug),
+      reviewsService.getPublicSummaries(withImages.map((product) => product.productId)),
+    ]);
+    return withImages.map((product) => {
+      const summary = summaries.get(product.productId);
+      return {
+        ...product,
+        reviewsEnabled: config.mode === 'public',
+        showRatingOnCards: config.mode === 'public' && config.showRatingOnCards,
+        showProductReviews: config.mode === 'public' && config.showProductReviews,
+        showReviewPhotos: config.mode === 'public' && config.showReviewPhotos,
+        reviewAverage: summary?.averageRating ?? 0,
+        reviewCount: summary?.reviewCount ?? 0,
+        reviewDistribution: summary?.distribution ?? { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      };
+    });
+  } catch {
+    // Reviews are an enhancement and must never make the catalog unavailable.
+    return withImages;
+  }
+}
+
 interface PublicCatalogSearchParams {
   storeSlug: string;
   categorySlug?: string;
@@ -209,6 +247,18 @@ type UntypedRpcClient = {
 const rpcClient = supabase as unknown as UntypedRpcClient;
 
 export const productsService = {
+  async getProductLinkOptionsByStore(storeId: string): Promise<ProductLinkOption[]> {
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, name, slug')
+      .eq('store_id', storeId)
+      .eq('status', 'active')
+      .eq('is_available', true)
+      .order('name', { ascending: true });
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  },
+
   async getProductsByStore(storeId: string): Promise<Product[]> {
     const { data, error } = await supabase
       .from('products')
@@ -232,6 +282,48 @@ export const productsService = {
       .order('created_at', { ascending: false });
     if (error) throw new Error(error.message);
     return (data ?? []).map(mapProductRowToProduct);
+  },
+
+  async getCategoryImageCandidates(
+    storeId: string,
+    categoryIds: string[],
+    options: { page: number; pageSize: number; search?: string },
+  ): Promise<ProductImageCandidatePage> {
+    const uniqueCategoryIds = Array.from(new Set(categoryIds.filter(Boolean)));
+    if (uniqueCategoryIds.length === 0) return { items: [], total: 0 };
+
+    const page = Math.max(0, Math.floor(options.page));
+    const pageSize = Math.min(24, Math.max(1, Math.floor(options.pageSize)));
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+    let query = supabase
+      .from('products')
+      .select('id, name, main_image_url, category_id, status', { count: 'exact' })
+      .eq('store_id', storeId)
+      .in('category_id', uniqueCategoryIds)
+      .neq('status', 'archived')
+      .not('main_image_url', 'is', null)
+      .order('name', { ascending: true })
+      .range(from, to);
+
+    const search = options.search?.trim();
+    if (search) query = query.ilike('name', `%${search}%`);
+
+    const { data, error, count } = await query;
+    if (error) throw new Error(error.message);
+
+    return {
+      items: (data ?? [])
+        .filter((row): row is typeof row & { main_image_url: string } => Boolean(row.main_image_url))
+        .map((row) => ({
+          productId: row.id,
+          name: row.name,
+          imageUrl: row.main_image_url,
+          categoryId: row.category_id,
+          status: row.status === 'draft' ? 'draft' : row.status === 'archived' ? 'archived' : 'active',
+        })),
+      total: count ?? 0,
+    };
   },
 
   async getProductById(id: string): Promise<Product | null> {
@@ -261,19 +353,73 @@ export const productsService = {
       throw new Error(error.message);
     }
     if (!data) return null;
-    const [product] = await attachPublicImages([mapPublicProductPageRowToPublicProductPage(data)]);
+    const [product] = await attachPublicStorefrontData([mapPublicProductPageRowToPublicProductPage(data)]);
     if (!product) return null;
     return product;
   },
 
   async getPublicProductsByStoreSlug(storeSlug: string): Promise<PublicProductPage[]> {
+    // Use the same server-side editorial ordering as StoreCatalogPage. This
+    // keeps home-builder product sections and the full catalog consistent;
+    // the intentionally unbounded limit preserves this method's existing
+    // "load the complete public catalog" contract.
+    const { data, error } = await rpcClient.rpc('public_catalog_search_page', {
+      p_store_slug: storeSlug,
+      p_category_slug: null,
+      p_category_parent_id: null,
+      p_subcategory_slug: null,
+      p_collection_slug: null,
+      p_query: null,
+      p_only_featured: false,
+      p_only_on_sale: false,
+      p_sort_key: 'relevance',
+      p_offset: 0,
+      p_limit: 2_147_483_647,
+    });
+    if (error) throw new Error(error.message);
+    return attachPublicStorefrontData(((data ?? []) as PublicProductPageRow[]).map(mapPublicProductPageRowToPublicProductPage));
+  },
+
+  /** Compact index for the persistent public header. Deliberately excludes
+   * product copy, prices, media, modifiers and checkout settings. */
+  async getPublicCatalogNavigationProducts(storeSlug: string): Promise<PublicCatalogNavigationProduct[]> {
     const { data, error } = await supabase
       .from('public_product_pages')
-      .select('*')
-      .eq('store_slug', storeSlug)
-      .order('product_name', { ascending: true });
+      .select('category_id, category_slug, category_parent_id, collections, facet_values, variant_options, variants')
+      .eq('store_slug', storeSlug);
     if (error) throw new Error(error.message);
-    return attachPublicImages((data ?? []).map(mapPublicProductPageRowToPublicProductPage));
+    return (data ?? []).map((row) => mapPublicCatalogNavigationProductRow(row));
+  },
+
+  async getPublicCartUpsells(
+    storeSlug: string,
+    productIds: string[],
+    limit = 3,
+  ): Promise<Array<{ title: string; products: PublicProductPage[] }>> {
+    if (productIds.length === 0) return [];
+    const { data, error } = await rpcClient.rpc('get_public_cart_upsells', {
+      p_store_slug: storeSlug,
+      p_product_ids: Array.from(new Set(productIds)),
+      p_limit: Math.min(6, Math.max(1, limit)),
+    });
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as Array<{ rule_title?: string; product_data?: PublicProductPageRow }>;
+    const productRows = rows
+      .map((row) => row.product_data)
+      .filter((row): row is PublicProductPageRow => Boolean(row));
+    const products = await attachPublicStorefrontData(productRows.map(mapPublicProductPageRowToPublicProductPage));
+    const productsById = new Map(products.map((product) => [product.productId, product]));
+    const groups = new Map<string, PublicProductPage[]>();
+    rows.forEach((row) => {
+      const productId = row.product_data?.product_id;
+      const product = productId ? productsById.get(productId) : null;
+      if (!product) return;
+      const title = row.rule_title?.trim() || 'Completa tu pedido';
+      const current = groups.get(title) ?? [];
+      current.push(product);
+      groups.set(title, current);
+    });
+    return Array.from(groups, ([title, groupedProducts]) => ({ title, products: groupedProducts }));
   },
 
   async getPublicProductsPageByStoreSlug(
@@ -294,7 +440,7 @@ export const productsService = {
     if (error) throw new Error(error.message);
 
     return {
-      products: await attachPublicImages((data ?? []).map(mapPublicProductPageRowToPublicProductPage)),
+      products: await attachPublicStorefrontData((data ?? []).map(mapPublicProductPageRowToPublicProductPage)),
       totalCount: count ?? 0,
     };
   },
@@ -333,7 +479,7 @@ export const productsService = {
 
     const rows = (pageResult.data ?? []) as PublicProductPageRow[];
     return {
-      products: await attachPublicImages(rows.map(mapPublicProductPageRowToPublicProductPage)),
+      products: await attachPublicStorefrontData(rows.map(mapPublicProductPageRowToPublicProductPage)),
       totalCount: Number(countResult.data ?? 0),
     };
   },
@@ -516,6 +662,8 @@ export const productsService = {
       .from('product_images')
       .select('*')
       .eq('product_id', productId)
+      .is('variant_id', null)
+      .is('option_value_id', null)
       .order('sort_order', { ascending: true });
     if (error) throw new Error(error.message);
     return (data ?? []).map(mapProductImageRowToProductImage);
@@ -582,6 +730,14 @@ export const productsService = {
       await supabase.storage.from('store-assets').remove([storagePath]);
     }
     const { error } = await supabase.from('product_images').delete().eq('id', imageId);
+    if (error) throw new Error(error.message);
+  },
+
+  async reorderProductImages(productId: string, imageIds: string[]): Promise<void> {
+    const { error } = await supabase.rpc('reorder_product_images', {
+      p_product_id: productId,
+      p_image_ids: imageIds,
+    });
     if (error) throw new Error(error.message);
   },
 

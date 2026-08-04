@@ -77,6 +77,7 @@ export function CatalogProductsConfigStep({ draft, updateDraft }: WizardStepProp
         value={content.order}
         onChange={(e) => updateDraft({ content: { ...content, order: e.target.value as typeof content.order } })}
         options={[
+          { value: 'catalog', label: 'Orden manual del catálogo' },
           { value: 'recent', label: 'Más recientes primero' },
           { value: 'featured', label: 'Destacados primero' },
           { value: 'name_asc', label: 'Nombre A-Z' },

@@ -21,6 +21,7 @@ import type {
   ProductStatus,
   ProductType,
   PublicProductImage,
+  PublicCatalogNavigationProduct,
   PublicProductPage,
   PublicProductVariant,
   PublicProductVariantOptionValue,
@@ -57,7 +58,7 @@ function parseDescriptionSections(raw: unknown): ProductDescriptionSection[] {
   return raw as ProductDescriptionSection[];
 }
 
-function parseFacetValues(raw: unknown): ProductFacetValue[] {
+export function parseFacetValues(raw: unknown): ProductFacetValue[] {
   if (!Array.isArray(raw)) return [];
   return (raw as Array<Record<string, unknown>>).map((item) => ({
     facetId: String(item.facet_id ?? ''),
@@ -70,7 +71,7 @@ function parseFacetValues(raw: unknown): ProductFacetValue[] {
   }));
 }
 
-function parseCollections(raw: unknown): ProductCollectionAssignment[] {
+export function parseCollections(raw: unknown): ProductCollectionAssignment[] {
   if (!Array.isArray(raw)) return [];
   return (raw as Array<Record<string, unknown>>).map((item) => ({
     id: String(item.id ?? ''),
@@ -96,7 +97,7 @@ function parsePublicVariantImages(raw: unknown): PublicProductImage[] {
     .filter((image) => image.imageUrl.trim().length > 0);
 }
 
-function parseVariantOptions(raw: unknown): PublicVariantOption[] {
+export function parseVariantOptions(raw: unknown): PublicVariantOption[] {
   if (!Array.isArray(raw)) return [];
   return (raw as Array<Record<string, unknown>>).map((item) => ({
     id: String(item.id ?? ''),
@@ -117,7 +118,7 @@ function parseVariantOptions(raw: unknown): PublicVariantOption[] {
   }));
 }
 
-function parseVariants(raw: unknown): PublicProductVariant[] {
+export function parseVariants(raw: unknown): PublicProductVariant[] {
   if (!Array.isArray(raw)) return [];
   return (raw as Array<Record<string, unknown>>).map((item) => ({
     id: String(item.id ?? ''),
@@ -318,7 +319,34 @@ export function mapPublicProductPageRowToPublicProductPage(row: PublicProductPag
     sizeChart: parseSizeChart(row.size_chart),
     variantOptions: parseVariantOptions(row.variant_options),
     variants: parseVariants(row.variants),
+    reviewsEnabled: false,
+    showRatingOnCards: false,
+    showProductReviews: false,
+    showReviewPhotos: false,
+    reviewAverage: 0,
+    reviewCount: 0,
+    reviewDistribution: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
     createdAt: row.product_created_at,
+  };
+}
+
+export function mapPublicCatalogNavigationProductRow(row: {
+  category_id: string | null;
+  category_slug: string | null;
+  category_parent_id: string | null;
+  collections: unknown;
+  facet_values: unknown;
+  variant_options: unknown;
+  variants: unknown;
+}): PublicCatalogNavigationProduct {
+  return {
+    categoryId: row.category_id ?? null,
+    categorySlug: row.category_slug ?? null,
+    categoryParentId: row.category_parent_id ?? null,
+    collections: parseCollections(row.collections),
+    facetValues: parseFacetValues(row.facet_values),
+    variantOptions: parseVariantOptions(row.variant_options),
+    variants: parseVariants(row.variants),
   };
 }
 

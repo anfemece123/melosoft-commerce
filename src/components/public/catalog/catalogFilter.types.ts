@@ -30,7 +30,7 @@ export const EMPTY_FILTERS: CatalogFilters = {
 export type SortKey = 'relevance' | 'price_asc' | 'price_desc' | 'name_asc' | 'newest' | 'featured';
 
 export const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: 'relevance', label: 'Relevancia' },
+  { key: 'relevance', label: 'Orden del catálogo' },
   { key: 'featured', label: 'Destacados' },
   { key: 'newest', label: 'Más nuevos' },
   { key: 'price_asc', label: 'Precio: menor a mayor' },

@@ -1,5 +1,6 @@
 import {
   BadgePercent,
+  ChevronDown,
   ChevronRight,
   FolderTree,
   Home,
@@ -9,6 +10,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type {
   HeaderNavigationItemType,
@@ -52,11 +54,64 @@ export function MobileNavDrawer({
   navigationItems,
   showAutomaticCollections,
 }: MobileNavDrawerProps) {
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(() => (
+    settings.menuMode === 'catalog_link'
+      ? navigationItems.find((item) => item.type === 'catalog')?.id ?? null
+      : null
+  ));
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    document.body.style.overflow = 'hidden';
+    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== 'Tab' || !drawerRef.current) return;
+      const focusable = Array.from(drawerRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previouslyFocused?.isConnected) previouslyFocused.focus();
+    };
+  }, [open]);
+
   if (!open) return null;
 
   const visibleCollections = showAutomaticCollections
     ? collections.filter((collection) => collection.showInMenu)
     : [];
+  const automaticCategoryTree = categoryTree.filter((category) => category.showInMenu);
 
   const controlBg = theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
   const menuTextClass = MENU_TEXT_SIZE_MAP[settings.menuTextSize];
@@ -71,6 +126,8 @@ export function MobileNavDrawer({
       />
 
       <div
+        id="storefront-mobile-navigation"
+        ref={drawerRef}
         className="fixed bottom-0 left-0 top-0 z-50 flex w-[280px] max-w-[85vw] flex-col shadow-2xl"
         style={{ backgroundColor: theme.background }}
         role="dialog"
@@ -112,6 +169,7 @@ export function MobileNavDrawer({
           )}
 
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             aria-label="Cerrar panel de navegación"
@@ -140,60 +198,104 @@ export function MobileNavDrawer({
             const rootCategory = item.rootCategorySlug
               ? categoryTree.find((category) => category.slug === item.rootCategorySlug) ?? null
               : null;
+            const isCatalogMenu = item.type === 'catalog';
+            const hasNestedContent = isCatalogMenu
+              ? automaticCategoryTree.length > 0
+              : (rootCategory?.children ?? []).length > 0;
+            const isExpanded = expandedItemId === item.id;
             return (
               <div key={item.id} className="border-b border-transparent">
-                <Link
-                  to={item.href}
-                  onClick={onClose}
-                  className={`flex items-center justify-between gap-3 px-5 py-3 font-medium transition-opacity hover:opacity-70 ${menuTextClass}`}
-                  style={{
-                    color: !settings.showHomeLink && index === 0
-                      ? theme.primary
-                      : theme.mode === 'dark' ? theme.text : '#374151',
-                  }}
-                >
-                  <span className="flex min-w-0 items-center gap-3">
+                <div className="flex items-center">
+                  <Link
+                    to={item.href}
+                    onClick={onClose}
+                    className={`flex min-w-0 flex-1 items-center gap-3 py-3 pl-5 font-medium transition-opacity hover:opacity-70 ${menuTextClass} ${hasNestedContent ? 'pr-2' : 'pr-5'}`}
+                    style={{
+                      color: !settings.showHomeLink && index === 0
+                        ? theme.primary
+                        : theme.mode === 'dark' ? theme.text : '#374151',
+                    }}
+                  >
                     <NavigationItemIcon type={item.type} />
                     <span className="truncate">{item.label}</span>
-                  </span>
-                  {(rootCategory?.children ?? []).length > 0 && (
-                    <ChevronRight
-                      className="h-3.5 w-3.5 shrink-0"
+                  </Link>
+                  {hasNestedContent ? (
+                    <button
+                      type="button"
+                      onClick={() => setExpandedItemId((current) => current === item.id ? null : item.id)}
+                      className="mr-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-black/5"
                       style={{ color: theme.mutedText }}
-                    />
-                  )}
-                </Link>
-                {(rootCategory?.children ?? []).length > 0 && (
-                  <div className="pb-2">
-                    {(rootCategory?.children ?? []).map((child) => (
+                      aria-label={`${isExpanded ? 'Ocultar' : 'Mostrar'} opciones de ${item.label}`}
+                      aria-expanded={isExpanded}
+                      aria-controls={`mobile-nav-children-${item.id}`}
+                    >
+                      <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                    </button>
+                  ) : null}
+                </div>
+
+                {hasNestedContent && isExpanded ? (
+                  <div
+                    id={`mobile-nav-children-${item.id}`}
+                    className="mx-4 mb-2 overflow-hidden rounded-xl"
+                    style={{ backgroundColor: controlBg }}
+                  >
+                    {isCatalogMenu ? automaticCategoryTree.map((category) => (
+                      <div key={category.id} className="border-b last:border-b-0" style={{ borderColor: theme.border }}>
+                        <Link
+                          to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(category.slug)}`)}
+                          onClick={onClose}
+                          className={`flex items-center gap-2.5 px-4 py-2.5 font-semibold transition-opacity hover:opacity-70 ${submenuTextClass}`}
+                          style={{ color: theme.text }}
+                        >
+                          {category.imageUrl ? (
+                            <img src={category.imageUrl} alt="" className="h-8 w-8 shrink-0 rounded-lg object-cover" />
+                          ) : null}
+                          <span className="min-w-0 flex-1 truncate">{category.name}</span>
+                          <ChevronRight className="h-3.5 w-3.5 shrink-0" style={{ color: theme.mutedText }} />
+                        </Link>
+                        {(category.children ?? []).length > 0 ? (
+                          <div className="pb-2">
+                            {(category.children ?? []).map((child) => (
+                              <Link
+                                key={child.id}
+                                to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(category.slug)}&sub=${encodeURIComponent(child.slug)}`)}
+                                onClick={onClose}
+                                className={`flex items-center gap-2 px-7 py-1.5 transition-opacity hover:opacity-70 ${submenuTextClass}`}
+                                style={{ color: theme.mutedText }}
+                              >
+                                {child.imageUrl ? (
+                                  <img src={child.imageUrl} alt="" className="h-6 w-6 shrink-0 rounded-md object-cover" />
+                                ) : null}
+                                <span className="truncate">{child.name}</span>
+                              </Link>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    )) : (rootCategory?.children ?? []).map((child) => (
                       <Link
                         key={child.id}
                         to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(rootCategory?.slug ?? '')}&sub=${encodeURIComponent(child.slug)}`)}
                         onClick={onClose}
-                        className={`block px-12 py-2 transition-opacity hover:opacity-70 ${submenuTextClass}`}
+                        className={`flex items-center gap-2.5 px-4 py-2.5 transition-opacity hover:opacity-70 ${submenuTextClass}`}
                         style={{ color: theme.mutedText }}
                       >
-                        {child.name}
+                        {child.imageUrl ? (
+                          <img src={child.imageUrl} alt="" className="h-7 w-7 shrink-0 rounded-md object-cover" />
+                        ) : null}
+                        <span className="min-w-0 flex-1 truncate">{child.name}</span>
+                        <ChevronRight className="h-3 w-3" />
                       </Link>
                     ))}
                   </div>
-                )}
+                ) : null}
               </div>
             );
           })}
 
           {visibleCollections.length > 0 && (
-            <>
-              <div
-                className="mx-4 my-1"
-                style={{ borderTop: `1px solid ${theme.border}` }}
-              />
-              <p
-                className="px-5 pb-1 pt-2 text-[11px] font-bold uppercase tracking-widest"
-                style={{ color: theme.mutedText }}
-              >
-                Colecciones
-              </p>
+            <div className="mt-1">
               {visibleCollections.map((collection) => (
                 <Link
                   key={collection.id}
@@ -202,11 +304,15 @@ export function MobileNavDrawer({
                   className={`flex items-center gap-3 px-5 py-3 transition-opacity hover:opacity-70 ${menuTextClass}`}
                   style={{ color: theme.mode === 'dark' ? theme.text : '#374151' }}
                 >
-                  <Sparkles className="h-4 w-4 shrink-0" style={{ color: theme.primary }} />
-                  {collection.name}
+                  {collection.imageUrl ? (
+                    <img src={collection.imageUrl} alt="" className="h-8 w-8 shrink-0 rounded-lg object-cover" />
+                  ) : (
+                    <Sparkles className="h-4 w-4 shrink-0" style={{ color: theme.primary }} />
+                  )}
+                  <span className="truncate">{collection.name}</span>
                 </Link>
               ))}
-            </>
+            </div>
           )}
         </nav>
       </div>

@@ -41,6 +41,7 @@ import type {
   OrderMethod,
   PublicStoreHeroSlide,
   PublicHeaderSettings,
+  HeroCtaTargetType,
 } from '@/types/common.types';
 import type {
   Store,
@@ -340,6 +341,9 @@ export function mapStoreHeroSlideRowToStoreHeroSlide(row: StoreHeroSlideRow): St
     title: row.title,
     subtitle: row.subtitle,
     ctaLabel: row.cta_label,
+    ctaTargetType: (row.cta_target_type as HeroCtaTargetType) ?? 'catalog',
+    ctaTargetId: row.cta_target_id ?? null,
+    ctaTargetUrl: row.cta_target_url ?? null,
     mainImageUrl: row.main_image_url,
     backgroundImageUrl: row.background_image_url,
     badgeImageUrl: row.badge_image_url,
@@ -362,6 +366,9 @@ export function mapStoreHeroSlideInsertToRow(data: StoreHeroSlideInsert): StoreH
     title: data.title ?? null,
     subtitle: data.subtitle ?? null,
     cta_label: data.ctaLabel ?? null,
+    cta_target_type: data.ctaTargetType,
+    cta_target_id: data.ctaTargetId ?? null,
+    cta_target_url: data.ctaTargetUrl ?? null,
     main_image_url: data.mainImageUrl ?? null,
     background_image_url: data.backgroundImageUrl ?? null,
     badge_image_url: data.badgeImageUrl ?? null,
@@ -380,6 +387,9 @@ export function mapStoreHeroSlideUpdateToRow(data: StoreHeroSlideUpdate): StoreH
   if (data.title !== undefined) row.title = data.title ?? null;
   if (data.subtitle !== undefined) row.subtitle = data.subtitle ?? null;
   if (data.ctaLabel !== undefined) row.cta_label = data.ctaLabel ?? null;
+  if (data.ctaTargetType !== undefined) row.cta_target_type = data.ctaTargetType;
+  if (data.ctaTargetId !== undefined) row.cta_target_id = data.ctaTargetId ?? null;
+  if (data.ctaTargetUrl !== undefined) row.cta_target_url = data.ctaTargetUrl ?? null;
   if (data.mainImageUrl !== undefined) row.main_image_url = data.mainImageUrl ?? null;
   if (data.backgroundImageUrl !== undefined) row.background_image_url = data.backgroundImageUrl ?? null;
   if (data.badgeImageUrl !== undefined) row.badge_image_url = data.badgeImageUrl ?? null;
@@ -537,6 +547,9 @@ export function mapPublicStoreHeroSlideRowToPublicStoreHeroSlide(
     title: row.title,
     subtitle: row.subtitle,
     ctaLabel: row.cta_label,
+    ctaTargetType: (row.cta_target_type as HeroCtaTargetType) ?? 'catalog',
+    ctaTargetId: row.cta_target_id ?? null,
+    ctaTargetUrl: row.cta_target_url ?? null,
     mainImageUrl: row.main_image_url,
     backgroundImageUrl: row.background_image_url,
     badgeImageUrl: row.badge_image_url,

@@ -227,6 +227,19 @@ export interface PublicStorePage {
   cartaListed: boolean;
 }
 
+/** Stable destination persisted for each public-cover button. Entity targets
+ * keep database ids; their current slugs are resolved only when rendering so
+ * renaming a category, collection, product or campaign cannot break the CTA. */
+export type HeroCtaTargetType =
+  | 'catalog'
+  | 'category'
+  | 'collection'
+  | 'featured'
+  | 'sale'
+  | 'product'
+  | 'offer'
+  | 'custom';
+
 export interface PublicStoreHeroSlide {
   id: string;
   storeId: string;
@@ -240,6 +253,9 @@ export interface PublicStoreHeroSlide {
   title: string | null;
   subtitle: string | null;
   ctaLabel: string | null;
+  ctaTargetType: HeroCtaTargetType;
+  ctaTargetId: string | null;
+  ctaTargetUrl: string | null;
   mainImageUrl: string | null;
   backgroundImageUrl: string | null;
   badgeImageUrl: string | null;
@@ -381,6 +397,13 @@ export interface PublicProductPage {
   sizeChart: PublicSizeChart | null;
   variantOptions: PublicVariantOption[];
   variants: PublicProductVariant[];
+  reviewsEnabled: boolean;
+  showRatingOnCards: boolean;
+  showProductReviews: boolean;
+  showReviewPhotos: boolean;
+  reviewAverage: number;
+  reviewCount: number;
+  reviewDistribution: Record<1 | 2 | 3 | 4 | 5, number>;
   createdAt: string;
 }
 
@@ -407,6 +430,7 @@ export interface PublicProductOptionItem {
   id: string;
   label: string;
   description: string | null;
+  imageUrl: string | null;
   priceDelta: number;
   isDefault: boolean;
   sortOrder: number;
@@ -582,13 +606,26 @@ export interface PublicStoreCategory {
   children?: PublicStoreCategory[];
 }
 
+/** Minimal product projection used to build storefront navigation. It keeps
+ * the header independent from descriptions, prices, galleries and checkout
+ * data, which would make every public route download the complete catalog. */
+export interface PublicCatalogNavigationProduct {
+  categoryId: string | null;
+  categorySlug: string | null;
+  categoryParentId: string | null;
+  collections: ProductCollectionAssignment[];
+  facetValues: ProductFacetValue[];
+  variantOptions: PublicVariantOption[];
+  variants: PublicProductVariant[];
+}
+
 export interface CatalogMeta {
   categories: PublicStoreCategory[];
   categoryTree: PublicStoreCategory[];
   collections: PublicStoreCollection[];
   facets: PublicStoreFacet[];
   megaMenuFacets: PublicStoreFacet[];
-  products?: PublicProductPage[];
+  products?: PublicCatalogNavigationProduct[];
   priceRange: { min: number; max: number };
 }
 

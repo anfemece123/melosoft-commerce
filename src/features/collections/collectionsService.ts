@@ -1,6 +1,10 @@
 import { supabase } from '@/lib/supabase';
 import { slugify } from '@/utils/slugify';
 import type { PublicStoreCollection } from '@/types/common.types';
+import {
+  removeCatalogTaxonomyImage,
+  uploadCatalogTaxonomyImage,
+} from '@/lib/images/catalogTaxonomyImages';
 
 async function getOwnerId(): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
@@ -48,17 +52,22 @@ export const collectionsService = {
     return (data ?? []).map(mapRow);
   },
 
-  async getStoreCollections(storeId: string): Promise<PublicStoreCollection[]> {
+  async getStoreCollections(
+    storeId: string,
+    options: { activeOnly?: boolean } = {},
+  ): Promise<PublicStoreCollection[]> {
     const { data: storeData } = await supabase
       .from('stores')
       .select('slug')
       .eq('id', storeId)
       .single();
     const storeSlug = storeData?.slug ?? '';
-    const { data, error } = await supabase
+    let query = supabase
       .from('store_product_collections')
       .select('id, store_id, name, slug, description, image_url, color, sort_order, show_on_home, show_in_menu, is_active')
-      .eq('store_id', storeId)
+      .eq('store_id', storeId);
+    if (options.activeOnly) query = query.eq('is_active', true);
+    const { data, error } = await query
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true });
     if (error) throw new Error(error.message);
@@ -141,8 +150,38 @@ export const collectionsService = {
     if (error) throw new Error(error.message);
   },
 
+  async setCollectionImage(storeId: string, id: string, file: File): Promise<string> {
+    const imageUrl = await uploadCatalogTaxonomyImage(storeId, 'collections', id, file);
+    const { error } = await supabase
+      .from('store_product_collections')
+      .update({ image_url: imageUrl })
+      .eq('id', id);
+    if (error) throw new Error(error.message);
+    return imageUrl;
+  },
+
+  async clearCollectionImage(id: string): Promise<void> {
+    const { data } = await supabase
+      .from('store_product_collections')
+      .select('image_url')
+      .eq('id', id)
+      .maybeSingle();
+    const { error } = await supabase
+      .from('store_product_collections')
+      .update({ image_url: null })
+      .eq('id', id);
+    if (error) throw new Error(error.message);
+    await removeCatalogTaxonomyImage(data?.image_url ?? null);
+  },
+
   async deleteCollection(id: string): Promise<void> {
+    const { data } = await supabase
+      .from('store_product_collections')
+      .select('image_url')
+      .eq('id', id)
+      .maybeSingle();
     const { error } = await supabase.from('store_product_collections').delete().eq('id', id);
     if (error) throw new Error(error.message);
+    await removeCatalogTaxonomyImage(data?.image_url ?? null);
   },
 };

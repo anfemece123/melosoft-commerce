@@ -6,12 +6,14 @@ import { productsService } from '@/features/products/productsService';
 import { offersService } from '@/features/offers/offersService';
 import { productAvailabilityService } from '@/features/products/productAvailabilityService';
 import { categoriesService } from '@/features/categories/categoriesService';
+import { collectionsService } from '@/features/collections/collectionsService';
 import { homeSectionsService } from '@/features/homeSections/homeSectionsService';
 import type {
   PublicStoreHeroSlide,
   PublicStorePage,
   PublicProductPage,
   PublicStoreCategory,
+  PublicStoreCollection,
   PublicHomeSection,
   StoreCampaignOffer,
 } from '@/types/common.types';
@@ -47,6 +49,7 @@ import { readPublicPageCache, writePublicPageCache } from '@/lib/storefront/publ
 import { writePublicScrollPosition } from '@/lib/storefront/publicScrollRestoration';
 import { useResolvedStoreSlug } from '@/lib/storefront/storefrontDomainContext';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
+import { resolveHeroCtaHref } from '@/lib/storefront/heroCta';
 
 interface StoreHomeCachePayload {
   store: PublicStorePage | null;
@@ -54,6 +57,7 @@ interface StoreHomeCachePayload {
   campaigns: StoreCampaignOffer[];
   heroSlides: PublicStoreHeroSlide[];
   categories: PublicStoreCategory[];
+  collections: PublicStoreCollection[];
   homeSections: PublicHomeSection[];
 }
 
@@ -86,6 +90,7 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
   const [campaigns, setCampaigns] = useState<StoreCampaignOffer[]>(cachedPayload?.campaigns ?? []);
   const [heroSlides, setHeroSlides] = useState<PublicStoreHeroSlide[]>(cachedPayload?.heroSlides ?? []);
   const [categories, setCategories] = useState<PublicStoreCategory[]>(cachedPayload?.categories ?? []);
+  const [collections, setCollections] = useState<PublicStoreCollection[]>(cachedPayload?.collections ?? []);
   const [homeSections, setHomeSections] = useState<PublicHomeSection[]>(cachedPayload?.homeSections ?? []);
   const [storeResolved, setStoreResolved] = useState(Boolean(cachedPayload?.store ?? storeBranding));
   const [contentLoading, setContentLoading] = useState(!cachedPayload);
@@ -114,21 +119,24 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
           setProducts([]);
           setCampaigns([]);
           setCategories([]);
+          setCollections([]);
           setHomeSections([]);
           return;
         }
 
-        const [productsData, campaignsData, slides, categoriesData, homeSectionsData] = await Promise.all([
+        const [productsData, campaignsData, slides, categoriesData, collectionsData, homeSectionsData] = await Promise.all([
           productsService.getPublicProductsByStoreSlug(storeSlug),
           offersService.getPublicStoreCampaignOffers(storeSlug),
           storesService.getPublicStoreHeroSlides(storeData.storeId),
           categoriesService.getPublicCategories(storeSlug),
+          collectionsService.getPublicCollections(storeSlug),
           homeSectionsService.getPublicHomeSections(storeData.storeId),
         ]);
         setProducts(productsData);
         setCampaigns(campaignsData);
         setHeroSlides(slides);
         setCategories(categoriesData);
+        setCollections(collectionsData);
         setHomeSections(homeSectionsData);
         writePublicPageCache(cacheKey, {
           store: storeData,
@@ -136,6 +144,7 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
           campaigns: campaignsData,
           heroSlides: slides,
           categories: categoriesData,
+          collections: collectionsData,
           homeSections: homeSectionsData,
         } satisfies StoreHomeCachePayload);
       } catch (err) {
@@ -255,6 +264,9 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
           title: heroTitle,
           subtitle: heroDescription,
           ctaLabel: store.heroCtaLabel?.trim() || `Ver ${catalogLabel.toLowerCase()}`,
+          ctaTargetType: 'catalog' as const,
+          ctaTargetId: null,
+          ctaTargetUrl: null,
           mainImageUrl: store.heroImageUrl,
           backgroundImageUrl: store.heroBackgroundImageUrl,
           badgeImageUrl: null,
@@ -286,6 +298,8 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
       productSlug: product.productSlug,
       productName: product.productName,
       productType: product.productType,
+      categoryId: product.categoryId,
+      categoryName: product.categoryName,
       imageUrl: product.mainImageUrl,
       unitPrice: getActivePrice(product.regularPrice, product.salePrice),
       customizationNotes: null,
@@ -320,7 +334,13 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
           theme={theme}
           storeName={store.storeName}
           storeLogoUrl={store.logoUrl}
-          ctaHref="#storefront-catalog"
+          getCtaHref={(slide) => resolveHeroCtaHref(slide, {
+            storeSlug,
+            categories,
+            collections,
+            products,
+            offers: campaigns,
+          })}
           fallbackCtaLabel={`Ver ${catalogLabel.toLowerCase()}`}
           slides={resolvedHeroSlides}
         />
@@ -392,8 +412,9 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
                   {isMenu ? 'El menú está vacío por el momento' : 'Aún no hay productos disponibles'}
                 </div>
               ) : (() => {
-                const displayedProducts = [...products]
-                  .sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0))
+                const displayedProducts = (isMenu
+                  ? products
+                  : [...products].sort((a, b) => (b.isFeatured ? 1 : 0) - (a.isFeatured ? 1 : 0)))
                   .slice(0, 8);
                 return (
                 <>
@@ -456,13 +477,13 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
                         <p className="mt-0.5 min-h-[2.5rem] text-sm font-semibold leading-5 line-clamp-2" style={{ color: theme.text }}>
                           {product.productName}
                         </p>
-                        <div className="min-h-[1rem] -mt-0.5">
+                        {product.reviewsEnabled && product.showRatingOnCards && <div className="min-h-[1rem] -mt-0.5">
                           <StorefrontRatingStars
                             theme={theme}
-                            rating={5}
-                            count={product.isFeatured ? 24 : 12}
+                            rating={product.reviewAverage}
+                            count={product.reviewCount}
                           />
-                        </div>
+                        </div>}
                         <div className="mt-1.5 min-h-[2rem]">
                           <div className="min-w-0">
                             {hasActiveDiscount(product.regularPrice, product.salePrice) ? (

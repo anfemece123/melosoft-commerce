@@ -1,4 +1,4 @@
-import { Minus, Plus, ShoppingBag, Trash2 } from 'lucide-react';
+import { Minus, Pencil, Plus, ShoppingBag, Trash2 } from 'lucide-react';
 import { getMaxQuantity, isOutOfStock, type CartItem } from '@/lib/cart/cartContext';
 import { formatCurrency } from '@/utils/formatCurrency';
 import type { StorefrontTheme } from '../storefront/storefrontTheme';
@@ -9,12 +9,19 @@ interface CartItemRowProps {
   currency: string;
   onUpdateQuantity: (lineId: string, quantity: number) => number;
   onRemove: (lineId: string) => void;
+  onEdit?: (item: CartItem) => void;
 }
 
-export function CartItemRow({ item, theme, currency, onUpdateQuantity, onRemove }: CartItemRowProps) {
+export function CartItemRow({ item, theme, currency, onUpdateQuantity, onRemove, onEdit }: CartItemRowProps) {
   const max = getMaxQuantity(item);
   const outOfStock = isOutOfStock(item);
   const atMax = max !== null && item.quantity >= max;
+  const customizationsByGroup = item.customizations.reduce<Map<string, typeof item.customizations>>((groups, customization) => {
+    const current = groups.get(customization.optionGroupName) ?? [];
+    current.push(customization);
+    groups.set(customization.optionGroupName, current);
+    return groups;
+  }, new Map());
 
   return (
     <div className="flex gap-4 py-5">
@@ -62,14 +69,16 @@ export function CartItemRow({ item, theme, currency, onUpdateQuantity, onRemove 
         </div>
 
         {item.customizations.length > 0 ? (
-          <div className="mt-1.5">
-            <p className="text-xs font-medium" style={{ color: theme.mutedText }}>
-              Adiciones:
-            </p>
-            {item.customizations.map((c) => (
-              <p key={c.optionItemId} className="text-xs pl-2" style={{ color: theme.mutedText }}>
-                {c.optionItemLabel} <span>+{formatCurrency(c.priceDelta, 'es-CO', currency)}</span>
-              </p>
+          <div className="mt-2 space-y-1.5 rounded-lg border px-2.5 py-2" style={{ borderColor: theme.border }}>
+            {Array.from(customizationsByGroup.entries()).map(([groupName, customizations]) => (
+              <div key={groupName} className="text-xs">
+                <span className="font-semibold" style={{ color: theme.text }}>{groupName}: </span>
+                <span style={{ color: theme.mutedText }}>
+                  {customizations.map((customization) => (
+                    `${customization.optionItemLabel}${customization.priceDelta > 0 ? ` (+${formatCurrency(customization.priceDelta, 'es-CO', currency)})` : ''}`
+                  )).join(', ')}
+                </span>
+              </div>
             ))}
           </div>
         ) : item.customizationNotes ? (
@@ -102,6 +111,17 @@ export function CartItemRow({ item, theme, currency, onUpdateQuantity, onRemove 
               <Plus className="h-3 w-3" />
             </button>
           </div>
+          {onEdit ? (
+            <button
+              type="button"
+              onClick={() => onEdit(item)}
+              className="inline-flex items-center gap-1 text-xs font-semibold hover:opacity-70"
+              style={{ color: theme.primary }}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Editar
+            </button>
+          ) : null}
         </div>
         {(outOfStock || atMax) && (
           <p className="mt-1 text-xs text-amber-600">

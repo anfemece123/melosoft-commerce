@@ -332,6 +332,9 @@ export interface Database {
           title: string | null;
           subtitle: string | null;
           cta_label: string | null;
+          cta_target_type: string;
+          cta_target_id: string | null;
+          cta_target_url: string | null;
           main_image_url: string | null;
           background_image_url: string | null;
           badge_image_url: string | null;
@@ -351,6 +354,9 @@ export interface Database {
           title?: string | null;
           subtitle?: string | null;
           cta_label?: string | null;
+          cta_target_type?: string;
+          cta_target_id?: string | null;
+          cta_target_url?: string | null;
           main_image_url?: string | null;
           background_image_url?: string | null;
           badge_image_url?: string | null;
@@ -370,6 +376,9 @@ export interface Database {
           title?: string | null;
           subtitle?: string | null;
           cta_label?: string | null;
+          cta_target_type?: string;
+          cta_target_id?: string | null;
+          cta_target_url?: string | null;
           main_image_url?: string | null;
           background_image_url?: string | null;
           badge_image_url?: string | null;
@@ -522,6 +531,129 @@ export interface Database {
           color?: string | null;
           show_in_menu?: boolean;
           sort_order?: number;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      store_cart_upsell_rules: {
+        Row: {
+          id: string;
+          store_id: string;
+          owner_id: string;
+          title: string;
+          source_product_id: string | null;
+          source_category_id: string | null;
+          target_product_id: string | null;
+          target_category_id: string | null;
+          only_if_missing: boolean;
+          max_items: number;
+          priority: number;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          owner_id: string;
+          title?: string;
+          source_product_id?: string | null;
+          source_category_id?: string | null;
+          target_product_id?: string | null;
+          target_category_id?: string | null;
+          only_if_missing?: boolean;
+          max_items?: number;
+          priority?: number;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          owner_id?: string;
+          title?: string;
+          source_product_id?: string | null;
+          source_category_id?: string | null;
+          target_product_id?: string | null;
+          target_category_id?: string | null;
+          only_if_missing?: boolean;
+          max_items?: number;
+          priority?: number;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      store_catalog_product_positions: {
+        Row: {
+          id: string;
+          store_id: string;
+          product_id: string;
+          owner_id: string;
+          category_id: string | null;
+          collection_id: string | null;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          product_id: string;
+          owner_id: string;
+          category_id?: string | null;
+          collection_id?: string | null;
+          sort_order: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          product_id?: string;
+          owner_id?: string;
+          category_id?: string | null;
+          collection_id?: string | null;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      store_product_option_templates: {
+        Row: {
+          id: string;
+          store_id: string;
+          owner_id: string;
+          name: string;
+          description: string | null;
+          groups: Json;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          owner_id: string;
+          name: string;
+          description?: string | null;
+          groups: Json;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          owner_id?: string;
+          name?: string;
+          description?: string | null;
+          groups?: Json;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -3143,6 +3275,7 @@ export interface Database {
           product_id: string;
           label: string;
           description: string | null;
+          image_url: string | null;
           price_delta: number;
           is_default: boolean;
           sort_order: number;
@@ -3169,6 +3302,9 @@ export interface Database {
           title: string | null;
           subtitle: string | null;
           cta_label: string | null;
+          cta_target_type: string;
+          cta_target_id: string | null;
+          cta_target_url: string | null;
           main_image_url: string | null;
           background_image_url: string | null;
           badge_image_url: string | null;
@@ -3353,6 +3489,52 @@ export interface Database {
           store_name: string;
         }>;
       };
+      reorder_product_images: {
+        Args: {
+          p_product_id: string;
+          p_image_ids: string[];
+        };
+        Returns: undefined;
+      };
+      get_public_cart_upsells: {
+        Args: {
+          p_store_slug: string;
+          p_product_ids: string[];
+          p_limit?: number;
+        };
+        Returns: Array<{
+          rule_title: string;
+          product_data: Json;
+        }>;
+      };
+      get_store_catalog_product_order: {
+        Args: {
+          p_store_id: string;
+          p_category_id?: string | null;
+          p_collection_id?: string | null;
+        };
+        Returns: Array<{
+          product_id: string;
+          sort_order: number;
+        }>;
+      };
+      reorder_store_catalog_products: {
+        Args: {
+          p_store_id: string;
+          p_product_ids: string[];
+          p_category_id?: string | null;
+          p_collection_id?: string | null;
+        };
+        Returns: undefined;
+      };
+      reorder_store_product_categories: {
+        Args: {
+          p_store_id: string;
+          p_category_ids: string[];
+          p_parent_id?: string | null;
+        };
+        Returns: undefined;
+      };
       check_store_slug_availability: {
         Args: {
           p_slug: string;
@@ -3531,6 +3713,16 @@ export type StoreHomeSectionItemRowUpdate = Database['public']['Tables']['store_
 export type StoreProductCategoryRow = Database['public']['Tables']['store_product_categories']['Row'];
 export type StoreProductCategoryRowInsert = Database['public']['Tables']['store_product_categories']['Insert'];
 export type StoreProductCategoryRowUpdate = Database['public']['Tables']['store_product_categories']['Update'];
+
+export type StoreCartUpsellRuleRow = Database['public']['Tables']['store_cart_upsell_rules']['Row'];
+export type StoreCartUpsellRuleRowInsert = Database['public']['Tables']['store_cart_upsell_rules']['Insert'];
+export type StoreCartUpsellRuleRowUpdate = Database['public']['Tables']['store_cart_upsell_rules']['Update'];
+
+export type StoreCatalogProductPositionRow = Database['public']['Tables']['store_catalog_product_positions']['Row'];
+
+export type StoreProductOptionTemplateRow = Database['public']['Tables']['store_product_option_templates']['Row'];
+export type StoreProductOptionTemplateRowInsert = Database['public']['Tables']['store_product_option_templates']['Insert'];
+export type StoreProductOptionTemplateRowUpdate = Database['public']['Tables']['store_product_option_templates']['Update'];
 
 export type StoreProductCollectionRow = Database['public']['Tables']['store_product_collections']['Row'];
 export type StoreProductCollectionRowInsert = Database['public']['Tables']['store_product_collections']['Insert'];

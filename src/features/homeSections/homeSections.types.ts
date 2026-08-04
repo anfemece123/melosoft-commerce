@@ -81,7 +81,7 @@ export type StoreHomeSectionItemUpdate = Partial<
 // offered anywhere in the admin UI. The hero/cover is owned entirely by
 // stores.hero_enabled + store_hero_slides (StoreSettingsPage), never by
 // the Home Builder.
-export type CatalogProductsOrder = 'recent' | 'featured' | 'name_asc' | 'price_asc';
+export type CatalogProductsOrder = 'catalog' | 'recent' | 'featured' | 'name_asc' | 'price_asc';
 
 export const CATALOG_PRODUCTS_MIN_ITEMS = 4;
 export const CATALOG_PRODUCTS_MAX_ITEMS = 24;
@@ -310,7 +310,7 @@ export function defaultHomeSectionContent(sectionType: HomeSectionType): HomeSec
       return {
         sectionType,
         maxItems: CATALOG_PRODUCTS_DEFAULT_ITEMS,
-        order: 'recent',
+        order: 'catalog',
         layout: 'carousel',
         columnsDesktop: 4,
         visibleMobile: 1,

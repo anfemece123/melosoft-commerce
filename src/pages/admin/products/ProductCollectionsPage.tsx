@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
@@ -10,6 +10,7 @@ import { collectionsService } from '@/features/collections/collectionsService';
 import type { PublicStoreCollection } from '@/types/common.types';
 import { notify } from '@/lib/notifications';
 import { scrollToFirstError } from '@/hooks/useScrollToFirstFormikError';
+import { ImageUploadField } from '@/components/admin/ImageUploadField';
 
 interface CollectionForm {
   name: string;
@@ -29,6 +30,16 @@ export function ProductCollectionsPage() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | undefined>();
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [imageRemoved, setImageRemoved] = useState(false);
+  const localPreviewRef = useRef<string | null>(null);
+
+  function replaceImagePreview(url: string | null) {
+    if (localPreviewRef.current) URL.revokeObjectURL(localPreviewRef.current);
+    localPreviewRef.current = url?.startsWith('blob:') ? url : null;
+    setImagePreviewUrl(url);
+  }
 
   async function load() {
     if (!storeId) return;
@@ -42,13 +53,33 @@ export function ProductCollectionsPage() {
     }
   }
 
-  useEffect(() => { void load(); }, [storeId]);
+  useEffect(() => {
+    if (!storeId) return;
+    let cancelled = false;
+    void collectionsService.getStoreCollections(storeId)
+      .then((data) => {
+        if (!cancelled) setCollections(data);
+      })
+      .catch(() => {
+        if (!cancelled) notify.error('Error cargando colecciones');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [storeId]);
+  useEffect(() => () => {
+    if (localPreviewRef.current) URL.revokeObjectURL(localPreviewRef.current);
+  }, []);
 
   if (!storeId) return null;
 
   function openCreate() {
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setImageFile(null);
+    setImageRemoved(false);
+    replaceImagePreview(null);
     setNameError(undefined);
     setShowForm(true);
   }
@@ -56,6 +87,9 @@ export function ProductCollectionsPage() {
   function openEdit(collection: PublicStoreCollection) {
     setEditingId(collection.id);
     setForm({ name: collection.name, showOnHome: collection.showOnHome, showInMenu: collection.showInMenu });
+    setImageFile(null);
+    setImageRemoved(false);
+    replaceImagePreview(collection.imageUrl);
     setNameError(undefined);
     setShowForm(true);
   }
@@ -64,7 +98,23 @@ export function ProductCollectionsPage() {
     setShowForm(false);
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setImageFile(null);
+    setImageRemoved(false);
+    replaceImagePreview(null);
     setNameError(undefined);
+  }
+
+  function selectImage(file: File | null) {
+    if (!file) return;
+    setImageFile(file);
+    setImageRemoved(false);
+    replaceImagePreview(URL.createObjectURL(file));
+  }
+
+  function clearImage() {
+    setImageFile(null);
+    setImageRemoved(true);
+    replaceImagePreview(null);
   }
 
   async function save() {
@@ -81,13 +131,19 @@ export function ProductCollectionsPage() {
         showOnHome: form.showOnHome,
         showInMenu: form.showInMenu,
       };
-      if (editingId) {
-        await collectionsService.updateCollection(editingId, payload);
-        notify.success('Colección actualizada');
+      let savedCollectionId = editingId;
+      if (savedCollectionId) {
+        await collectionsService.updateCollection(savedCollectionId, payload);
       } else {
-        await collectionsService.createCollection(storeId as string, payload);
-        notify.success('Colección creada');
+        const created = await collectionsService.createCollection(storeId as string, payload);
+        savedCollectionId = created.id;
       }
+      if (imageFile) {
+        await collectionsService.setCollectionImage(storeId as string, savedCollectionId, imageFile);
+      } else if (editingId && imageRemoved) {
+        await collectionsService.clearCollectionImage(savedCollectionId);
+      }
+      notify.success(editingId ? 'Colección actualizada' : 'Colección creada');
       cancel();
       await load();
     } catch (err) {
@@ -144,6 +200,17 @@ export function ProductCollectionsPage() {
               error={nameError}
               placeholder="Ej: Ofertas, Black Friday, Más vendidos"
             />
+            <ImageUploadField
+              id="collection-navigation-image"
+              label="Imagen de la colección"
+              assetKind="catalog_taxonomy_image"
+              previewUrl={imagePreviewUrl}
+              onFileSelect={selectImage}
+              onClear={imagePreviewUrl ? clearImage : undefined}
+              uploading={saving && imageFile !== null}
+              aspectClassName="h-24 w-24 rounded-xl"
+              hint="Se mostrará en el megamenú y en otros espacios visuales donde aparezca esta colección. Puedes recortar cualquier formato."
+            />
             <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -187,6 +254,13 @@ export function ProductCollectionsPage() {
               key={collection.id}
               className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3"
             >
+              {collection.imageUrl ? (
+                <img src={collection.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg object-cover" />
+              ) : (
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-400">
+                  <ImageIcon className="h-4 w-4" />
+                </span>
+              )}
               <span className="flex-1 text-sm font-medium text-gray-900">{collection.name}</span>
               {collection.showOnHome && <Badge variant="info">Inicio</Badge>}
               {collection.showInMenu && <Badge variant="success">Menú</Badge>}

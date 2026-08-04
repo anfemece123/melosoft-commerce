@@ -161,7 +161,19 @@ export function CartDrawer({
               onClose={onClose}
             />
 
-            <CartItemsList items={items} theme={theme} currency={currency} onUpdateQuantity={updateQuantity} onRemove={removeItem} />
+            <CartItemsList
+              items={items}
+              theme={theme}
+              currency={currency}
+              onUpdateQuantity={updateQuantity}
+              onRemove={removeItem}
+              onEdit={(item) => {
+                onClose();
+                void navigate(buildStorefrontPath(storeSlug, `/p/${item.productSlug}`), {
+                  state: { editCartLineId: item.lineId, returnTo: 'cart' },
+                });
+              }}
+            />
 
             {items.length > 0 && (
               <CartSummary
@@ -172,7 +184,7 @@ export function CartDrawer({
                 onRemoveUnavailable={handleRemoveUnavailable}
                 paymentSelector={
                   <div className="space-y-3">
-                    <OrderingStatusNotice theme={theme} />
+                    <OrderingStatusNotice />
                   {hasAnyPaymentMethod ? (
                     <CheckoutPaymentSelector
                       theme={theme}
@@ -211,7 +223,7 @@ export function CartDrawer({
             />
 
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-              <OrderingStatusNotice theme={theme} />
+              <OrderingStatusNotice />
               {showLocationSelector ? (
                 <CheckoutLocationSelector
                   theme={theme}

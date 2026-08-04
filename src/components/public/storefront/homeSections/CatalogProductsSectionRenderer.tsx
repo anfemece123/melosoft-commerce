@@ -32,7 +32,7 @@ const DESKTOP_COLUMN_CLASSES: Record<number, string> = {
   5: 'md:grid-cols-5',
 };
 
-function sortCatalogItems(items: CatalogItem[], order: 'recent' | 'featured' | 'name_asc' | 'price_asc'): CatalogItem[] {
+function sortCatalogItems(items: CatalogItem[], order: 'catalog' | 'recent' | 'featured' | 'name_asc' | 'price_asc'): CatalogItem[] {
   const sorted = [...items];
   switch (order) {
     case 'price_asc':
@@ -43,6 +43,10 @@ function sortCatalogItems(items: CatalogItem[], order: 'recent' | 'featured' | '
       break;
     case 'featured':
       sorted.sort((a, b) => (b.product.isFeatured ? 1 : 0) - (a.product.isFeatured ? 1 : 0));
+      break;
+    case 'catalog':
+      // buildCatalogItems preserves the product array received from the
+      // server, which is already in the merchant's editorial order.
       break;
     case 'recent':
     default:
@@ -163,7 +167,10 @@ export function CatalogProductsSectionRenderer({
       : products;
 
   const allItems = buildCatalogItems(scopedProducts);
-  const items = sortCatalogItems(allItems, order).slice(0, maxItems);
+  // Restaurant/menu storefronts always honor the same manual positions as
+  // the full menu. Older sections saved as "recent" therefore stop
+  // overriding the order the merchant configured in Catalog Ordering.
+  const items = sortCatalogItems(allItems, isMenu ? 'catalog' : order).slice(0, maxItems);
 
   // Nothing to show at all (no nav, no products) — matches the original
   // behavior exactly. When the nav itself has tabs, keep it visible even if

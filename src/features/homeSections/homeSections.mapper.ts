@@ -78,7 +78,7 @@ function isHomeSectionType(value: unknown): value is HomeSectionType {
 }
 
 function isCatalogProductsOrder(value: unknown): value is CatalogProductsOrder {
-  return value === 'recent' || value === 'featured' || value === 'name_asc' || value === 'price_asc';
+  return value === 'catalog' || value === 'recent' || value === 'featured' || value === 'name_asc' || value === 'price_asc';
 }
 
 /** Defensive: unknown/malformed jsonb (or a shape mismatched with the
@@ -186,7 +186,7 @@ export function parseHomeSectionContent(sectionType: HomeSectionType, raw: Json 
       return {
         sectionType,
         maxItems: clampCatalogProductsMaxItems(typeof record.maxItems === 'number' ? record.maxItems : 8),
-        order: isCatalogProductsOrder(record.order) ? record.order : 'recent',
+        order: isCatalogProductsOrder(record.order) ? record.order : 'catalog',
         layout: record.layout === 'grid' ? 'grid' : 'carousel',
         columnsDesktop:
           typeof record.columnsDesktop === 'number' && record.columnsDesktop >= 2 && record.columnsDesktop <= 5

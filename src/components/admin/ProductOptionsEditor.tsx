@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link2, Package, Plus, Trash2 } from 'lucide-react';
+import { Layers3, Link2, Package, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -12,6 +12,11 @@ import { productVariantsService } from '@/features/products/productVariantsServi
 import type { Product } from '@/features/products/products.types';
 import type { ProductVariant } from '@/features/products/productVariants.types';
 import { formatCurrency } from '@/utils/formatCurrency';
+import {
+  cloneTemplateGroups,
+  restaurantMerchandisingService,
+  type ProductOptionTemplate,
+} from '@/features/restaurants/restaurantMerchandisingService';
 
 interface ProductOptionsEditorProps {
   currency: string;
@@ -19,6 +24,7 @@ interface ProductOptionsEditorProps {
   productId?: string;
   groups: ProductOptionGroupDraft[];
   onChange: (groups: ProductOptionGroupDraft[]) => void;
+  showTemplatePicker?: boolean;
 }
 
 function createEmptyItem() {
@@ -54,10 +60,13 @@ export function ProductOptionsEditor({
   productId,
   groups,
   onChange,
+  showTemplatePicker = true,
 }: ProductOptionsEditorProps) {
   const [catalogProducts, setCatalogProducts] = useState<Product[]>([]);
   const [variantsByProduct, setVariantsByProduct] = useState<Record<string, ProductVariant[]>>({});
   const [catalogLoadError, setCatalogLoadError] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<ProductOptionTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -72,6 +81,17 @@ export function ProductOptionsEditor({
       });
     return () => { cancelled = true; };
   }, [productId, storeId]);
+
+  useEffect(() => {
+    if (!showTemplatePicker) return;
+    let cancelled = false;
+    void restaurantMerchandisingService.getTemplates(storeId)
+      .then((rows) => {
+        if (!cancelled) setTemplates(rows.filter((template) => template.isActive));
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [showTemplatePicker, storeId]);
 
   const productsById = useMemo(
     () => new Map(catalogProducts.map((product) => [product.id, product])),
@@ -133,6 +153,41 @@ export function ProductOptionsEditor({
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           <strong>Inventario inteligente:</strong> usa una opción simple para preferencias como “sin cebolla”. Si agregas una bebida, postre u otro artículo vendible, vincúlalo con el catálogo para compartir su precio y descontar el mismo inventario.
         </div>
+
+        {showTemplatePicker && templates.length > 0 ? (
+          <div className="flex flex-col gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1">
+              <label htmlFor="option-template" className="mb-1 block text-sm font-medium text-gray-700">
+                Plantilla reutilizable
+              </label>
+              <select
+                id="option-template"
+                value={selectedTemplateId}
+                onChange={(event) => setSelectedTemplateId(event.target.value)}
+                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">Selecciona una plantilla</option>
+                {templates.map((template) => (
+                  <option key={template.id} value={template.id}>{template.name}</option>
+                ))}
+              </select>
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              leftIcon={<Layers3 className="h-4 w-4" />}
+              disabled={!selectedTemplateId}
+              onClick={() => {
+                const template = templates.find((current) => current.id === selectedTemplateId);
+                if (!template) return;
+                onChange([...groups, ...cloneTemplateGroups(template.groups)]);
+                setSelectedTemplateId('');
+              }}
+            >
+              Aplicar plantilla
+            </Button>
+          </div>
+        ) : null}
 
         {catalogLoadError ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{catalogLoadError}</div>

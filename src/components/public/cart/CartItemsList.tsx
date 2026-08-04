@@ -9,9 +9,10 @@ interface CartItemsListProps {
   currency: string;
   onUpdateQuantity: (lineId: string, quantity: number) => number;
   onRemove: (lineId: string) => void;
+  onEdit?: (item: CartItem) => void;
 }
 
-export function CartItemsList({ items, theme, currency, onUpdateQuantity, onRemove }: CartItemsListProps) {
+export function CartItemsList({ items, theme, currency, onUpdateQuantity, onRemove, onEdit }: CartItemsListProps) {
   return (
     <div className="flex-1 overflow-y-auto px-5 py-2">
       {items.length === 0 ? (
@@ -29,6 +30,7 @@ export function CartItemsList({ items, theme, currency, onUpdateQuantity, onRemo
               currency={currency}
               onUpdateQuantity={onUpdateQuantity}
               onRemove={onRemove}
+              onEdit={onEdit}
             />
           </div>
         ))

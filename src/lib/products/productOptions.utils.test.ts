@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { PublicProductOptionGroup } from '@/types/common.types';
 import {
+  applyLocationAvailabilityToProductOptions,
+  buildProductOptionSelectionsFromCart,
   buildInitialProductOptionSelections,
   toggleProductOptionSelection,
   validateProductOptionSelections,
@@ -21,6 +23,7 @@ function group(overrides: Partial<PublicProductOptionGroup> = {}): PublicProduct
         id: 'cola',
         label: 'Gaseosa',
         description: null,
+        imageUrl: null,
         priceDelta: 4_000,
         isDefault: true,
         sortOrder: 0,
@@ -51,6 +54,13 @@ describe('product option availability', () => {
     expect(toggleProductOptionSelection(soldOut, { drinks: [] }, 'cola')).toEqual({ drinks: [] });
   });
 
+  it('allows removing a selected option that became unavailable', () => {
+    const soldOut = group({
+      items: [{ ...group().items[0], isAvailable: false, unavailableReason: 'Agotado' }],
+    });
+    expect(toggleProductOptionSelection(soldOut, { drinks: ['cola'] }, 'cola')).toEqual({ drinks: [] });
+  });
+
   it('explains when a required group has no available choices', () => {
     const soldOut = group({
       items: [{ ...group().items[0], isAvailable: false, unavailableReason: 'Agotado' }],
@@ -65,5 +75,23 @@ describe('product option availability', () => {
       items: [{ ...group().items[0], isAvailable: false, unavailableReason: 'Agotado' }],
     });
     expect(validateProductOptionSelections([soldOut], { drinks: ['cola'] })[0]).toContain('se agotó');
+  });
+
+  it('disables a linked drink that is unavailable at the selected location', () => {
+    const [localized] = applyLocationAvailabilityToProductOptions([group()], new Set(['product-cola']));
+    expect(localized.items[0]).toMatchObject({
+      isAvailable: false,
+      unavailableReason: 'No disponible en esta sede',
+    });
+  });
+
+  it('restores modifier selections when editing a cart line', () => {
+    expect(buildProductOptionSelectionsFromCart([group()], [{
+      optionGroupId: 'drinks',
+      optionGroupName: 'Bebida',
+      optionItemId: 'cola',
+      optionItemLabel: 'Gaseosa',
+      priceDelta: 4_000,
+    }])).toEqual({ drinks: ['cola'] });
   });
 });

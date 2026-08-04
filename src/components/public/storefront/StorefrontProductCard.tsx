@@ -153,9 +153,11 @@ export function StorefrontProductCard({
         >
           {item.displayName}
         </p>
-        <div className="min-h-[1rem] -mt-0.5">
-          <StorefrontRatingStars theme={theme} rating={5} count={product.isFeatured ? 24 : 12} />
-        </div>
+        {product.reviewsEnabled && product.showRatingOnCards && (
+          <div className="min-h-[1rem] -mt-0.5">
+            <StorefrontRatingStars theme={theme} rating={product.reviewAverage} count={product.reviewCount} />
+          </div>
+        )}
         <div className={`mt-2 min-h-[2rem] ${isLarge ? 'min-h-[2.25rem]' : ''}`}>
           {product.hasVariants ? (
             <span className={`font-bold tracking-tight ${isLarge ? 'text-lg' : 'text-base'}`} style={{ color: theme.text }}>

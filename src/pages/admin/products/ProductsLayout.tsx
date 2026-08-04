@@ -14,7 +14,9 @@ export function ProductsLayout() {
 
   const tabs = [
     { to: `/admin/stores/${storeId}/products`, label: 'Productos', end: true },
+    { to: `/admin/stores/${storeId}/products/order`, label: 'Ordenar catálogo', end: false },
     { to: `/admin/stores/${storeId}/products/categories`, label: 'Categorías', end: false },
+    ...(isMenu ? [{ to: `/admin/stores/${storeId}/products/merchandising`, label: 'Venta adicional', end: false }] : []),
     { to: `/admin/stores/${storeId}/products/collections`, label: 'Colecciones', end: false },
     { to: `/admin/stores/${storeId}/products/filters`, label: 'Atributos del producto', end: false },
   ];

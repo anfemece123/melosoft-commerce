@@ -1,12 +1,25 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ImageIcon, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { Button } from '@/components/ui/Button';
 import { SwitchField } from '@/components/ui/SwitchField';
 import { ImageUploadField } from '@/components/admin/ImageUploadField';
 import { StoreHeroSlidePreview } from './StoreHeroSlidePreview';
 import type { StorefrontTheme } from '@/components/public/storefront/storefrontTheme';
+import { categoriesService } from '@/features/categories/categoriesService';
+import { collectionsService } from '@/features/collections/collectionsService';
+import { offersService } from '@/features/offers/offersService';
+import { productsService } from '@/features/products/productsService';
+import type { Offer } from '@/features/offers/offers.types';
+import type { ProductLinkOption } from '@/features/products/products.types';
+import type {
+  HeroCtaTargetType,
+  PublicStoreCategory,
+  PublicStoreCollection,
+} from '@/types/common.types';
+import { heroCtaTargetNeedsEntity } from '@/lib/storefront/heroCta';
 
 export interface EditableStoreHeroSlide {
   id: string;
@@ -20,6 +33,9 @@ export interface EditableStoreHeroSlide {
   title: string;
   subtitle: string;
   ctaLabel: string;
+  ctaTargetType: HeroCtaTargetType;
+  ctaTargetId: string | null;
+  ctaTargetUrl: string | null;
   mainImageUrl: string | null;
   backgroundImageUrl: string | null;
   badgeImageUrl: string | null;
@@ -42,6 +58,8 @@ interface StoreHeroSlideEditorProps {
   previewTheme: StorefrontTheme;
   storeName: string;
   logoUrl: string | null;
+  storeId: string;
+  catalogLabel: string;
 }
 
 export function StoreHeroSlideEditor({
@@ -61,12 +79,73 @@ export function StoreHeroSlideEditor({
   previewTheme,
   storeName,
   logoUrl,
+  storeId,
+  catalogLabel,
 }: StoreHeroSlideEditorProps) {
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
+  const [categories, setCategories] = useState<PublicStoreCategory[]>([]);
+  const [collections, setCollections] = useState<PublicStoreCollection[]>([]);
+  const [products, setProducts] = useState<ProductLinkOption[]>([]);
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [destinationsError, setDestinationsError] = useState<string | null>(null);
+  const [loadedDestinationsStoreId, setLoadedDestinationsStoreId] = useState<string | null>(null);
+  const destinationsLoading = loadedDestinationsStoreId !== storeId;
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      categoriesService.getStoreCategories(storeId, { activeOnly: true }),
+      collectionsService.getStoreCollections(storeId, { activeOnly: true }),
+      productsService.getProductLinkOptionsByStore(storeId),
+      offersService.getOffersByStore(storeId),
+    ]).then(([categoryData, collectionData, productData, offerData]) => {
+      if (cancelled) return;
+      setCategories(categoryData);
+      setCollections(collectionData);
+      setProducts(productData);
+      setOffers(offerData.filter((offer) => offer.status === 'active' && offer.isVisibleInStore));
+      setDestinationsError(null);
+    }).catch((error: unknown) => {
+      if (!cancelled) {
+        setDestinationsError(error instanceof Error ? error.message : 'No se pudieron cargar los destinos.');
+      }
+    }).finally(() => {
+      if (!cancelled) setLoadedDestinationsStoreId(storeId);
+    });
+    return () => { cancelled = true; };
+  }, [storeId]);
+
+  const entityOptions = useMemo(() => {
+    const categoryById = new Map(categories.map((category) => [category.id, category]));
+    if (slide.ctaTargetType === 'category') {
+      return categories.map((category) => ({
+        value: category.id,
+        label: category.parentId
+          ? `${categoryById.get(category.parentId)?.name ?? 'Categoría'} / ${category.name}`
+          : category.name,
+      }));
+    }
+    if (slide.ctaTargetType === 'collection') {
+      return collections.map((collection) => ({ value: collection.id, label: collection.name }));
+    }
+    if (slide.ctaTargetType === 'product') {
+      return products.map((product) => ({ value: product.id, label: product.name }));
+    }
+    if (slide.ctaTargetType === 'offer') {
+      return offers.map((offer) => ({ value: offer.id, label: offer.title }));
+    }
+    return [];
+  }, [categories, collections, offers, products, slide.ctaTargetType]);
 
   function patch(values: Partial<EditableStoreHeroSlide>) {
     onChange({ ...slide, ...values });
   }
+
+  const catalogDestinationLabel = catalogLabel === 'Menú'
+    ? 'Ver menú completo'
+    : catalogLabel === 'Servicios'
+      ? 'Ver todos los servicios'
+      : 'Ver todos los productos';
 
   return (
     <div className="space-y-5 rounded-2xl border border-gray-200 bg-gray-50/70 p-5">
@@ -197,6 +276,66 @@ export function StoreHeroSlideEditor({
                 onChange={(event) => patch({ ctaLabel: event.target.value })}
               />
             </div>
+            {slide.showCta ? (
+              <div className="mt-4 space-y-3 rounded-xl border border-gray-100 bg-gray-50/80 p-3">
+                <Select
+                  id={`slide-${slide.id}-cta-destination`}
+                  label="Destino del botón"
+                  value={slide.ctaTargetType}
+                  disabled={disabled}
+                  onChange={(event) => patch({
+                    ctaTargetType: event.target.value as HeroCtaTargetType,
+                    ctaTargetId: null,
+                    ctaTargetUrl: null,
+                  })}
+                  options={[
+                    { value: 'catalog', label: catalogDestinationLabel },
+                    { value: 'sale', label: 'Productos en promoción' },
+                    { value: 'featured', label: 'Productos destacados' },
+                    { value: 'category', label: 'Categoría o subcategoría específica' },
+                    { value: 'collection', label: 'Colección específica' },
+                    { value: 'product', label: 'Producto específico' },
+                    { value: 'offer', label: 'Campaña u oferta específica' },
+                    { value: 'custom', label: 'Enlace personalizado' },
+                  ]}
+                  hint={`“Ver ${catalogLabel.toLowerCase()}” abre la página completa, no una sección del inicio.`}
+                />
+
+                {heroCtaTargetNeedsEntity(slide.ctaTargetType) ? (
+                  <Select
+                    id={`slide-${slide.id}-cta-entity`}
+                    label={slide.ctaTargetType === 'category'
+                      ? 'Categoría'
+                      : slide.ctaTargetType === 'collection'
+                        ? 'Colección'
+                        : slide.ctaTargetType === 'product'
+                          ? 'Producto'
+                          : 'Campaña u oferta'}
+                    value={slide.ctaTargetId ?? ''}
+                    placeholder={destinationsLoading ? 'Cargando opciones…' : 'Selecciona una opción'}
+                    disabled={disabled || destinationsLoading}
+                    onChange={(event) => patch({ ctaTargetId: event.target.value || null })}
+                    options={entityOptions}
+                    error={destinationsError ?? undefined}
+                    hint={!destinationsLoading && !destinationsError && entityOptions.length === 0
+                      ? 'No hay opciones públicas disponibles para este destino.'
+                      : undefined}
+                  />
+                ) : null}
+
+                {slide.ctaTargetType === 'custom' ? (
+                  <Input
+                    id={`slide-${slide.id}-cta-custom-url`}
+                    label="URL o ruta"
+                    value={slide.ctaTargetUrl ?? ''}
+                    disabled={disabled}
+                    placeholder="https://ejemplo.com o /policies"
+                    hint="Acepta una dirección https:// o una ruta interna de esta tienda."
+                    onChange={(event) => patch({ ctaTargetUrl: event.target.value || null })}
+                  />
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <div className="rounded-2xl border border-gray-200 bg-white p-4">

@@ -222,25 +222,33 @@ function PublicStoreShell({
   useEffect(() => {
     if (!storeSlug) return;
     let cancelled = false;
-    Promise.all([
+    const navigationPromise = Promise.all([
       categoriesService.getPublicCategories(storeSlug),
       collectionsService.getPublicCollections(storeSlug),
       facetsService.getPublicFacets(storeSlug),
-      productsService.getPublicProductsByStoreSlug(storeSlug),
-    ]).then(([cats, cols, facets, products]) => {
+    ]);
+    const productsPromise = productsService.getPublicCatalogNavigationProducts(storeSlug);
+
+    // Categories and collections make the header useful immediately. A
+    // compact product index then refines empty destinations and contextual
+    // attributes in a second, non-blocking pass.
+    void navigationPromise.then(([cats, cols, facets]) => {
+      if (cancelled) return;
+      setCatalogMeta({
+        categories: cats,
+        categoryTree: buildCategoryTree(cats),
+        collections: cols,
+        facets,
+        megaMenuFacets: facets.filter((facet) => facet.showInMegaMenu),
+        products: [],
+        priceRange: { min: 0, max: 0 },
+      });
+    }).catch(() => { /* catalog navigation is optional */ });
+
+    void Promise.all([navigationPromise, productsPromise]).then(([[cats, cols, facets], products]) => {
       if (cancelled) return;
       const categoryTree = pruneEmptyCategoryTree(buildCategoryTree(cats), products);
       const nonEmptyCollections = pruneEmptyCollections(cols, products);
-      const priceRange = products.reduce(
-        (acc, product) => {
-          const activePrice = product.salePrice ?? product.regularPrice;
-          return {
-            min: Math.min(acc.min, activePrice),
-            max: Math.max(acc.max, activePrice),
-          };
-        },
-        { min: Number.POSITIVE_INFINITY, max: 0 },
-      );
       setCatalogMeta({
         categories: cats,
         categoryTree,
@@ -248,12 +256,9 @@ function PublicStoreShell({
         facets,
         megaMenuFacets: facets.filter((f) => f.showInMegaMenu),
         products,
-        priceRange: {
-          min: priceRange.min === Number.POSITIVE_INFINITY ? 0 : priceRange.min,
-          max: priceRange.max,
-        },
+        priceRange: { min: 0, max: 0 },
       });
-    }).catch(() => { /* catalog meta is optional */ });
+    }).catch(() => { /* keep the lightweight navigation when product refinement fails */ });
     return () => { cancelled = true; };
   }, [storeSlug]);
 

@@ -6,6 +6,11 @@ export interface FacetFilterLike {
   valueSlug: string;
 }
 
+export type FacetMatchProduct = Pick<
+  PublicProductPage,
+  'facetValues' | 'variantOptions' | 'variants'
+>;
+
 const VARIANT_FACET_SLUG_PREFIX = 'v-';
 
 /** lower + trim + strip diacritics — used to detect "Talla"/"talla"/"Size" as
@@ -39,7 +44,7 @@ export function buildFacetConcepts(facets: PublicStoreFacet[]): Map<string, stri
  * has one — the crux of "is Color an attribute or a variant for THIS
  * specific product". A product can have neither, one, or (in principle)
  * several options normalizing to the same name; the first is used. */
-function findVariantOptionForConcept(product: PublicProductPage, normalizedConceptName: string): PublicVariantOption | null {
+function findVariantOptionForConcept(product: FacetMatchProduct, normalizedConceptName: string): PublicVariantOption | null {
   return product.variantOptions.find((option) => normalizeFilterKey(option.name) === normalizedConceptName) ?? null;
 }
 
@@ -55,7 +60,7 @@ function findVariantOptionForConcept(product: PublicProductPage, normalizedConce
  * treated one way for display and another way for filtering.
  */
 export function productSatisfiesFacetValue(
-  product: PublicProductPage,
+  product: FacetMatchProduct,
   facetSlug: string,
   valueSlug: string,
   concepts: Map<string, string>

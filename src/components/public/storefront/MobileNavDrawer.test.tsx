@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { MobileNavDrawer } from './MobileNavDrawer';
 import { buildStorefrontTheme } from './storefrontTheme';
@@ -95,10 +95,49 @@ describe('MobileNavDrawer custom navigation', () => {
       .toBe('/s/demo/catalog?f_genero=mujer');
     expect(screen.getByRole('link', { name: /calzado/i }).getAttribute('href'))
       .toBe('/s/demo/catalog?cat=zapatos');
+    fireEvent.click(screen.getByRole('button', { name: 'Mostrar opciones de Calzado' }));
     expect(screen.getByRole('link', { name: 'Running' }).getAttribute('href'))
       .toBe('/s/demo/catalog?cat=zapatos&sub=running');
     expect(screen.queryByRole('link', { name: 'Temporada' })).toBeNull();
     expect(screen.getByRole('link', { name: /mujer/i }).className).toContain('text-[18px]');
     expect(screen.getByRole('link', { name: 'Running' }).className).toContain('text-[15px]');
+  });
+
+  it('shows catalog categories as an accessible mobile section', () => {
+    const onClose = vi.fn();
+    render(
+      <MemoryRouter>
+        <MobileNavDrawer
+          open
+          onClose={onClose}
+          theme={buildStorefrontTheme({})}
+          storeSlug="demo"
+          storeName="Demo"
+          logoUrl={null}
+          settings={DEFAULT_HEADER_SETTINGS}
+          categoryTree={categoryTree}
+          collections={[]}
+          navigationItems={[{
+            id: 'catalog',
+            type: 'catalog',
+            label: 'Productos',
+            href: '/s/demo/catalog',
+            targetId: null,
+            rootCategorySlug: null,
+          }]}
+          showAutomaticCollections
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Ocultar opciones de Productos' }).getAttribute('aria-expanded'))
+      .toBe('true');
+    expect(screen.getByRole('link', { name: 'Zapatos' }).getAttribute('href'))
+      .toBe('/s/demo/catalog?cat=zapatos');
+    expect(screen.getByRole('link', { name: 'Running' }).getAttribute('href'))
+      .toBe('/s/demo/catalog?cat=zapatos&sub=running');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });

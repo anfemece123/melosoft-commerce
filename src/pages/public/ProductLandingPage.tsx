@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { MessageCircle, AlertCircle, Lock, ShoppingBag, ChevronLeft, ChevronRight, ChevronDown, Package, UtensilsCrossed } from 'lucide-react';
 import { getProductIcon } from '@/features/products/productDescriptionIcons';
 import { StorefrontActionButton } from '@/components/public/storefront/StorefrontActionButton';
@@ -27,8 +27,10 @@ import {
   buildCustomizationPricedLines,
   buildCustomizationSummaryLines,
   buildInitialProductOptionSelections,
+  buildProductOptionSelectionsFromCart,
   buildSelectedProductOptions,
   calculateCustomizationTotal,
+  applyLocationAvailabilityToProductOptions,
   toggleProductOptionSelection,
   type ProductOptionSelections,
   validateProductOptionSelections,
@@ -37,6 +39,8 @@ import { formatCurrency } from '@/utils/formatCurrency';
 import { DiscountBadge } from '@/components/ui/DiscountBadge';
 import { StorefrontMediaFrame } from '@/components/public/storefront/StorefrontMediaFrame';
 import { ProductImageZoom } from '@/components/public/storefront/ProductImageZoom';
+import { ProductReviewsSection } from '@/components/public/storefront/ProductReviewsSection';
+import { StorefrontRatingStars } from '@/components/public/storefront/StorefrontRatingStars';
 import { buildStorefrontTheme, withAlpha, STOREFRONT_CONTAINER_CLASS } from '@/components/public/storefront/storefrontTheme';
 import {
   hasActiveDiscount,
@@ -105,6 +109,13 @@ function normalizePublicProduct(p: PublicProductPage | null): PublicProductPage 
     sizeChart: p.sizeChart ?? null,
     variantOptions: Array.isArray(p.variantOptions) ? p.variantOptions : [],
     variants: Array.isArray(p.variants) ? p.variants : [],
+    reviewsEnabled: p.reviewsEnabled ?? false,
+    showRatingOnCards: p.showRatingOnCards ?? false,
+    showProductReviews: p.showProductReviews ?? false,
+    showReviewPhotos: p.showReviewPhotos ?? false,
+    reviewAverage: p.reviewAverage ?? 0,
+    reviewCount: p.reviewCount ?? 0,
+    reviewDistribution: p.reviewDistribution ?? { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
   };
 }
 
@@ -228,8 +239,18 @@ function ProductLandingContent({
 }: ProductLandingContentProps) {
   const { branding: storeBranding } = usePublicStoreBranding();
   const { setRouteReady } = usePublicRouteReady();
-  const { addItem } = useCart();
+  const { addItem, replaceItem, items: cartItems } = useCart();
   const location = useLocation();
+  const navigate = useNavigate();
+  const editCartLineId = typeof (location.state as { editCartLineId?: unknown } | null)?.editCartLineId === 'string'
+    ? (location.state as { editCartLineId: string }).editCartLineId
+    : null;
+  const editReturnPath = (location.state as { returnTo?: unknown } | null)?.returnTo === 'checkout'
+    ? '/checkout'
+    : '/cart';
+  const editingCartItem = editCartLineId
+    ? cartItems.find((item) => item.lineId === editCartLineId) ?? null
+    : null;
   const [searchParams] = useSearchParams();
   const { selectedLocation, locations } = useSelectedLocation();
   const { requestLocationChange, confirmLocationChange, cancelLocationChange, pendingChange } =
@@ -244,12 +265,25 @@ function ProductLandingContent({
   );
   const [product, setProduct] = useState<PublicProductPage | null>(cachedProduct);
   const [selections, setSelections] = useState<ProductOptionSelections>(() =>
-    cachedProduct ? buildInitialProductOptionSelections(cachedProduct.optionGroups) : {}
+    cachedProduct
+      ? editingCartItem?.productId === cachedProduct.productId
+        ? buildProductOptionSelectionsFromCart(cachedProduct.optionGroups, editingCartItem.customizations)
+        : buildInitialProductOptionSelections(cachedProduct.optionGroups)
+      : {}
   );
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [purchaseDialogOpen, setPurchaseDialogOpen] = useState(false);
   const [selectedValueIds, setSelectedValueIds] = useState<Record<string, string>>(() =>
-    cachedProduct ? resolveInitialVariantSelection(cachedProduct, searchParams.get('opt')) : {}
+    cachedProduct
+      ? (() => {
+          const cartVariant = editingCartItem?.productId === cachedProduct.productId && editingCartItem.variantId
+            ? cachedProduct.variants.find((variant) => variant.id === editingCartItem.variantId) ?? null
+            : null;
+          return cartVariant
+            ? Object.fromEntries(cartVariant.optionValues.map((value) => [value.optionId, value.valueId]))
+            : resolveInitialVariantSelection(cachedProduct, searchParams.get('opt'));
+        })()
+      : {}
   );
   const [sizeChartOpen, setSizeChartOpen] = useState(false);
   const [loading, setLoading] = useState(!cachedProduct);
@@ -279,16 +313,23 @@ function ProductLandingContent({
         const payload = normalizePublicProduct({ ...data, optionGroups }) as PublicProductPage;
         setProduct(payload);
         writePublicPageCache(cacheKey, { product: payload } satisfies ProductPageCachePayload);
-        setSelections(buildInitialProductOptionSelections(optionGroups));
+        setSelections(
+          editingCartItem?.productId === payload.productId
+            ? buildProductOptionSelectionsFromCart(optionGroups, editingCartItem.customizations)
+            : buildInitialProductOptionSelections(optionGroups)
+        );
         // A catalog card for one visual value (e.g. "Zapatos deportivos -
         // Verde") links here with ?opt=<optionValueId> so the PDP opens with
         // that Color/Modelo preselected — only that one option value; the
         // rest (e.g. Talla) is deliberately left for the customer to choose,
         // same as clicking it manually. Falls back to the default/only
         // variant when there's no preset (typical direct PDP visit).
-        setSelectedValueIds(
-          resolveInitialVariantSelection(payload, searchParams.get('opt'))
-        );
+        const cartVariant = editingCartItem?.productId === payload.productId && editingCartItem.variantId
+          ? payload.variants.find((variant) => variant.id === editingCartItem.variantId) ?? null
+          : null;
+        setSelectedValueIds(cartVariant
+          ? Object.fromEntries(cartVariant.optionValues.map((value) => [value.optionId, value.valueId]))
+          : resolveInitialVariantSelection(payload, searchParams.get('opt')));
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Error cargando producto');
       } finally {
@@ -449,6 +490,8 @@ function ProductLandingContent({
     type: 'product',
     price: product ? getActivePrice(product.regularPrice, product.salePrice) : null,
     currency: storeBranding?.currency || 'COP',
+    ratingValue: product?.reviewCount ? product.reviewAverage : null,
+    reviewCount: product?.reviewCount ?? null,
   });
 
   if (loading) {
@@ -509,6 +552,11 @@ function ProductLandingContent({
 
   const bgColor = product.backgroundColor ?? '#ffffff';
   const currentProduct = product;
+  const effectiveOptionGroups = applyLocationAvailabilityToProductOptions(
+    currentProduct.optionGroups,
+    recommendedUnavailableIds,
+  );
+  const isEditingCartItem = editingCartItem?.productId === currentProduct.productId;
   const variantSelectionComplete =
     !currentProduct.hasVariants || currentProduct.variantOptions.length === Object.keys(selectedValueIds).length;
   const variantReady = !currentProduct.hasVariants || (variantSelectionComplete && selectedVariant !== null);
@@ -565,7 +613,7 @@ function ProductLandingContent({
   const activePrice = currentProduct.hasVariants
     ? resolveVariantPrice(currentProduct, selectedVariant)
     : getActivePrice(currentProduct.regularPrice, currentProduct.salePrice);
-  const customizationTotal = calculateCustomizationTotal(currentProduct.optionGroups, selections);
+  const customizationTotal = calculateCustomizationTotal(effectiveOptionGroups, selections);
   const finalPrice = activePrice + customizationTotal;
   const primaryCategory = currentProduct.categoryName && currentProduct.categorySlug
     ? { name: currentProduct.categoryName, slug: currentProduct.categorySlug }
@@ -599,7 +647,7 @@ function ProductLandingContent({
       notify.error('Selecciona una variante disponible antes de continuar.');
       return false;
     }
-    const errors = validateProductOptionSelections(currentProduct.optionGroups, selections);
+    const errors = validateProductOptionSelections(effectiveOptionGroups, selections);
     if (errors.length > 0) {
       notify.error(errors[0]);
       return false;
@@ -623,7 +671,7 @@ function ProductLandingContent({
 
   function sendWhatsAppOrder() {
     if (!whatsappNumber) return;
-    const selectedOptions = buildSelectedProductOptions(currentProduct.optionGroups, selections);
+    const selectedOptions = buildSelectedProductOptions(effectiveOptionGroups, selections);
     const pricedLines = buildCustomizationPricedLines(selectedOptions);
     const variantLines = selectedVariant
       ? [
@@ -651,15 +699,17 @@ function ProductLandingContent({
   }
 
   function commitAddToCart() {
-    const selectedOptions = buildSelectedProductOptions(currentProduct.optionGroups, selections);
-    const summaryLines = buildCustomizationSummaryLines(currentProduct.optionGroups, selections, '');
+    const selectedOptions = buildSelectedProductOptions(effectiveOptionGroups, selections);
+    const summaryLines = buildCustomizationSummaryLines(effectiveOptionGroups, selections, '');
     const notes = summaryLines.length > 0 ? summaryLines.join(', ') : null;
-    const added = addItem({
+    const cartPayload = {
       productId: currentProduct.productId,
       storeId: storeBranding?.storeId ?? '',
       productSlug: currentProduct.productSlug,
       productName: currentProduct.productName,
       productType: currentProduct.productType,
+      categoryId: currentProduct.categoryId,
+      categoryName: currentProduct.categoryName,
       imageUrl: resolveVariantGalleryImages(currentProduct, selectedVariant, selectedValueIds)[0]?.imageUrl ?? null,
       unitPrice: finalPrice,
       customizationNotes: notes,
@@ -670,7 +720,10 @@ function ProductLandingContent({
       stock: selectedVariant ? selectedVariant.stockQuantity : currentProduct.stock,
       trackInventory: selectedVariant ? selectedVariant.stockPolicy !== 'allow_backorder' : currentProduct.trackInventory,
       isAvailable: currentProduct.isAvailable,
-    });
+    };
+    const added = isEditingCartItem && editCartLineId
+      ? replaceItem(editCartLineId, cartPayload)
+      : addItem(cartPayload);
     if (!added) {
       notify.warning(
         isMenu
@@ -681,7 +734,12 @@ function ProductLandingContent({
     }
     setPurchaseDialogOpen(false);
     setSpecialInstructions('');
-    notify.cartSuccess(`"${currentProduct.productName}" agregado al pedido`);
+    if (isEditingCartItem) {
+      notify.success('Pedido actualizado');
+      void navigate(buildStorefrontPath(storeSlug, editReturnPath), { replace: true });
+    } else {
+      notify.cartSuccess(`"${currentProduct.productName}" agregado al pedido`);
+    }
   }
 
   // Selecting a value (e.g. Color: Verde) can make an already-selected value
@@ -849,6 +907,17 @@ function ProductLandingContent({
                 <p className="text-[0.95rem]" style={{ color: theme.mutedText }}>
                   {productSubtitle}
                 </p>
+                {currentProduct.reviewsEnabled && (
+                  currentProduct.showProductReviews ? (
+                    <a href="#opiniones" className="inline-flex pt-1 hover:opacity-80">
+                      <StorefrontRatingStars theme={theme} rating={currentProduct.reviewAverage} count={currentProduct.reviewCount} size="md" />
+                    </a>
+                  ) : (
+                    <div className="inline-flex pt-1">
+                      <StorefrontRatingStars theme={theme} rating={currentProduct.reviewAverage} count={currentProduct.reviewCount} size="md" />
+                    </div>
+                  )
+                )}
               </div>
 
               {currentProduct.hasVariants ? (
@@ -1002,11 +1071,11 @@ function ProductLandingContent({
               <p className="text-sm" style={{ color: theme.mutedText }}>Últimas {selectedVariant.stockQuantity} unidades</p>
             )}
 
-            {product.optionGroups.length > 0 || product.allowsSpecialInstructions ? (
+            {effectiveOptionGroups.length > 0 || product.allowsSpecialInstructions ? (
               <StorefrontProductCustomizer
                 theme={theme}
                 currency="COP"
-                groups={product.optionGroups}
+                groups={effectiveOptionGroups}
                 selections={selections}
                 onToggleOption={(group, itemId) => {
                   setSelections((current) => toggleProductOptionSelection(group, current, itemId));
@@ -1014,7 +1083,7 @@ function ProductLandingContent({
               />
             ) : null}
 
-            {(product.optionGroups.length > 0 || product.allowsSpecialInstructions) && customizationTotal > 0 ? (
+            {(effectiveOptionGroups.length > 0 || product.allowsSpecialInstructions) && customizationTotal > 0 ? (
               <div className="space-y-2 text-sm" style={{ color: theme.mutedText }}>
                 <div className="flex items-center justify-between">
                   <span>Base</span>
@@ -1102,7 +1171,7 @@ function ProductLandingContent({
                 className="gap-2 rounded-full py-3.5 text-sm font-medium"
               >
                 <ShoppingBag className="w-5 h-5" />
-                Agregar a la bolsa de compras
+                {isEditingCartItem ? 'Guardar cambios' : 'Agregar a la bolsa de compras'}
               </StorefrontActionButton>
             )}
 
@@ -1174,6 +1243,8 @@ function ProductLandingContent({
             </div>
           </section>
         )}
+
+        <ProductReviewsSection product={currentProduct} theme={theme} />
 
         {!recommendationsLoaded ? (
           <section className="mt-16 border-t pt-10" style={{ borderColor: theme.border }}>

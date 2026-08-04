@@ -252,6 +252,9 @@ export function StoreCheckoutPage() {
                     currency={branding.currency}
                     onUpdateQuantity={checkout.updateQuantity}
                     onRemove={checkout.removeItem}
+                    onEdit={(item) => void navigate(buildStorefrontPath(storeSlug, `/p/${item.productSlug}`), {
+                      state: { editCartLineId: item.lineId, returnTo: 'checkout' },
+                    })}
                   />
                 </div>
 
@@ -309,7 +312,7 @@ export function StoreCheckoutPage() {
                 </div>
 
                 <div className="px-5 pb-4">
-                  <OrderingStatusNotice theme={theme} />
+                  <OrderingStatusNotice />
                 </div>
                 <CheckoutActions
                   theme={theme}

@@ -9,6 +9,8 @@ export interface CartItem {
   productSlug: string;
   productName: string;
   productType?: ProductType;
+  categoryId?: string | null;
+  categoryName?: string | null;
   imageUrl: string | null;
   unitPrice: number;
   quantity: number;
@@ -40,6 +42,7 @@ interface CartContextValue {
   // Returns the resulting line item, or null if the item could not be added
   // (e.g. trackInventory is true and stock is 0).
   addItem: (item: Omit<CartItem, 'lineId' | 'quantity'> & { quantity?: number }) => CartItem | null;
+  replaceItem: (lineId: string, item: Omit<CartItem, 'lineId' | 'quantity'>) => CartItem | null;
   // Returns the quantity actually applied after clamping to available stock
   // (may be less than requested; 0 means the line was removed).
   updateQuantity: (lineId: string, quantity: number) => number;
@@ -159,6 +162,8 @@ function normalizeCartItem(raw: unknown): CartItem | null {
       || candidate.productType === 'service'
       ? candidate.productType
       : undefined,
+    categoryId: typeof candidate.categoryId === 'string' ? candidate.categoryId : null,
+    categoryName: typeof candidate.categoryName === 'string' ? candidate.categoryName : null,
     imageUrl: typeof candidate.imageUrl === 'string' ? candidate.imageUrl : null,
     unitPrice: candidate.unitPrice,
     quantity: Number.isFinite(candidate.quantity) && candidate.quantity > 0 ? Math.floor(candidate.quantity) : 1,
@@ -351,6 +356,41 @@ export function CartProvider({ storeSlug, children }: { storeSlug: string; child
     return applied;
   }, [items]);
 
+  const replaceItem = useCallback((lineId: string, incoming: Omit<CartItem, 'lineId' | 'quantity'>): CartItem | null => {
+    const current = items.find((item) => item.lineId === lineId);
+    if (!current || incoming.isAvailable === false) return null;
+
+    const normalizedIncoming = {
+      ...incoming,
+      customizationNotes: incoming.customizationNotes?.trim() || null,
+    };
+    const nextLineId = buildCartLineId({
+      productId: normalizedIncoming.productId,
+      unitPrice: normalizedIncoming.unitPrice,
+      customizationNotes: normalizedIncoming.customizationNotes,
+      variantId: normalizedIncoming.variantId ?? null,
+      customizations: normalizedIncoming.customizations,
+    });
+    const matchingLine = items.find((item) => item.lineId === nextLineId && item.lineId !== lineId);
+    const requestedQuantity = current.quantity + (matchingLine?.quantity ?? 0);
+    const max = getMaxQuantity(normalizedIncoming);
+    if (max !== null && max <= 0) return null;
+
+    const result: CartItem = {
+      ...normalizedIncoming,
+      lineId: nextLineId,
+      quantity: max !== null ? Math.min(requestedQuantity, max) : requestedQuantity,
+    };
+
+    setItems((previous) => {
+      const insertionIndex = Math.max(0, previous.findIndex((item) => item.lineId === lineId));
+      const next = previous.filter((item) => item.lineId !== lineId && item.lineId !== nextLineId);
+      next.splice(Math.min(insertionIndex, next.length), 0, result);
+      return next;
+    });
+    return result;
+  }, [items]);
+
   const removeItem = useCallback((lineId: string) => {
     setItems((prev) => prev.filter((i) => i.lineId !== lineId));
   }, []);
@@ -371,6 +411,7 @@ export function CartProvider({ storeSlug, children }: { storeSlug: string; child
       totalItems,
       totalPrice,
       addItem,
+      replaceItem,
       updateQuantity,
       removeItem,
       removeItemsByProductIds,

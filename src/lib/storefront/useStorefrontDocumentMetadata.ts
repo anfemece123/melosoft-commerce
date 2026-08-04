@@ -12,6 +12,8 @@ interface PageMetadataOptions {
   type?: 'website' | 'product';
   price?: number | null;
   currency?: string | null;
+  ratingValue?: number | null;
+  reviewCount?: number | null;
 }
 
 interface MetaSnapshot {
@@ -83,6 +85,8 @@ export function useStorefrontPageDocumentMetadata({
   type = 'website',
   price,
   currency,
+  ratingValue,
+  reviewCount,
 }: PageMetadataOptions): void {
   useEffect(() => {
     const normalizedTitle = title?.trim();
@@ -112,6 +116,39 @@ export function useStorefrontPageDocumentMetadata({
       snapshots.push(setMetaTag('property', 'product:price:currency', currency));
     }
 
+    let structuredData: HTMLScriptElement | null = null;
+    if (type === 'product') {
+      structuredData = document.createElement('script');
+      structuredData.type = 'application/ld+json';
+      structuredData.dataset.melosoftProduct = 'true';
+      structuredData.textContent = JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'Product',
+        name: normalizedTitle,
+        description: resolvedDescription,
+        ...(imageUrl ? { image: [imageUrl] } : {}),
+        ...(canonicalUrl ? { url: canonicalUrl } : {}),
+        ...(price !== null && price !== undefined && currency ? {
+          offers: {
+            '@type': 'Offer',
+            priceCurrency: currency,
+            price: price.toFixed(2),
+            url: canonicalUrl || undefined,
+          },
+        } : {}),
+        ...(ratingValue && reviewCount && reviewCount > 0 ? {
+          aggregateRating: {
+            '@type': 'AggregateRating',
+            ratingValue: ratingValue.toFixed(2),
+            reviewCount,
+            bestRating: 5,
+            worstRating: 1,
+          },
+        } : {}),
+      });
+      document.head.appendChild(structuredData);
+    }
+
     const canonicalSnapshot = ensureLinkTag('canonical');
     const previousCanonicalHref = canonicalSnapshot.element.getAttribute('href');
     if (canonicalUrl) canonicalSnapshot.element.setAttribute('href', canonicalUrl);
@@ -123,8 +160,9 @@ export function useStorefrontPageDocumentMetadata({
       if (!canonicalSnapshot.existed) canonicalSnapshot.element.remove();
       else if (previousCanonicalHref !== null) canonicalSnapshot.element.setAttribute('href', previousCanonicalHref);
       else canonicalSnapshot.element.removeAttribute('href');
+      structuredData?.remove();
     };
-  }, [canonicalUrl, currency, description, imageUrl, price, siteName, title, type]);
+  }, [canonicalUrl, currency, description, imageUrl, price, ratingValue, reviewCount, siteName, title, type]);
 }
 
 // Sets the storefront-wide base metadata. Nested product/offer pages can

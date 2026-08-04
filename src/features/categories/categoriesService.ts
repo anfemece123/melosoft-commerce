@@ -1,6 +1,10 @@
 import { supabase } from '@/lib/supabase';
 import { slugify } from '@/utils/slugify';
 import type { PublicStoreCategory } from '@/types/common.types';
+import {
+  removeCatalogTaxonomyImage,
+  uploadCatalogTaxonomyImage,
+} from '@/lib/images/catalogTaxonomyImages';
 
 async function getOwnerId(): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
@@ -68,17 +72,22 @@ export const categoriesService = {
     return (data ?? []).map(mapRow);
   },
 
-  async getStoreCategories(storeId: string): Promise<PublicStoreCategory[]> {
+  async getStoreCategories(
+    storeId: string,
+    options: { activeOnly?: boolean } = {},
+  ): Promise<PublicStoreCategory[]> {
     const { data: storeData } = await supabase
       .from('stores')
       .select('slug')
       .eq('id', storeId)
       .single();
     const storeSlug = storeData?.slug ?? '';
-    const { data, error } = await supabase
+    let query = supabase
       .from('store_product_categories')
       .select('id, store_id, name, slug, description, parent_id, image_url, color, sort_order, show_in_menu, is_active')
-      .eq('store_id', storeId)
+      .eq('store_id', storeId);
+    if (options.activeOnly) query = query.eq('is_active', true);
+    const { data, error } = await query
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true });
     if (error) throw new Error(error.message);
@@ -177,9 +186,39 @@ export const categoriesService = {
     if (error) throw new Error(error.message);
   },
 
+  async setCategoryImage(storeId: string, id: string, file: File): Promise<string> {
+    const imageUrl = await uploadCatalogTaxonomyImage(storeId, 'categories', id, file);
+    const { error } = await supabase
+      .from('store_product_categories')
+      .update({ image_url: imageUrl })
+      .eq('id', id);
+    if (error) throw new Error(error.message);
+    return imageUrl;
+  },
+
+  async clearCategoryImage(id: string): Promise<void> {
+    const { data } = await supabase
+      .from('store_product_categories')
+      .select('image_url')
+      .eq('id', id)
+      .maybeSingle();
+    const { error } = await supabase
+      .from('store_product_categories')
+      .update({ image_url: null })
+      .eq('id', id);
+    if (error) throw new Error(error.message);
+    await removeCatalogTaxonomyImage(data?.image_url ?? null);
+  },
+
   async deleteCategory(id: string): Promise<void> {
+    const { data } = await supabase
+      .from('store_product_categories')
+      .select('image_url')
+      .eq('id', id)
+      .maybeSingle();
     const { error } = await supabase.from('store_product_categories').delete().eq('id', id);
     if (error) throw new Error(error.message);
+    await removeCatalogTaxonomyImage(data?.image_url ?? null);
   },
 
   /** Persists an explicit full order (drag-and-drop can move a category

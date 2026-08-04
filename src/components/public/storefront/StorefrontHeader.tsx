@@ -94,11 +94,13 @@ export function StorefrontHeader({
   const [searchParams] = useSearchParams();
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [megaMenuCategory, setMegaMenuCategory] = useState<string | null>(null);
+  const [megaMenuItemId, setMegaMenuItemId] = useState<string | null>(null);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') ?? '');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
+  const megaMenuOpenTimerRef = useRef<number | null>(null);
+  const megaMenuCloseTimerRef = useRef<number | null>(null);
 
   const transparent = hasHero && settings.transparentOnHero;
   const shouldBeTransparent = transparent && !isScrolled;
@@ -113,14 +115,30 @@ export function StorefrontHeader({
   const catalogLabel = getCatalogPageLabel(catalogType);
   const viewAllLabel = getViewAllLabel(catalogType);
 
+  const menuCategoryTree = useMemo(
+    () => (catalogMeta?.categoryTree ?? categories)
+      .filter((category) => category.showInMenu)
+      .map((category) => ({
+        ...category,
+        children: (category.children ?? []).filter((child) => child.showInMenu),
+      })),
+    [catalogMeta?.categoryTree, categories],
+  );
+  const navigationCategoryTree = settings.menuMode === 'categories'
+    ? menuCategoryTree
+    : catalogMeta?.categoryTree ?? categories;
+
+  const menuCollections = useMemo(
+    () => (catalogMeta?.collections ?? []).filter((collection) => collection.showInMenu),
+    [catalogMeta?.collections],
+  );
+
   const navigationItems = buildHeaderNavigationItems({
     settings,
     storeSlug,
     catalogLabel,
     viewAllLabel,
-    categoryTree: settings.menuMode === 'categories'
-      ? categories
-      : catalogMeta?.categoryTree ?? [],
+    categoryTree: navigationCategoryTree,
     collections: catalogMeta?.collections ?? [],
     facets: catalogMeta?.facets ?? [],
   });
@@ -128,9 +146,11 @@ export function StorefrontHeader({
   const overflowNavigationItems = navigationItems.slice(MAX_VISIBLE_HEADER_ITEMS);
   const hasOverflow = overflowNavigationItems.length > 0;
 
-  // Mega menu: find active category in tree by slug
-  const activeCategoryNode = megaMenuCategory
-    ? (catalogMeta?.categoryTree ?? []).find((c) => c.slug === megaMenuCategory) ?? null
+  const activeMegaMenuItem = megaMenuItemId
+    ? navigationItems.find((item) => item.id === megaMenuItemId) ?? null
+    : null;
+  const activeCategoryNode = activeMegaMenuItem?.rootCategorySlug
+    ? navigationCategoryTree.find((category) => category.slug === activeMegaMenuItem.rootCategorySlug) ?? null
     : null;
   const megaSubcategories = activeCategoryNode?.children ?? [];
 
@@ -154,35 +174,80 @@ export function StorefrontHeader({
     [catalogMeta?.megaMenuFacets, activeCategoryNode, activeCategoryScopedProducts]
   );
 
-  const menuCollections = useMemo(
-    () => (catalogMeta?.collections ?? []).filter((c) => c.showInMenu),
-    [catalogMeta?.collections]
-  );
+  const showMegaMenu = activeMegaMenuItem?.type === 'catalog'
+    ? menuCategoryTree.length > 0 || menuCollections.length > 0
+    : Boolean(activeCategoryNode && (
+      megaSubcategories.length > 0 || megaMenuFacets.some((facet) => facet.values.length > 0)
+    ));
 
-  const showMegaMenu =
-    megaMenuCategory !== null &&
-    (megaSubcategories.length > 0 || megaMenuFacets.some((f) => f.values.length > 0));
-
-  function closeMenus() {
-    setMobileNavOpen(false);
-    setMegaMenuCategory(null);
-    setMoreMenuOpen(false);
+  function clearMegaMenuTimers() {
+    if (megaMenuOpenTimerRef.current !== null) {
+      window.clearTimeout(megaMenuOpenTimerRef.current);
+      megaMenuOpenTimerRef.current = null;
+    }
+    if (megaMenuCloseTimerRef.current !== null) {
+      window.clearTimeout(megaMenuCloseTimerRef.current);
+      megaMenuCloseTimerRef.current = null;
+    }
   }
 
-  function handleNavigationItemMouseEnter(item: ResolvedHeaderNavigationItem) {
-    if (!item.rootCategorySlug) {
-      setMegaMenuCategory(null);
+  function itemHasMegaMenu(item: ResolvedHeaderNavigationItem): boolean {
+    if (item.type === 'catalog') return menuCategoryTree.length > 0 || menuCollections.length > 0;
+    if (!item.rootCategorySlug) return false;
+    const category = navigationCategoryTree.find((candidate) => candidate.slug === item.rootCategorySlug);
+    if ((category?.children?.length ?? 0) > 0) return true;
+    return (catalogMeta?.megaMenuFacets ?? []).some((facet) => {
+      if (facet.values.length === 0) return false;
+      if (facet.appliesToAllCategories) return true;
+      return facet.applicableCategories.some((assignment) => assignment.categoryId === category?.id);
+    });
+  }
+
+  function openMegaMenu(item: ResolvedHeaderNavigationItem, immediate = false) {
+    clearMegaMenuTimers();
+    if (!itemHasMegaMenu(item)) {
+      setMegaMenuItemId(null);
       return;
     }
-    const node = (catalogMeta?.categoryTree ?? []).find(
-      (category) => category.slug === item.rootCategorySlug
-    );
-    const facets = catalogMeta?.megaMenuFacets ?? [];
-    if ((node?.children?.length ?? 0) > 0 || facets.some((f) => f.values.length > 0)) {
-      setMegaMenuCategory(item.rootCategorySlug);
-    } else {
-      setMegaMenuCategory(null);
+    if (immediate) {
+      setMegaMenuItemId(item.id);
+      return;
     }
+    megaMenuOpenTimerRef.current = window.setTimeout(() => {
+      setMegaMenuItemId(item.id);
+      megaMenuOpenTimerRef.current = null;
+    }, 90);
+  }
+
+  function keepMegaMenuOpen() {
+    if (megaMenuCloseTimerRef.current !== null) {
+      window.clearTimeout(megaMenuCloseTimerRef.current);
+      megaMenuCloseTimerRef.current = null;
+    }
+  }
+
+  function scheduleMegaMenuClose() {
+    if (megaMenuOpenTimerRef.current !== null) {
+      window.clearTimeout(megaMenuOpenTimerRef.current);
+      megaMenuOpenTimerRef.current = null;
+    }
+    if (megaMenuCloseTimerRef.current !== null) window.clearTimeout(megaMenuCloseTimerRef.current);
+    megaMenuCloseTimerRef.current = window.setTimeout(() => {
+      setMegaMenuItemId(null);
+      megaMenuCloseTimerRef.current = null;
+    }, 180);
+  }
+
+  function closeMegaMenuImmediately() {
+    clearMegaMenuTimers();
+    setMegaMenuItemId(null);
+  }
+
+  function closeMenus() {
+    clearMegaMenuTimers();
+    setMobileNavOpen(false);
+    setMegaMenuItemId(null);
+    setMoreMenuOpen(false);
   }
 
   useEffect(() => {
@@ -191,12 +256,30 @@ export function StorefrontHeader({
       if (window.scrollY > 12) {
         setMobileNavOpen(false);
         setMoreMenuOpen(false);
-        setMegaMenuCategory(null);
+        setMegaMenuItemId(null);
       }
     }
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      if (megaMenuOpenTimerRef.current !== null) window.clearTimeout(megaMenuOpenTimerRef.current);
+      if (megaMenuCloseTimerRef.current !== null) window.clearTimeout(megaMenuCloseTimerRef.current);
+      megaMenuOpenTimerRef.current = null;
+      megaMenuCloseTimerRef.current = null;
+      setMegaMenuItemId(null);
+      setMoreMenuOpen(false);
+    }
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      if (megaMenuOpenTimerRef.current !== null) window.clearTimeout(megaMenuOpenTimerRef.current);
+      if (megaMenuCloseTimerRef.current !== null) window.clearTimeout(megaMenuCloseTimerRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -258,18 +341,21 @@ export function StorefrontHeader({
     );
   }
 
-  function renderHamburgerButton() {
+  function renderHamburgerButton(desktopAt: 'lg' | 'xl' = 'lg') {
+    const visibilityClass = desktopAt === 'xl' ? 'xl:hidden' : 'lg:hidden';
     return (
       <button
         type="button"
         aria-label={mobileNavOpen ? 'Cerrar menú de navegación' : 'Abrir menú de navegación'}
+        aria-expanded={mobileNavOpen}
+        aria-controls="storefront-mobile-navigation"
         onClick={() => {
           setMobileNavOpen((v) => !v);
-          setMegaMenuCategory(null);
+          closeMegaMenuImmediately();
           setMoreMenuOpen(false);
           onRequestCloseCart?.();
         }}
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border shadow-sm lg:hidden"
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border shadow-sm ${visibilityClass}`}
         style={{ borderColor: controlBorder, backgroundColor: controlBg, color: theme.text }}
       >
         {mobileNavOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -285,7 +371,8 @@ export function StorefrontHeader({
         <button
           type="button"
           onClick={() => setMoreMenuOpen((v) => !v)}
-          onMouseEnter={() => setMegaMenuCategory(null)}
+          onMouseEnter={closeMegaMenuImmediately}
+          aria-expanded={moreMenuOpen}
           className={`${menuTextClass} inline-flex items-center gap-1 font-medium whitespace-nowrap transition-opacity hover:opacity-80`}
           style={{ color: navTextColor }}
         >
@@ -324,39 +411,55 @@ export function StorefrontHeader({
     );
   }
 
-  function renderDesktopNav() {
+  function renderDesktopNav(desktopAt: 'lg' | 'xl' = 'lg') {
+    const visibilityClass = desktopAt === 'xl' ? 'xl:flex' : 'lg:flex';
     return (
-      <nav className="hidden flex-wrap items-center justify-center gap-6 lg:flex">
+      <nav className={`hidden flex-wrap items-center justify-center gap-x-5 gap-y-2 ${visibilityClass}`} aria-label="Navegación principal">
         {settings.showHomeLink && (
           <Link
             to={buildStorefrontPath(storeSlug)}
             className={`${menuTextClass} font-medium whitespace-nowrap transition-opacity hover:opacity-80`}
             style={{ color: theme.primary }}
-            onMouseEnter={() => setMegaMenuCategory(null)}
+            onMouseEnter={closeMegaMenuImmediately}
             onClick={closeMenus}
           >
             Inicio
           </Link>
         )}
 
-        {visibleNavigationItems.map((item) => (
-          <Link
-            key={item.id}
-            to={item.href}
-            className={`${menuTextClass} font-medium whitespace-nowrap transition-opacity hover:opacity-80`}
-            style={{
-              color: megaMenuCategory === item.rootCategorySlug
-                ? theme.primary
-                : !settings.showHomeLink && item === visibleNavigationItems[0]
+        {visibleNavigationItems.map((item) => {
+          const hasMegaMenu = itemHasMegaMenu(item);
+          const isOpen = megaMenuItemId === item.id && showMegaMenu;
+          return (
+            <Link
+              key={item.id}
+              to={item.href}
+              className={`${menuTextClass} group relative inline-flex items-center gap-1.5 whitespace-nowrap py-2 font-semibold outline-none transition-colors`}
+              style={{
+                color: isOpen
                   ? theme.primary
-                  : navTextColor,
-            }}
-            onMouseEnter={() => handleNavigationItemMouseEnter(item)}
-            onClick={closeMenus}
-          >
-            {item.label}
-          </Link>
-        ))}
+                  : !settings.showHomeLink && item === visibleNavigationItems[0]
+                    ? theme.primary
+                    : navTextColor,
+              }}
+              onMouseEnter={() => openMegaMenu(item)}
+              onFocus={() => openMegaMenu(item, true)}
+              onClick={closeMenus}
+              aria-expanded={hasMegaMenu ? isOpen : undefined}
+              aria-controls={hasMegaMenu ? 'storefront-mega-menu' : undefined}
+            >
+              {item.label}
+              {hasMegaMenu ? (
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+              ) : null}
+              <span
+                className="pointer-events-none absolute inset-x-0 -bottom-0.5 h-0.5 origin-center scale-x-0 rounded-full transition-transform group-hover:scale-x-100 group-focus-visible:scale-x-100"
+                style={{ backgroundColor: theme.primary, transform: isOpen ? 'scaleX(1)' : undefined }}
+                aria-hidden="true"
+              />
+            </Link>
+          );
+        })}
         {renderMoreDropdown()}
       </nav>
     );
@@ -367,9 +470,9 @@ export function StorefrontHeader({
     return (
       <>
         <header className={positionClass} style={headerStyle}>
-          <div onMouseLeave={() => setMegaMenuCategory(null)}>
+          <div onMouseEnter={keepMegaMenuOpen} onMouseLeave={scheduleMegaMenuClose}>
             <div className={`relative mx-auto ${STOREFRONT_CONTAINER_CLASS} px-4 py-4 md:px-6`}>
-              <div className="flex items-center justify-between gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center">
+              <div className="flex items-center justify-between gap-4 xl:grid xl:grid-cols-[1fr_auto_1fr] xl:items-center">
 
                 {/* LEFT: brand */}
                 <div className="min-w-0">
@@ -377,7 +480,7 @@ export function StorefrontHeader({
                     <Link
                       to={buildStorefrontPath(storeSlug)}
                       className="flex shrink-0 items-center gap-3 md:gap-4"
-                      onMouseEnter={() => setMegaMenuCategory(null)}
+                      onMouseEnter={closeMegaMenuImmediately}
                       onClick={closeMenus}
                     >
                       {settings.showLogo && (
@@ -412,14 +515,14 @@ export function StorefrontHeader({
                 </div>
 
                 {/* CENTER: nav */}
-                {renderDesktopNav()}
+                {renderDesktopNav('xl')}
 
                 {/* RIGHT: search + cart + hamburger */}
                 <div className="relative flex items-center justify-end gap-2 md:gap-3">
                   <form
                     onSubmit={handleSearchSubmit}
-                    className="relative hidden w-full min-w-[190px] max-w-[250px] lg:block"
-                    onMouseEnter={() => setMegaMenuCategory(null)}
+                    className="relative hidden w-full min-w-[190px] max-w-[250px] xl:block"
+                    onMouseEnter={closeMegaMenuImmediately}
                   >
                     <input
                       ref={searchInputRef}
@@ -435,12 +538,12 @@ export function StorefrontHeader({
                     </button>
                   </form>
                   {renderCartButton()}
-                  {renderHamburgerButton()}
+                  {renderHamburgerButton('xl')}
                 </div>
               </div>
 
               {/* Mobile search */}
-              <form onSubmit={handleSearchSubmit} className="mt-3 lg:hidden">
+              <form onSubmit={handleSearchSubmit} className="mt-3 xl:hidden">
                 <div className="relative w-full">
                   <input
                     type="search"
@@ -458,15 +561,16 @@ export function StorefrontHeader({
             </div>
 
             {/* MegaMenuPanel — full width below nav */}
-            {showMegaMenu && activeCategoryNode && (
+            {showMegaMenu && (
               <MegaMenuPanel
                 theme={theme}
                 storeSlug={storeSlug}
-                activeCategoryName={activeCategoryNode.name}
-                activeCategorySlug={activeCategoryNode.slug}
-                subcategories={megaSubcategories}
+                catalogLabel={catalogLabel}
+                categoryTree={menuCategoryTree}
+                collections={menuCollections}
+                activeCategory={activeMegaMenuItem?.type === 'catalog' ? null : activeCategoryNode}
                 megaMenuFacets={megaMenuFacets}
-                onClose={() => setMegaMenuCategory(null)}
+                onClose={closeMegaMenuImmediately}
               />
             )}
           </div>
@@ -480,7 +584,7 @@ export function StorefrontHeader({
           storeName={storeName}
           logoUrl={logoUrl}
           settings={settings}
-          categoryTree={catalogMeta?.categoryTree ?? []}
+          categoryTree={navigationCategoryTree}
           collections={menuCollections}
           navigationItems={navigationItems}
           showAutomaticCollections={settings.menuMode !== 'custom'}
@@ -492,10 +596,14 @@ export function StorefrontHeader({
   // ── SEARCH ────────────────────────────────────────────────────
   return (
     <>
-      <header className={positionClass} style={headerStyle}>
+      <header
+        className={positionClass}
+        style={headerStyle}
+        onMouseEnter={keepMegaMenuOpen}
+        onMouseLeave={scheduleMegaMenuClose}
+      >
         <div
           className={`mx-auto ${STOREFRONT_CONTAINER_CLASS} px-4 md:px-6`}
-          onMouseLeave={() => setMegaMenuCategory(null)}
         >
           {/* Row 1 */}
           <div className="flex items-center gap-3 py-3">
@@ -503,7 +611,7 @@ export function StorefrontHeader({
               <Link
                 to={buildStorefrontPath(storeSlug)}
                 className="flex shrink-0 items-center gap-2.5"
-                onMouseEnter={() => setMegaMenuCategory(null)}
+                onMouseEnter={closeMegaMenuImmediately}
                 onClick={closeMenus}
               >
                 {settings.showLogo && (
@@ -540,7 +648,7 @@ export function StorefrontHeader({
             <form
               onSubmit={handleSearchSubmit}
               className="relative mx-auto hidden max-w-[480px] flex-1 lg:block"
-              onMouseEnter={() => setMegaMenuCategory(null)}
+              onMouseEnter={closeMegaMenuImmediately}
             >
               <input
                 ref={searchInputRef}
@@ -583,19 +691,21 @@ export function StorefrontHeader({
             {renderDesktopNav()}
           </div>
 
-          {/* MegaMenuPanel — full width below nav */}
-          {showMegaMenu && activeCategoryNode && (
-            <MegaMenuPanel
-              theme={theme}
-              storeSlug={storeSlug}
-              activeCategoryName={activeCategoryNode.name}
-              activeCategorySlug={activeCategoryNode.slug}
-              subcategories={megaSubcategories}
-              megaMenuFacets={megaMenuFacets}
-              onClose={() => setMegaMenuCategory(null)}
-            />
-          )}
         </div>
+
+        {/* Full-width desktop navigation panel. */}
+        {showMegaMenu && (
+          <MegaMenuPanel
+            theme={theme}
+            storeSlug={storeSlug}
+            catalogLabel={catalogLabel}
+            categoryTree={menuCategoryTree}
+            collections={menuCollections}
+            activeCategory={activeMegaMenuItem?.type === 'catalog' ? null : activeCategoryNode}
+            megaMenuFacets={megaMenuFacets}
+            onClose={closeMegaMenuImmediately}
+          />
+        )}
       </header>
 
       <MobileNavDrawer
@@ -606,7 +716,7 @@ export function StorefrontHeader({
         storeName={storeName}
         logoUrl={logoUrl}
         settings={settings}
-        categoryTree={catalogMeta?.categoryTree ?? []}
+        categoryTree={navigationCategoryTree}
         collections={menuCollections}
         navigationItems={navigationItems}
         showAutomaticCollections={settings.menuMode !== 'custom'}

@@ -217,6 +217,7 @@ serve(async (req: Request) => {
   async function validateAndPriceModifiers(
     storeId: string,
     productId: string,
+    storeLocationId: string,
     selections: ModifierSelection[],
   ): Promise<{ customizations: ValidatedCustomization[]; total: number; error?: undefined } | { error: string }> {
     const { data: groups, error: groupsErr } = await supabase
@@ -271,6 +272,18 @@ serve(async (req: Request) => {
           .maybeSingle();
         if (!linkedProduct || linkedProduct.status !== 'active' || !linkedProduct.is_available) {
           return { error: `La opción "${item.label}" ya no está disponible.` };
+        }
+        const { data: locationAvailability, error: locationAvailabilityError } = await supabase
+          .from('product_location_availability')
+          .select('is_available')
+          .eq('product_id', item.linked_product_id)
+          .eq('store_location_id', storeLocationId)
+          .maybeSingle();
+        if (locationAvailabilityError) {
+          return { error: 'No pudimos validar la disponibilidad de los adicionales.' };
+        }
+        if (locationAvailability?.is_available === false) {
+          return { error: `La opción "${item.label}" no está disponible en esta sede.` };
         }
         if (linkedProduct.has_variants && !item.linked_variant_id) {
           return { error: `La opción "${item.label}" necesita una presentación.` };
@@ -520,7 +533,12 @@ serve(async (req: Request) => {
 
     // ── Validate + price modifiers (never trust client price/label) ────
     const modifierSelections = item.customizations ?? [];
-    const modifierResult = await validateAndPriceModifiers(storeId, product.id, modifierSelections);
+    const modifierResult = await validateAndPriceModifiers(
+      storeId,
+      product.id,
+      operationalLocationId,
+      modifierSelections,
+    );
     if ('error' in modifierResult) {
       return json({ error: modifierResult.error }, 422);
     }

@@ -486,6 +486,8 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
       productSlug: product.productSlug,
       productName: product.productName,
       productType: product.productType,
+      categoryId: product.categoryId,
+      categoryName: product.categoryName,
       imageUrl: product.mainImageUrl,
       unitPrice: getActivePrice(product.regularPrice, product.salePrice),
       customizationNotes: null,

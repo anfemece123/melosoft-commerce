@@ -73,6 +73,28 @@ export interface ProductCountStats {
   unavailable: number;
 }
 
+/** Compact projection used by visual selectors. It deliberately excludes
+ * prices, descriptions, galleries, variants and other product form data. */
+export interface ProductImageCandidate {
+  productId: string;
+  name: string;
+  imageUrl: string;
+  categoryId: string | null;
+  status: ProductStatus;
+}
+
+export interface ProductImageCandidatePage {
+  items: ProductImageCandidate[];
+  total: number;
+}
+
+/** Minimal projection for admin controls that only need to create a link. */
+export interface ProductLinkOption {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 export interface ProductOptionItem {
   id: string;
   groupId: string;

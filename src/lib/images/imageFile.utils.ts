@@ -150,6 +150,29 @@ export async function cropImageToFile(
   return new File([blob], `${fileNameBase}.${outputExtension}`, { type: outputType });
 }
 
+/** Optimizes customer-generated media without forcing a crop. Review photos
+ * must preserve the evidence the customer chose to share; the storefront
+ * uses object-fit thumbnails and opens the complete image when selected. */
+export async function optimizeImageToFile(
+  loaded: LoadedImageFile,
+  fileNameBase: string,
+  maxOutputBytes: number,
+  maxDimension = 1600,
+): Promise<File> {
+  const image = await loadHtmlImage(loaded.previewUrl);
+  const scale = Math.min(1, maxDimension / Math.max(loaded.width, loaded.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(loaded.width * scale));
+  canvas.height = Math.max(1, Math.round(loaded.height * scale));
+  const context = canvas.getContext('2d');
+  if (!context) throw new Error('No se pudo preparar la imagen.');
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  const blob = await encodeCanvasWithinBudget(canvas, maxOutputBytes);
+  return new File([blob], `${fileNameBase}.webp`, { type: blob.type || OUTPUT_MIME_TYPE });
+}
+
 async function encodeCanvasWithinBudget(canvas: HTMLCanvasElement, maxBytes: number): Promise<Blob> {
   let workingCanvas = canvas;
   let smallest: Blob | null = null;

@@ -11,6 +11,7 @@ import type {
   ThemePreset,
   PublicHeaderSettings,
   WhatsappButtonLayout,
+  HeroCtaTargetType,
 } from '@/types/common.types';
 import type { StoreCommerceSettings } from './storeCommerce.types';
 
@@ -136,6 +137,9 @@ export interface StoreHeroSlide {
   title: string | null;
   subtitle: string | null;
   ctaLabel: string | null;
+  ctaTargetType: HeroCtaTargetType;
+  ctaTargetId: string | null;
+  ctaTargetUrl: string | null;
   mainImageUrl: string | null;
   backgroundImageUrl: string | null;
   badgeImageUrl: string | null;

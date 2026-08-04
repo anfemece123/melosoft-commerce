@@ -20,6 +20,7 @@ import { OrderConfirmDialog } from './OrderConfirmDialog';
 import { OrderShipmentDialog } from './OrderShipmentDialog';
 import { OrderDetailsEditDialog } from './OrderDetailsEditDialog';
 import { OrderItemsAmendDialog } from './OrderItemsAmendDialog';
+import { OrderReviewInvitationCard } from './OrderReviewInvitationCard';
 
 interface NextAction {
   label: string;
@@ -489,6 +490,12 @@ export function OrderDetailDrawer({
                     </div>
                   ))}
                 </div>
+              </Section>
+            )}
+
+            {order.status === 'delivered' && (
+              <Section title="Opinión del cliente">
+                <OrderReviewInvitationCard key={order.id} order={order} />
               </Section>
             )}
           </div>

@@ -6,6 +6,8 @@ export type ImageAssetKind =
   | 'store_hero_background'
   | 'carta_cover'
   | 'product_image'
+  | 'review_image'
+  | 'catalog_taxonomy_image'
   | 'offer_hero'
   | 'home_section_image'
   | 'promo_banner_wide'
@@ -127,6 +129,34 @@ export const IMAGE_ASSET_PRESETS: Record<ImageAssetKind, ImageAssetPreset> = {
     recommendedHeight: 1200,
     maxBytes: 12 * 1024 * 1024,
     maxOutputBytes: 650 * 1024,
+    shape: 'rounded',
+  },
+  review_image: {
+    kind: 'review_image',
+    label: 'Foto de reseña',
+    aspectRatio: 1,
+    minWidth: 640,
+    minHeight: 640,
+    minimumCropWidth: 160,
+    minimumCropHeight: 160,
+    recommendedWidth: 1600,
+    recommendedHeight: 1600,
+    maxBytes: 10 * 1024 * 1024,
+    maxOutputBytes: 900 * 1024,
+    shape: 'rounded',
+  },
+  catalog_taxonomy_image: {
+    kind: 'catalog_taxonomy_image',
+    label: 'Imagen de navegación del catálogo',
+    aspectRatio: 1,
+    minWidth: 500,
+    minHeight: 500,
+    minimumCropWidth: 180,
+    minimumCropHeight: 180,
+    recommendedWidth: 900,
+    recommendedHeight: 900,
+    maxBytes: 10 * 1024 * 1024,
+    maxOutputBytes: 450 * 1024,
     shape: 'rounded',
   },
   offer_hero: {

@@ -1,5 +1,5 @@
 import type { PublicProductPage, PublicStoreCategory, PublicStoreCollection, PublicStoreFacet } from '@/types/common.types';
-import { productSatisfiesFacetValue } from './variantFilters';
+import { productSatisfiesFacetValue, type FacetMatchProduct } from './variantFilters';
 
 interface CategoryContext {
   id: string;
@@ -23,7 +23,7 @@ interface CategoryContext {
 export function getContextualFacets(
   facets: PublicStoreFacet[],
   activeCategory: CategoryContext | null,
-  productsInScope: PublicProductPage[],
+  productsInScope: FacetMatchProduct[],
   concepts: Map<string, string>
 ): PublicStoreFacet[] {
   return facets

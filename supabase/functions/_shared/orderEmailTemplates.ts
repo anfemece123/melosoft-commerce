@@ -43,6 +43,7 @@ export interface OrderEmailData {
   trackingNumber: string | null;
   trackingUrl: string | null;
   estimatedDeliveryAt: string | null;
+  reviewUrl?: string | null;
   items: OrderEmailItem[];
 }
 
@@ -242,6 +243,17 @@ function renderTrackingHtml(data: OrderEmailData): string {
   </div>`;
 }
 
+function renderReviewInvitationHtml(data: OrderEmailData): string {
+  if (data.eventType !== 'customer_order_delivered') return '';
+  const reviewUrl = safeHttpUrl(data.reviewUrl ?? null);
+  if (!reviewUrl) return '';
+  return `<div style="margin:20px 0 0;padding:18px;border-radius:12px;background:#eef2ff;border:1px solid #c7d2fe;text-align:center">
+    <div style="color:#3730a3;font-size:12px;font-weight:800;letter-spacing:.08em">¿CÓMO FUE TU COMPRA?</div>
+    <p style="margin:8px 0 0;color:#475569;font-size:13px;line-height:1.55">Califica únicamente los productos de este pedido. No necesitas crear una cuenta.</p>
+    <a href="${escapeHtml(reviewUrl)}" style="display:inline-block;margin-top:14px;padding:11px 18px;border-radius:9px;background:#4f46e5;color:#ffffff;text-decoration:none;font-size:13px;font-weight:700">Compartir mi opinión</a>
+  </div>`;
+}
+
 function renderText(data: OrderEmailData, copy: EventCopy): string {
   const itemLines = data.items.length > 0
     ? data.items.map((item) => `- ${item.quantity} x ${item.name}${item.variantLabel ? ` (${item.variantLabel})` : ''}: ${formatMoney(item.totalPrice, data.currency)}`).join('\n')
@@ -253,7 +265,7 @@ function renderText(data: OrderEmailData, copy: EventCopy): string {
     formatEstimatedDate(data.estimatedDeliveryAt) ? `Entrega estimada: ${formatEstimatedDate(data.estimatedDeliveryAt)}` : null,
   ].filter(Boolean).join('\n');
 
-  return `${copy.title}\n\n${copy.message}\n\nPedido #${data.orderNumber}\nFecha: ${formatDate(data.createdAt)}\nCliente: ${data.customerName}\nTeléfono: ${data.customerPhone}\nEntrega: ${fulfillmentLabel(data.fulfillmentMethod)}\nDestino: ${destinationLabel(data)}\nPago: ${paymentLabel(data.paymentMethod, data.paymentStatus)}\n\nProductos\n${itemLines}\n\nSubtotal: ${formatMoney(data.subtotal, data.currency)}\nEnvío: ${formatMoney(data.shippingAmount, data.currency)}${data.discountAmount > 0 ? `\nDescuento: -${formatMoney(data.discountAmount, data.currency)}` : ''}\nTotal: ${formatMoney(data.totalAmount, data.currency)}${trackingLines ? `\n\n${trackingLines}` : ''}${data.notes ? `\n\nNotas: ${data.notes}` : ''}\n\n${data.supportEmail ? `¿Necesitas ayuda? Responde a este correo o escribe a ${data.supportEmail}.` : `¿Necesitas ayuda? Responde a este correo para contactar a ${data.storeName}.`}`;
+  return `${copy.title}\n\n${copy.message}\n\nPedido #${data.orderNumber}\nFecha: ${formatDate(data.createdAt)}\nCliente: ${data.customerName}\nTeléfono: ${data.customerPhone}\nEntrega: ${fulfillmentLabel(data.fulfillmentMethod)}\nDestino: ${destinationLabel(data)}\nPago: ${paymentLabel(data.paymentMethod, data.paymentStatus)}\n\nProductos\n${itemLines}\n\nSubtotal: ${formatMoney(data.subtotal, data.currency)}\nEnvío: ${formatMoney(data.shippingAmount, data.currency)}${data.discountAmount > 0 ? `\nDescuento: -${formatMoney(data.discountAmount, data.currency)}` : ''}\nTotal: ${formatMoney(data.totalAmount, data.currency)}${trackingLines ? `\n\n${trackingLines}` : ''}${data.reviewUrl && data.eventType === 'customer_order_delivered' ? `\n\nComparte tu opinión: ${data.reviewUrl}` : ''}${data.notes ? `\n\nNotas: ${data.notes}` : ''}\n\n${data.supportEmail ? `¿Necesitas ayuda? Responde a este correo o escribe a ${data.supportEmail}.` : `¿Necesitas ayuda? Responde a este correo para contactar a ${data.storeName}.`}`;
 }
 
 export function renderOrderEmail(data: OrderEmailData): RenderedOrderEmail {
@@ -292,6 +304,7 @@ export function renderOrderEmail(data: OrderEmailData): RenderedOrderEmail {
         <h1 style="margin:0 0 10px;font-size:25px;line-height:1.25;color:#0f172a">${escapeHtml(copy.title)}</h1>
         <p style="margin:0;color:#475569;font-size:15px;line-height:1.6">${escapeHtml(copy.message)}</p>
         ${renderTrackingHtml(data)}
+        ${renderReviewInvitationHtml(data)}
       </td></tr>
       <tr><td style="padding:0 28px"><div style="border-top:1px solid #e2e8f0"></div></td></tr>
       <tr><td style="padding:22px 28px">
