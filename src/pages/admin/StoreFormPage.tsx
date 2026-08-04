@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFormik } from 'formik';
 import type { FormikErrors } from 'formik';
@@ -140,20 +140,9 @@ const VERTICAL_PRESET_SUMMARY: Record<BusinessVertical, string[]> = {
   ],
 };
 
-const CURRENCY_OPTIONS = [
-  { value: 'COP', label: 'COP — Peso colombiano' },
-  { value: 'USD', label: 'USD — Dólar americano' },
-  { value: 'EUR', label: 'EUR — Euro' },
-  { value: 'MXN', label: 'MXN — Peso mexicano' },
-];
+const CURRENCY_OPTIONS = [{ value: 'COP', label: 'COP — Peso colombiano' }];
 
-const COUNTRY_OPTIONS = [
-  { value: 'CO', label: 'Colombia' },
-  { value: 'MX', label: 'México' },
-  { value: 'US', label: 'Estados Unidos' },
-  { value: 'ES', label: 'España' },
-  { value: 'AR', label: 'Argentina' },
-];
+const COUNTRY_OPTIONS = [{ value: 'CO', label: 'Colombia' }];
 
 const DOCUMENT_TYPE_OPTIONS = [
   { value: '',         label: 'Seleccionar...' },
@@ -173,14 +162,6 @@ const DEFAULT_BUSINESS_HOURS: StoreCreationFormValues['businessHours'] = [0, 1, 
   breakStartsAt: null,
   breakEndsAt: null,
 }));
-
-const DEFAULT_POLICIES = {
-  shippingPolicy: 'Realizamos envíos a nivel nacional. Los pedidos son procesados en 1-2 días hábiles. El tiempo de entrega varía según la ciudad de destino.',
-  returnsPolicy: 'Aceptamos devoluciones dentro de los 15 días posteriores a la compra, siempre que el producto esté en perfectas condiciones y con su empaque original.',
-  warrantyPolicy: 'Todos nuestros productos cuentan con garantía del fabricante. Ante cualquier defecto, contáctanos para gestionar el reemplazo o reparación.',
-  privacyPolicy: 'Tu información personal es tratada con total confidencialidad. No compartimos tus datos con terceros. Usamos tu información únicamente para procesar pedidos y mejorar tu experiencia.',
-  termsAndConditions: 'Al realizar una compra en nuestra tienda aceptas nuestros términos y condiciones. Nos reservamos el derecho de modificar precios y disponibilidad sin previo aviso.',
-};
 
 const INITIAL_VALUES = {
   // Owner
@@ -203,7 +184,6 @@ const INITIAL_VALUES = {
   supportEmail: '',
   whatsappNumber: '',
   country: 'CO',
-  city: '',
   currency: 'COP',
   // Design
   mode: 'light',
@@ -218,12 +198,11 @@ const INITIAL_VALUES = {
   // Hours
   businessHours: DEFAULT_BUSINESS_HOURS,
   // Policies
-  usePolicyDefaults: true,
-  shippingPolicy: DEFAULT_POLICIES.shippingPolicy,
-  returnsPolicy: DEFAULT_POLICIES.returnsPolicy,
-  warrantyPolicy: DEFAULT_POLICIES.warrantyPolicy,
-  privacyPolicy: DEFAULT_POLICIES.privacyPolicy,
-  termsAndConditions: DEFAULT_POLICIES.termsAndConditions,
+  shippingPolicy: '',
+  returnsPolicy: '',
+  warrantyPolicy: '',
+  privacyPolicy: '',
+  termsAndConditions: '',
 } satisfies StoreCreationFormValues;
 
 // ── Error summary helpers ─────────────────────────────────────
@@ -242,7 +221,6 @@ const FIELD_LABELS: Partial<Record<keyof StoreCreationFormValues, string>> = {
   description: 'Descripción',
   whatsappNumber: 'WhatsApp de contacto',
   country: 'País',
-  city: 'Ciudad (empresa)',
   currency: 'Moneda',
   mode: 'Modo de tema',
   themePreset: 'Tema de color',
@@ -298,6 +276,7 @@ export function StoreFormPage() {
   const [departments, setDepartments] = useState<GeoDepartment[]>([]);
   const [cities, setCities] = useState<GeoCity[]>([]);
   const [loadingGeo, setLoadingGeo] = useState(false);
+  const cityRequestId = useRef(0);
   const [ownerPasswordVisible, setOwnerPasswordVisible] = useState(false);
   const [slugSubmitAttempted, setSlugSubmitAttempted] = useState(false);
   const [createdCredentials, setCreatedCredentials] = useState<{
@@ -327,15 +306,13 @@ export function StoreFormPage() {
         const colors = getThemeColors(values.themePreset as ThemePreset, values.mode as ThemeMode);
         const normalizedOwnerEmail = values.ownerEmail.trim().toLowerCase();
 
-        const policies = values.usePolicyDefaults
-          ? DEFAULT_POLICIES
-          : {
-              shippingPolicy: values.shippingPolicy || null,
-              returnsPolicy: values.returnsPolicy || null,
-              warrantyPolicy: values.warrantyPolicy || null,
-              privacyPolicy: values.privacyPolicy || null,
-              termsAndConditions: values.termsAndConditions || null,
-            };
+        const policies = {
+          shippingPolicy: values.shippingPolicy || null,
+          returnsPolicy: values.returnsPolicy || null,
+          warrantyPolicy: values.warrantyPolicy || null,
+          privacyPolicy: values.privacyPolicy || null,
+          termsAndConditions: values.termsAndConditions || null,
+        };
 
         const result = await storesService.createStoreWithOwner({
           ownerFullName: values.ownerFullName,
@@ -355,7 +332,6 @@ export function StoreFormPage() {
           supportEmail: values.supportEmail || null,
           whatsappNumber: values.whatsappNumber,
           country: values.country,
-          city: values.city,
           currency: values.currency,
           mode: values.mode as ThemeMode,
           themePreset: values.themePreset,
@@ -477,32 +453,30 @@ export function StoreFormPage() {
     }
   }
 
-  // Load cities when locationDepartment changes
-  useEffect(() => {
-    const dept = departments.find((d) => d.name === formik.values.locationDepartment);
-    if (!dept) { setCities([]); return; }
-    setLoadingGeo(true);
-    geoService.getCities(dept.id)
-      .then(setCities)
-      .catch(() => setCities([]))
-      .finally(() => setLoadingGeo(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formik.values.locationDepartment, departments]);
+  async function handleLocationDepartmentChange(event: ChangeEvent<HTMLSelectElement>) {
+    const departmentName = event.target.value;
+    formik.handleChange(event);
+    await formik.setFieldValue('locationCity', '');
 
-  // Sync policy fields when usePolicyDefaults is toggled on
-  useEffect(() => {
-    if (formik.values.usePolicyDefaults) {
-      void formik.setValues((prev) => ({
-        ...prev,
-        shippingPolicy: DEFAULT_POLICIES.shippingPolicy,
-        returnsPolicy: DEFAULT_POLICIES.returnsPolicy,
-        warrantyPolicy: DEFAULT_POLICIES.warrantyPolicy,
-        privacyPolicy: DEFAULT_POLICIES.privacyPolicy,
-        termsAndConditions: DEFAULT_POLICIES.termsAndConditions,
-      }));
+    const requestId = cityRequestId.current + 1;
+    cityRequestId.current = requestId;
+    const department = departments.find((item) => item.name === departmentName);
+    if (!department) {
+      setCities([]);
+      setLoadingGeo(false);
+      return;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formik.values.usePolicyDefaults]);
+
+    setLoadingGeo(true);
+    try {
+      const nextCities = await geoService.getCities(department.id);
+      if (cityRequestId.current === requestId) setCities(nextCities);
+    } catch {
+      if (cityRequestId.current === requestId) setCities([]);
+    } finally {
+      if (cityRequestId.current === requestId) setLoadingGeo(false);
+    }
+  }
 
   const selectedColors = getThemeColors(
     formik.values.themePreset as ThemePreset,
@@ -622,6 +596,7 @@ export function StoreFormPage() {
                   onChange={formik.handleChange}
                   onBlur={formik.handleBlur}
                   error={fieldError('ownerEmail')}
+                  hint="Será su usuario de acceso. Si la cuenta ya existe, se conserva su perfil y se agrega esta empresa a la misma cuenta."
                   required
                 />
                 <PhoneInput
@@ -1073,7 +1048,7 @@ export function StoreFormPage() {
                   error={fieldError('supportEmail')}
                 />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Select
                   label="País"
                   id="country"
@@ -1083,17 +1058,8 @@ export function StoreFormPage() {
                   onChange={formik.handleChange}
                   onBlur={formik.handleBlur}
                   error={fieldError('country')}
-                />
-                <Input
-                  label="Ciudad"
-                  id="city"
-                  name="city"
-                  placeholder="Ej: Bogotá"
-                  value={formik.values.city}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  error={fieldError('city')}
-                  required
+                  disabled
+                  hint="La operación actual de Melosoft está configurada para Colombia."
                 />
                 <Select
                   label="Moneda"
@@ -1104,6 +1070,8 @@ export function StoreFormPage() {
                   onChange={formik.handleChange}
                   onBlur={formik.handleBlur}
                   error={fieldError('currency')}
+                  disabled
+                  hint="Wompi y el checkout procesan los cobros en pesos colombianos."
                 />
               </div>
             </div>
@@ -1233,10 +1201,7 @@ export function StoreFormPage() {
                   id="locationDepartment"
                   name="locationDepartment"
                   value={formik.values.locationDepartment ?? ''}
-                  onChange={(e) => {
-                    formik.handleChange(e);
-                    void formik.setFieldValue('locationCity', '');
-                  }}
+                  onChange={(event) => void handleLocationDepartmentChange(event)}
                   onBlur={formik.handleBlur}
                   error={fieldError('locationDepartment')}
                   options={[
@@ -1370,72 +1335,62 @@ export function StoreFormPage() {
             <SectionHeader
               icon={<FileText className="w-4 h-4 text-indigo-600" />}
               title="Políticas"
-              description="Textos legales para el ecommerce público."
+              description="Textos legales opcionales para el ecommerce público."
             />
             <div className="space-y-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  id="usePolicyDefaults"
-                  name="usePolicyDefaults"
-                  checked={formik.values.usePolicyDefaults}
+              <div className="flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                <p>
+                  No se publicarán textos legales genéricos. Déjalos vacíos para que la empresa los complete después o ingresa únicamente textos revisados y aprobados por el negocio.
+                </p>
+              </div>
+              <div className="space-y-4 pt-1">
+                <Textarea
+                  label="Política de envíos"
+                  id="shippingPolicy"
+                  name="shippingPolicy"
+                  value={formik.values.shippingPolicy ?? ''}
                   onChange={formik.handleChange}
-                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  onBlur={formik.handleBlur}
+                  rows={3}
                 />
-                <span className="text-sm text-gray-700">
-                  Usar textos de política por defecto (pueden editarse después)
-                </span>
-              </label>
-
-              {!formik.values.usePolicyDefaults && (
-                <div className="space-y-4 pt-2">
-                  <Textarea
-                    label="Política de envíos"
-                    id="shippingPolicy"
-                    name="shippingPolicy"
-                    value={formik.values.shippingPolicy ?? ''}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    rows={3}
-                  />
-                  <Textarea
-                    label="Política de devoluciones"
-                    id="returnsPolicy"
-                    name="returnsPolicy"
-                    value={formik.values.returnsPolicy ?? ''}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    rows={3}
-                  />
-                  <Textarea
-                    label="Garantía"
-                    id="warrantyPolicy"
-                    name="warrantyPolicy"
-                    value={formik.values.warrantyPolicy ?? ''}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    rows={3}
-                  />
-                  <Textarea
-                    label="Política de privacidad"
-                    id="privacyPolicy"
-                    name="privacyPolicy"
-                    value={formik.values.privacyPolicy ?? ''}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    rows={3}
-                  />
-                  <Textarea
-                    label="Términos y condiciones"
-                    id="termsAndConditions"
-                    name="termsAndConditions"
-                    value={formik.values.termsAndConditions ?? ''}
-                    onChange={formik.handleChange}
-                    onBlur={formik.handleBlur}
-                    rows={3}
-                  />
-                </div>
-              )}
+                <Textarea
+                  label="Política de devoluciones"
+                  id="returnsPolicy"
+                  name="returnsPolicy"
+                  value={formik.values.returnsPolicy ?? ''}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  rows={3}
+                />
+                <Textarea
+                  label="Garantía"
+                  id="warrantyPolicy"
+                  name="warrantyPolicy"
+                  value={formik.values.warrantyPolicy ?? ''}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  rows={3}
+                />
+                <Textarea
+                  label="Política de privacidad"
+                  id="privacyPolicy"
+                  name="privacyPolicy"
+                  value={formik.values.privacyPolicy ?? ''}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  rows={3}
+                />
+                <Textarea
+                  label="Términos y condiciones"
+                  id="termsAndConditions"
+                  name="termsAndConditions"
+                  value={formik.values.termsAndConditions ?? ''}
+                  onChange={formik.handleChange}
+                  onBlur={formik.handleBlur}
+                  rows={3}
+                />
+              </div>
             </div>
           </CardBody>
         </Card>

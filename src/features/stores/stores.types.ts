@@ -236,7 +236,6 @@ export interface CreateStoreWithOwnerInput {
   supportEmail: string | null;
   whatsappNumber: string;
   country: string;
-  city: string;
   currency: string;
   // Theme
   mode: ThemeMode;

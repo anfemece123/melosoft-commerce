@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFormik } from 'formik';
-import * as Yup from 'yup';
 import { AlertCircle, KeyRound, Loader } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAppDispatch } from '@/app/hooks';
@@ -13,20 +12,7 @@ import { getPostLoginRedirect } from '@/utils/authRedirect';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
-
-const setPasswordSchema = Yup.object({
-  password: Yup.string()
-    .min(8, 'La contraseña debe tener al menos 8 caracteres')
-    .required('La contraseña es obligatoria'),
-  confirmPassword: Yup.string()
-    .oneOf([Yup.ref('password')], 'Las contraseñas no coinciden')
-    .required('Confirma tu contraseña'),
-});
-
-interface SetPasswordFormValues {
-  password: string;
-  confirmPassword: string;
-}
+import { setPasswordSchema, type SetPasswordFormValues } from '@/schemas/setPassword.schema';
 
 export function SetPasswordPage() {
   const dispatch = useAppDispatch();
@@ -141,7 +127,7 @@ export function SetPasswordPage() {
               label="Nueva contraseña"
               type="password"
               autoComplete="new-password"
-              placeholder="Mínimo 8 caracteres"
+              placeholder="Mínimo 12 caracteres, con número y símbolo"
               {...formik.getFieldProps('password')}
               error={formik.touched.password ? formik.errors.password : undefined}
             />

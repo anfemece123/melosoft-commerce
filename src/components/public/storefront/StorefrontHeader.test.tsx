@@ -37,6 +37,43 @@ const catalogMeta: CatalogMeta = {
 };
 
 describe('StorefrontHeader custom navigation', () => {
+  it('allows a long store name to wrap on mobile without displacing the closed status', () => {
+    const longStoreName = 'Restaurante Tradición y Sabores de Nuestra Tierra';
+
+    render(
+      <MemoryRouter initialEntries={['/s/restaurante-demo']}>
+        <StorefrontHeader
+          theme={buildStorefrontTheme({})}
+          storeName={longStoreName}
+          storeSlug="restaurante-demo"
+          logoUrl={null}
+          catalogType="menu"
+          showCart
+          orderStatus={{
+            isAcceptingOrders: false,
+            statusCode: 'closed',
+            timezone: 'America/Bogota',
+            localDate: '2026-08-04',
+            localTime: '22:00:00',
+            pausedUntil: null,
+            pauseReason: null,
+          }}
+          scheduleLoading={false}
+          headerSettings={DEFAULT_HEADER_SETTINGS}
+        />
+      </MemoryRouter>,
+    );
+
+    const brandName = screen.getByText(longStoreName);
+    expect(brandName.hasAttribute('data-storefront-brand-name')).toBe(true);
+    expect(brandName.classList).toContain('line-clamp-2');
+    expect(brandName.classList).toContain('break-words');
+    expect(brandName.classList).not.toContain('truncate');
+    expect(screen.getByText('Cerrado ahora')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Carrito de compras' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Abrir menú de navegación' })).not.toBeNull();
+  });
+
   it('renders a top-level attribute value as a catalog filter link', () => {
     render(
       <MemoryRouter initialEntries={['/s/demo']}>

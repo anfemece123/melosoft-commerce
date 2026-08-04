@@ -472,14 +472,14 @@ export function StorefrontHeader({
         <header className={positionClass} style={headerStyle}>
           <div onMouseEnter={keepMegaMenuOpen} onMouseLeave={scheduleMegaMenuClose}>
             <div className={`relative mx-auto ${STOREFRONT_CONTAINER_CLASS} px-4 py-4 md:px-6`}>
-              <div className="flex items-center justify-between gap-4 xl:grid xl:grid-cols-[1fr_auto_1fr] xl:items-center">
+              <div className="flex items-center justify-between gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:items-center">
 
                 {/* LEFT: brand */}
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1 xl:flex-none">
                   {(settings.showLogo || settings.showStoreName) && (
                     <Link
                       to={buildStorefrontPath(storeSlug)}
-                      className="flex shrink-0 items-center gap-3 md:gap-4"
+                      className="flex min-w-0 items-center gap-3 md:gap-4"
                       onMouseEnter={closeMegaMenuImmediately}
                       onClick={closeMenus}
                     >
@@ -498,15 +498,21 @@ export function StorefrontHeader({
                         />
                       )}
                       {settings.showStoreName && (
-                        <div className="flex min-w-0 flex-col gap-1">
+                        <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
                           <span
-                            className="truncate text-[22px] font-semibold leading-none tracking-[-0.03em] md:text-[26px]"
+                            data-storefront-brand-name
+                            className="line-clamp-2 max-w-full break-words text-[18px] font-semibold leading-[1.15] tracking-[-0.03em] sm:text-[22px] md:text-[26px] xl:block xl:truncate xl:leading-none"
                             style={{ color: theme.mode === 'dark' ? theme.text : '#1f2937' }}
                           >
                             {storeName}
                           </span>
                           {showCart && (
-                            <StoreStatusBadge theme={theme} orderStatus={orderStatus} scheduleLoading={scheduleLoading} />
+                            <StoreStatusBadge
+                              theme={theme}
+                              orderStatus={orderStatus}
+                              scheduleLoading={scheduleLoading}
+                              className="max-w-full px-2 text-[10px] sm:px-2.5 sm:text-[11px]"
+                            />
                           )}
                         </div>
                       )}

@@ -1,6 +1,8 @@
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { getCorsHeaders, resolveAppOrigin } from '../_shared/allowedOrigins.ts';
 import { ownerPasswordValidationError } from '../_shared/ownerAccess.ts';
+import { buildOwnerProfileUpsert } from '../_shared/ownerProfile.ts';
+import { getStoreCreationCommerceDefaults } from '../_shared/storeCreationDefaults.ts';
 
 // ── Request / Response shapes ────────────────────────────────
 
@@ -51,7 +53,6 @@ interface CreateStoreWithOwnerPayload {
   supportEmail: string | null;
   whatsappNumber: string;
   country: string;
-  city: string;
   currency: string;
   // Theme
   mode: 'light' | 'dark';
@@ -91,108 +92,6 @@ const RESERVED_STORE_SLUGS = new Set([
   'support', 'test', 'testing', 'webhook', 'webhooks', 'www',
 ]);
 
-// ── Commerce defaults ─────────────────────────────────────────
-
-interface CommerceDefaults {
-  business_category: string;
-  catalog_type: string;
-  commerce_mode: string;
-  delivery_mode: string;
-  allows_pickup: boolean;
-  allows_local_delivery: boolean;
-  allows_national_shipping: boolean;
-  whatsapp_checkout_enabled: boolean;
-  web_order_enabled: boolean;
-  online_checkout_enabled: boolean;
-  cash_on_delivery_enabled: boolean;
-  default_order_method: string;
-  order_flow_type: string;
-  has_inventory: boolean;
-  has_variants: boolean;
-  has_leads: boolean;
-}
-
-function getCommerceDefaults(businessVertical: string): CommerceDefaults {
-  switch (businessVertical) {
-    case 'food_restaurant':
-      return {
-        business_category: 'restaurant',
-        catalog_type: 'menu',
-        commerce_mode: 'local_delivery_and_pickup',
-        delivery_mode: 'local_delivery',
-        allows_pickup: true,
-        allows_local_delivery: true,
-        allows_national_shipping: false,
-        whatsapp_checkout_enabled: true,
-        web_order_enabled: true,
-        online_checkout_enabled: false,
-        cash_on_delivery_enabled: true,
-        default_order_method: 'whatsapp',
-        order_flow_type: 'restaurant',
-        has_inventory: false,
-        has_variants: false,
-        has_leads: false,
-      };
-    case 'catalog_quote':
-      return {
-        business_category: 'other',
-        catalog_type: 'physical_products',
-        commerce_mode: 'catalog_only',
-        delivery_mode: 'none',
-        allows_pickup: false,
-        allows_local_delivery: false,
-        allows_national_shipping: false,
-        whatsapp_checkout_enabled: true,
-        web_order_enabled: false,
-        online_checkout_enabled: false,
-        cash_on_delivery_enabled: false,
-        default_order_method: 'whatsapp',
-        order_flow_type: 'quote',
-        has_inventory: false,
-        has_variants: false,
-        has_leads: true,
-      };
-    case 'real_estate':
-      return {
-        business_category: 'other',
-        catalog_type: 'physical_products',
-        commerce_mode: 'catalog_only',
-        delivery_mode: 'none',
-        allows_pickup: false,
-        allows_local_delivery: false,
-        allows_national_shipping: false,
-        whatsapp_checkout_enabled: true,
-        web_order_enabled: false,
-        online_checkout_enabled: false,
-        cash_on_delivery_enabled: false,
-        default_order_method: 'whatsapp',
-        order_flow_type: 'lead',
-        has_inventory: false,
-        has_variants: false,
-        has_leads: true,
-      };
-    default: // retail_products
-      return {
-        business_category: 'retail',
-        catalog_type: 'physical_products',
-        commerce_mode: 'national_shipping',
-        delivery_mode: 'national_shipping',
-        allows_pickup: true,
-        allows_local_delivery: true,
-        allows_national_shipping: true,
-        whatsapp_checkout_enabled: true,
-        web_order_enabled: true,
-        online_checkout_enabled: false,
-        cash_on_delivery_enabled: false,
-        default_order_method: 'whatsapp',
-        order_flow_type: 'ecommerce',
-        has_inventory: true,
-        has_variants: false,
-        has_leads: false,
-      };
-  }
-}
-
 function verticalToLegacyBusinessType(vertical: string): string {
   switch (vertical) {
     case 'food_restaurant': return 'restaurante';
@@ -220,7 +119,7 @@ function jsonError(message: string, status: number, cors: Record<string, string>
 // user), it is removed too — auth.users deletion cascades to profiles.
 // Pre-existing owners (ownerIsNew === false) are never touched.
 async function rollbackStoreCreation(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: SupabaseClient<any, any, any, any, any>,
   storeId: string,
   ownerUserId: string,
   ownerIsNew: boolean,
@@ -311,7 +210,7 @@ Deno.serve(async (req) => {
   const required: (keyof CreateStoreWithOwnerPayload)[] = [
     'ownerFullName', 'ownerEmail', 'ownerPhone', 'ownerAccessMode',
     'name', 'slug', 'businessVertical', 'businessSubcategory', 'description', 'whatsappNumber',
-    'country', 'city', 'currency', 'mode', 'themePreset',
+    'country', 'currency', 'mode', 'themePreset',
   ];
   for (const field of required) {
     if (!payload[field]) {
@@ -320,6 +219,9 @@ Deno.serve(async (req) => {
   }
 
   payload.ownerEmail = payload.ownerEmail.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(payload.ownerEmail) || payload.ownerEmail.length > 254) {
+    return jsonError('El correo de acceso del propietario no es válido.', 400, cors);
+  }
   if (!['invitation', 'password'].includes(payload.ownerAccessMode)) {
     return jsonError('El método de acceso del propietario no es válido.', 400, cors);
   }
@@ -327,6 +229,32 @@ Deno.serve(async (req) => {
     const passwordError = ownerPasswordValidationError(payload.ownerPassword ?? '');
     if (passwordError) return jsonError(passwordError, 400, cors);
   }
+
+  const supportedVerticals = new Set([
+    'food_restaurant',
+    'retail_products',
+    'catalog_quote',
+    'real_estate',
+  ]);
+  if (!supportedVerticals.has(payload.businessVertical)) {
+    return jsonError('El tipo de empresa no es válido.', 400, cors);
+  }
+  if (payload.country !== 'CO' || payload.currency !== 'COP') {
+    return jsonError('Melosoft Commerce admite nuevas empresas únicamente en Colombia y en pesos COP.', 400, cors);
+  }
+  if (
+    !payload.location
+    || payload.location.country !== 'CO'
+    || !payload.location.department?.trim()
+    || !payload.location.city?.trim()
+  ) {
+    return jsonError('La sede principal debe tener un departamento y una ciudad válidos de Colombia.', 400, cors);
+  }
+  if (!Array.isArray(payload.businessHours) || !payload.policies) {
+    return jsonError('La configuración inicial de horarios o políticas no es válida.', 400, cors);
+  }
+  const primaryLocationCity = payload.location.city.trim();
+  const primaryLocationDepartment = payload.location.department.trim();
 
   payload.slug = payload.slug.trim().toLowerCase();
   if (
@@ -364,16 +292,35 @@ Deno.serve(async (req) => {
   // ── Resolve or create owner in Auth ─────────────────────
   let ownerUserId: string;
   let ownerIsNew = false;
+  let ownerHadProfileBefore = false;
   let ownerAccessResult: CreateStoreWithOwnerResponse['ownerAccessResult'];
 
-  // Check if a profile already exists with this email
-  const { data: existingProfile } = await adminClient
-    .from('profiles')
-    .select('user_id')
-    .ilike('email', payload.ownerEmail)
-    .maybeSingle();
+  // Auth is the authority for login email. A profile can be missing on a
+  // legacy account or contain an older email after an Auth email change.
+  const { data: existingAuthUserId, error: ownerLookupError } = await adminClient
+    .rpc('resolve_auth_user_id_by_email', { p_email: payload.ownerEmail });
+  if (ownerLookupError) {
+    return jsonError(`No se pudo verificar el correo de acceso: ${ownerLookupError.message}`, 500, cors);
+  }
 
-  if (existingProfile?.user_id) {
+  if (typeof existingAuthUserId === 'string' && existingAuthUserId) {
+    const { data: existingProfile, error: existingProfileError } = await adminClient
+      .from('profiles')
+      .select('user_id, status')
+      .eq('user_id', existingAuthUserId)
+      .maybeSingle();
+    if (existingProfileError) {
+      return jsonError(`No se pudo verificar el perfil del propietario: ${existingProfileError.message}`, 500, cors);
+    }
+    if (existingProfile?.status === 'inactive') {
+      return jsonError(
+        'La cuenta asociada a este correo está inactiva. Reactívala explícitamente antes de asignarle una empresa.',
+        409,
+        cors,
+      );
+    }
+    ownerHadProfileBefore = Boolean(existingProfile);
+
     // Never overwrite an existing account password: the same person may own
     // other stores. Reuse is safe for invitation mode because they already
     // have credentials; direct-password mode must use a new email instead.
@@ -384,7 +331,7 @@ Deno.serve(async (req) => {
         cors,
       );
     }
-    ownerUserId = existingProfile.user_id;
+    ownerUserId = existingAuthUserId;
     ownerAccessResult = 'existing_account';
   } else {
     const userMetadata = {
@@ -438,30 +385,32 @@ Deno.serve(async (req) => {
     ownerIsNew = true;
   }
 
-  // ── Upsert owner profile with additional fields ──────────
-  const { error: profileUpsertError } = await adminClient
-    .from('profiles')
-    .upsert(
-      {
-        user_id: ownerUserId,
-        email: payload.ownerEmail,
-        full_name: payload.ownerFullName,
-        phone: payload.ownerPhone,
-        document_type: payload.ownerDocumentType ?? null,
-        document_number: payload.ownerDocumentNumber ?? null,
-        platform_role: 'platform_member',
-        status: 'active',
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id' }
-    );
+  // Only populate personal data for a new/missing profile. An existing
+  // profile belongs to the person across every store, so creating another
+  // company must not overwrite it or alter platform_role/status.
+  const ownerProfileRow = buildOwnerProfileUpsert({
+    userId: ownerUserId,
+    email: payload.ownerEmail,
+    fullName: payload.ownerFullName,
+    phone: payload.ownerPhone,
+    documentType: payload.ownerDocumentType ?? null,
+    documentNumber: payload.ownerDocumentNumber ?? null,
+  }, ownerHadProfileBefore);
 
-  if (profileUpsertError) {
-    if (ownerIsNew) {
-      await adminClient.auth.admin.deleteUser(ownerUserId).catch(() => undefined);
+  if (ownerProfileRow) {
+    const { error: profileUpsertError } = await adminClient
+      .from('profiles')
+      .upsert(ownerProfileRow, { onConflict: 'user_id' });
+
+    if (profileUpsertError) {
+      if (ownerIsNew) {
+        await adminClient.auth.admin.deleteUser(ownerUserId).catch(() => undefined);
+      }
+      return jsonError(`Failed to create owner profile: ${profileUpsertError.message}`, 500, cors);
     }
-    return jsonError(`Failed to upsert owner profile: ${profileUpsertError.message}`, 500, cors);
   }
+
+  const commerceDefaults = getStoreCreationCommerceDefaults(payload.businessVertical);
 
   // ── Create store ────────────────────────────────────────
   const { data: store, error: storeError } = await adminClient
@@ -479,7 +428,7 @@ Deno.serve(async (req) => {
       support_email: payload.supportEmail ?? null,
       whatsapp_number: payload.whatsappNumber,
       country: payload.country,
-      city: payload.city,
+      city: primaryLocationCity,
       currency: payload.currency,
       status: 'active',
     })
@@ -552,13 +501,13 @@ Deno.serve(async (req) => {
         is_primary: true,
         is_active: true,
         is_public: payload.location.isPublic,
-        allows_pickup: true,
-        allows_local_delivery: false,
+        allows_pickup: commerceDefaults.allows_pickup,
+        allows_local_delivery: commerceDefaults.allows_local_delivery,
         sort_order: 0,
         address_line: payload.location.addressLine ?? null,
         neighborhood: payload.location.neighborhood ?? null,
-        city: payload.location.city ?? null,
-        department: payload.location.department ?? null,
+        city: primaryLocationCity,
+        department: primaryLocationDepartment,
         country: payload.location.country || payload.country,
         postal_code: payload.location.postalCode ?? null,
         timezone: 'America/Bogota',
@@ -659,7 +608,6 @@ Deno.serve(async (req) => {
   // by the on_store_created trigger (migration 004).
 
   // ── Create commerce settings ─────────────────────────────
-  const commerceDefaults = getCommerceDefaults(payload.businessVertical);
   const { error: commerceError } = await adminClient
     .from('store_commerce_settings')
     .insert({

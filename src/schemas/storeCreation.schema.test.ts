@@ -48,3 +48,12 @@ describe('store creation owner access validation', () => {
     ).rejects.toThrow(/no coinciden/);
   });
 });
+
+describe('store creation operating region validation', () => {
+  it('only accepts the Colombia and COP combination supported by checkout', async () => {
+    await expect(storeCreationSchema.validateAt('country', { country: 'CO' })).resolves.toBe('CO');
+    await expect(storeCreationSchema.validateAt('currency', { currency: 'COP' })).resolves.toBe('COP');
+    await expect(storeCreationSchema.validateAt('country', { country: 'MX' })).rejects.toThrow(/Colombia/);
+    await expect(storeCreationSchema.validateAt('currency', { currency: 'USD' })).rejects.toThrow(/COP/);
+  });
+});

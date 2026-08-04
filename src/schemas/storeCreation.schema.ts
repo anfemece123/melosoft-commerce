@@ -102,9 +102,8 @@ export const storeCreationSchema = Yup.object({
   logoUrl: Yup.string().trim().url('Logo inválido').nullable(),
   supportEmail: Yup.string().trim().email('Email inválido').nullable(),
   whatsappNumber: colombianMobilePhoneSchema.required('Número de WhatsApp requerido'),
-  country: Yup.string().trim().length(2, 'Código de 2 letras').required('País requerido'),
-  city: Yup.string().trim().max(100).required('Ciudad requerida'),
-  currency: Yup.string().trim().length(3, 'Código de 3 letras').required('Moneda requerida'),
+  country: Yup.string().oneOf(['CO'], 'Por ahora solo está disponible Colombia').required('País requerido'),
+  currency: Yup.string().oneOf(['COP'], 'Por ahora solo está disponible COP').required('Moneda requerida'),
 
   // Section 3 — Design
   mode: Yup.string().oneOf(['light', 'dark'], 'Modo de tema inválido.').required('Modo de tema requerido'),
@@ -124,7 +123,6 @@ export const storeCreationSchema = Yup.object({
   businessHours: Yup.array().of(businessHourSchema).required(),
 
   // Section 6 — Policies
-  usePolicyDefaults: Yup.boolean().required(),
   shippingPolicy: Yup.string().trim().max(3000).nullable(),
   returnsPolicy: Yup.string().trim().max(3000).nullable(),
   warrantyPolicy: Yup.string().trim().max(3000).nullable(),

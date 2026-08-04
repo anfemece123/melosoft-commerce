@@ -58,22 +58,22 @@ function HomeSkeletonHeader({
       }}
     >
       <div className={`relative mx-auto ${STOREFRONT_CONTAINER_CLASS} px-4 py-4 md:px-6`}>
-        <div className="flex items-center justify-between gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr]">
-          <div className="flex min-w-0 items-center gap-3 md:gap-4">
+        <div className="flex items-center justify-between gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+          <div className="flex min-w-0 flex-1 items-center gap-3 md:gap-4 lg:flex-none">
             <PublicStoreLogo
               logoUrl={branding?.logoUrl ?? null}
               storeName={storeName}
               sizeClassName="h-[52px] w-[52px] md:h-[64px] md:w-[64px]"
               fallbackColor={theme.primary}
-              outerClassName="border shadow-sm"
+              outerClassName="border shadow-sm shrink-0"
               outerStyle={{
                 borderColor: theme.border,
                 backgroundColor: theme.surface,
                 boxShadow: `0 10px 24px ${theme.shadow}`,
               }}
             />
-            <div className="min-w-0">
-              <p className="truncate text-[22px] font-semibold leading-none tracking-[-0.03em] md:text-[26px]" style={{ color: theme.text }}>
+            <div className="min-w-0 flex-1">
+              <p className="line-clamp-2 max-w-full break-words text-[18px] font-semibold leading-[1.15] tracking-[-0.03em] sm:text-[22px] md:text-[26px] lg:block lg:truncate lg:leading-none" style={{ color: theme.text }}>
                 {storeName}
               </p>
             </div>
