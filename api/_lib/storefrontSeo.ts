@@ -1,6 +1,6 @@
 const DEFAULT_DESCRIPTION = 'Compra en línea de forma fácil y segura.';
 const DEFAULT_BRAND_IMAGE_PATH = '/branding/melosoft-mark.png';
-const OG_CARD_LAYOUT_VERSION = 'image-only-square-v5';
+const OG_CARD_LAYOUT_VERSION = 'logo-square-png-v6';
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
 const RESERVED_SUBDOMAINS = new Set([
   'admin', 'api', 'app', 'assets', 'auth', 'beta', 'blog', 'cdn', 'commerce',
@@ -358,14 +358,20 @@ async function getProductLinks(storeSlug: string): Promise<ProductLinkRow[]> {
   );
 }
 
-function storeStructuredData(store: StoreSeoRow, canonicalUrl: string, imageUrl: string): Record<string, unknown>[] {
+function storeStructuredData(
+  store: StoreSeoRow,
+  canonicalUrl: string,
+  logoUrl: string,
+  imageUrl: string,
+): Record<string, unknown>[] {
   const organization: Record<string, unknown> = {
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name: store.store_name,
     url: canonicalUrl,
     description: cleanText(store.description || store.slogan),
-    logo: imageUrl,
+    logo: logoUrl,
+    image: imageUrl,
   };
   if (store.city || store.country) {
     organization.address = {
@@ -540,7 +546,7 @@ export async function resolveSeoDocument(request: Request): Promise<SeoDocument 
     canonicalBaseUrl: baseUrl,
     imageUrl: fallbackImage,
     logoUrl,
-    ogImageUrl: buildOgImageUrl(request, storeSlug, routePath, [pageTitle, descriptions[kind], fallbackImage]),
+    ogImageUrl: buildOgImageUrl(request, storeSlug, routePath, [pageTitle, descriptions[kind], logoUrl]),
     accentColor,
     backgroundColor,
     currency: store.currency,
@@ -548,7 +554,7 @@ export async function resolveSeoDocument(request: Request): Promise<SeoDocument 
     available: null,
     categoryName: null,
     productLinks,
-    structuredData: storeStructuredData(store, childUrl(baseUrl, ''), fallbackImage),
+    structuredData: storeStructuredData(store, childUrl(baseUrl, ''), logoUrl, fallbackImage),
   };
 }
 

@@ -3,7 +3,8 @@
 ## Qué queda automatizado
 
 - WhatsApp, Facebook, X, LinkedIn, Slack, Telegram, Discord, Pinterest y los buscadores reciben HTML generado en Vercel con Open Graph, Twitter Cards, canonical y JSON-LD.
-- Cada empresa, producto y oferta obtiene una imagen social cuadrada de 1200×1200 en `/api/og-card`, sin texto incrustado ni recortes.
+- El enlace principal de cada empresa usa exclusivamente su logo en una imagen PNG cuadrada de 1200×1200, centrada, con espacio de seguridad y sin recortes. Productos y ofertas conservan su imagen específica.
+- El generador acepta los formatos WebP y AVIF producidos por la app y los convierte a PNG compatible con WhatsApp y las demás redes.
 - La SPA se publica como `app.html` para que el archivo estático no intercepte la ruta `/` antes del rewrite SEO de las empresas en Vercel.
 - Cada hostname de tienda publica su propio `/robots.txt` y `/sitemap.xml`.
 - El sitemap solo incluye empresas activas, productos públicos activos, ofertas visibles vigentes y cartas habilitadas.
@@ -42,9 +43,10 @@ No se usa Google Indexing API: Google la limita a páginas con `JobPosting` o ev
 ```bash
 curl -A 'WhatsApp/2.0' 'https://{empresa}.melosoftapp.com/p/{producto}'
 curl 'https://{empresa}.melosoftapp.com/sitemap.xml'
-curl -I 'https://{empresa}.melosoftapp.com/api/og-card?storeSlug={empresa}&routePath=/p/{producto}'
+curl -o /tmp/og-card.png 'https://{empresa}.melosoftapp.com/api/og-card?storeSlug={empresa}&routePath=/'
+file /tmp/og-card.png
 ```
 
-La primera respuesta debe contener `og:title`, `og:description`, `og:image`, `og:url`, canonical y JSON-LD. La tercera debe responder como imagen PNG de 1200×1200.
+La primera respuesta debe contener `og:title`, `og:description`, `og:image`, `og:url`, canonical y JSON-LD. El archivo descargado debe ser una imagen PNG real de 1200×1200 y nunca una respuesta vacía.
 
 Para refrescar tarjetas que una red social haya almacenado previamente, usar el Sharing Debugger de Meta y solicitar **Scrape Again** después del despliegue.

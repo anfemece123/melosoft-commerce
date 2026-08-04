@@ -105,10 +105,36 @@ describe('storefront SEO resolver', () => {
     expect(document?.heading).toBe('Café Central');
     expect(document?.description).toBe('El mejor café de la ciudad.');
     expect(document?.canonicalUrl).toBe('https://cafe-central.melosoftapp.com');
+    expect(document?.logoUrl).toBe('https://cdn.example.com/logo.png');
     expect(ogImageUrl.pathname).toBe('/api/og-card');
     expect(ogImageUrl.searchParams.get('storeSlug')).toBe('cafe-central');
     expect(ogImageUrl.searchParams.get('routePath')).toBe('/');
     expect(ogImageUrl.searchParams.get('v')).toBeTruthy();
+    expect(document?.structuredData[0]).toMatchObject({
+      '@type': 'Organization',
+      logo: 'https://cdn.example.com/logo.png',
+      image: 'https://cdn.example.com/hero.jpg',
+    });
+  });
+
+  it('changes the main store social image version when its logo changes', async () => {
+    let logoUrl = 'https://cdn.example.com/logo-v1.webp';
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('/rpc/resolve_store_domain')) return json([]);
+      if (url.pathname.endsWith('/public_store_pages')) return json([{ ...storeRow, logo_url: logoUrl }]);
+      if (url.pathname.endsWith('/public_product_pages')) return json([]);
+      throw new Error(`Unexpected request: ${url}`);
+    }));
+
+    const request = new Request(
+      'https://commerce.melosoftapp.com/api/storefront-preview?storeSlug=cafe-central&routePath=/',
+    );
+    const first = await resolveSeoDocument(request);
+    logoUrl = 'https://cdn.example.com/logo-v2.webp';
+    const second = await resolveSeoDocument(request);
+
+    expect(first?.ogImageUrl).not.toBe(second?.ogImageUrl);
   });
 
   it('keeps a verified custom hostname as the canonical origin', async () => {
