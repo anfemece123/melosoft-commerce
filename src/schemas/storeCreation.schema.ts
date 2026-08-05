@@ -10,25 +10,58 @@ import {
 import { getOwnerPasswordValidationError } from '@/lib/auth/ownerPassword';
 import { colombianMobilePhoneSchema } from './phone.schema';
 
+const timeSchema = Yup.string()
+  .matches(/^([01]\d|2[0-3]):[0-5]\d$/, 'Usa una hora válida')
+  .nullable();
+
 const businessHourSchema = Yup.object({
   dayOfWeek: Yup.number().min(0).max(6).required(),
   isOpen: Yup.boolean().required(),
-  opensAt: Yup.string()
-    .nullable()
+  opensAt: timeSchema
     .when('isOpen', {
       is: true,
       then: (s) => s.required('Hora de apertura requerida si el día está abierto'),
       otherwise: (s) => s.nullable(),
     }),
-  closesAt: Yup.string()
-    .nullable()
+  closesAt: timeSchema
     .when('isOpen', {
       is: true,
       then: (s) => s.required('Hora de cierre requerida si el día está abierto'),
       otherwise: (s) => s.nullable(),
     }),
-  breakStartsAt: Yup.string().nullable(),
-  breakEndsAt: Yup.string().nullable(),
+  breakStartsAt: timeSchema,
+  breakEndsAt: timeSchema,
+}).test('valid-business-hours', function validateBusinessHours(value) {
+  if (!value?.isOpen || !value.opensAt || !value.closesAt) return true;
+
+  if (value.opensAt >= value.closesAt) {
+    return this.createError({
+      path: `${this.path}.closesAt`,
+      message: 'La hora de cierre debe ser posterior a la apertura',
+    });
+  }
+
+  const hasBreakStart = Boolean(value.breakStartsAt);
+  const hasBreakEnd = Boolean(value.breakEndsAt);
+  if (hasBreakStart !== hasBreakEnd) {
+    return this.createError({
+      path: `${this.path}.${hasBreakStart ? 'breakEndsAt' : 'breakStartsAt'}`,
+      message: 'Completa las dos horas del cierre intermedio',
+    });
+  }
+
+  if (value.breakStartsAt && value.breakEndsAt && !(
+    value.opensAt < value.breakStartsAt
+    && value.breakStartsAt < value.breakEndsAt
+    && value.breakEndsAt < value.closesAt
+  )) {
+    return this.createError({
+      path: `${this.path}.breakStartsAt`,
+      message: 'El cierre intermedio debe quedar dentro del horario del día',
+    });
+  }
+
+  return true;
 });
 
 export const storeCreationSchema = Yup.object({

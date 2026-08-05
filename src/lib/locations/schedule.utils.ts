@@ -37,6 +37,38 @@ export function createInterval(): ScheduleIntervalInput {
   return { startsAt: '08:00', endsAt: '18:00', endsNextDay: false, isAllDay: false };
 }
 
+/**
+ * Suggests a useful, non-overlapping interval when a day already has hours.
+ * The evening slot comes first because split restaurant shifts commonly use it.
+ * The user can still edit the suggested hours before saving.
+ */
+export function createNextInterval(intervals: ScheduleIntervalInput[]): ScheduleIntervalInput {
+  const candidates: ScheduleIntervalInput[] = [
+    { startsAt: '18:00', endsAt: '22:00', endsNextDay: false, isAllDay: false },
+    { startsAt: '08:00', endsAt: '12:00', endsNextDay: false, isAllDay: false },
+    { startsAt: '12:00', endsAt: '16:00', endsNextDay: false, isAllDay: false },
+    { startsAt: '22:00', endsAt: '02:00', endsNextDay: true, isAllDay: false },
+  ];
+
+  const normalized = intervals.flatMap((interval) => {
+    if (interval.isAllDay) return [{ start: 0, end: 1440 }];
+    const start = minutes(interval.startsAt);
+    const end = minutes(interval.endsAt);
+    if (start === null || end === null) return [];
+    return [{ start, end: interval.endsNextDay ? end + 1440 : end }];
+  });
+
+  const available = candidates.find((candidate) => {
+    const start = minutes(candidate.startsAt);
+    const endValue = minutes(candidate.endsAt);
+    if (start === null || endValue === null) return false;
+    const end = candidate.endsNextDay ? endValue + 1440 : endValue;
+    return normalized.every((current) => end <= current.start || start >= current.end);
+  });
+
+  return available ?? createInterval();
+}
+
 export function intervalsToWeek(intervals: LocationScheduleInterval[]): WeeklySchedule {
   const week = createEmptyWeek();
   for (const interval of intervals) {

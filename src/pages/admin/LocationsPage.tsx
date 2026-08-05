@@ -52,6 +52,12 @@ const EMPTY_FORM: LocationForm = {
   pickupNotes: null,
 };
 
+const ORDER_SCHEDULE_LABELS: Record<StoreLocation['orderScheduleMode'], string> = {
+  always_open: 'Pedidos: 24 horas',
+  same_as_business: 'Pedidos: horario del local',
+  custom: 'Pedidos: horario personalizado',
+};
+
 export function LocationsPage() {
   const { storeId } = useParams<{ storeId: string }>();
   const [locations, setLocations] = useState<StoreLocation[]>([]);
@@ -232,7 +238,7 @@ export function LocationsPage() {
       top={(
         <PageHeader
           title="Sucursales"
-          description="Gestiona las sedes y puntos de atención de tu empresa."
+          description="Gestiona las sedes, sus horarios públicos y cuándo pueden recibir pedidos."
           action={
             !showForm ? (
               <Button onClick={() => setShowForm(true)} size="sm">
@@ -412,6 +418,9 @@ export function LocationsPage() {
                         </Badge>
                       )}
                       {!loc.isActive && <Badge variant="warning">Inactiva</Badge>}
+                      <Badge variant={loc.orderScheduleMode === 'always_open' ? 'success' : 'neutral'}>
+                        {ORDER_SCHEDULE_LABELS[loc.orderScheduleMode]}
+                      </Badge>
                     </div>
                     {(loc.addressLine || loc.city) && (
                       <p className="text-xs text-gray-500 mt-0.5">
@@ -433,10 +442,10 @@ export function LocationsPage() {
                     size="sm"
                     variant={scheduleLocationId === loc.id ? 'secondary' : 'ghost'}
                     onClick={() => setScheduleLocationId((current) => current === loc.id ? null : loc.id)}
-                    title="Configurar horarios"
+                    title="Configurar horario del local y horario de pedidos"
                   >
                     <Clock3 className="mr-1.5 h-4 w-4" />
-                    Horarios
+                    Horarios y pedidos
                   </Button>
                   {!loc.isPrimary && (
                     <Button
@@ -477,6 +486,7 @@ export function LocationsPage() {
             {scheduleLocationId === loc.id && (
               <LocationScheduleEditor
                 location={loc}
+                initialTab="ordering"
                 onClose={() => setScheduleLocationId(null)}
                 onSaved={load}
               />

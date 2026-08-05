@@ -26,6 +26,7 @@ import {
   cloneWeek,
   createEmptyWeek,
   createInterval,
+  createNextInterval,
   formatScheduleInterval,
   SCHEDULE_DAY_NAMES,
   SCHEDULE_DAY_ORDER,
@@ -52,6 +53,7 @@ interface LocationScheduleEditorProps {
   location: StoreLocation;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
+  initialTab?: EditorTab;
 }
 
 type EditorTab = 'business' | 'ordering' | 'exceptions';
@@ -134,30 +136,52 @@ function WeeklyScheduleEditor({
             <div key={day} className="grid gap-3 px-4 py-3 lg:grid-cols-[110px_1fr]">
               <div className="pt-2">
                 <p className="text-sm font-semibold text-gray-800">{SCHEDULE_DAY_NAMES[day]}</p>
-                <p className="text-xs text-gray-400">{intervals.length === 0 ? 'Cerrado' : 'Abierto'}</p>
+                <p className="text-xs text-gray-400">
+                  {intervals.length === 0
+                    ? 'Cerrado'
+                    : intervals.length === 1
+                      ? '1 franja'
+                      : `${intervals.length} franjas`}
+                </p>
               </div>
 
               <div className="space-y-2">
                 {intervals.map((interval, index) => (
-                  <div key={index} className="rounded-lg bg-gray-50 p-3">
-                    <div className="flex flex-wrap items-end gap-2">
+                  <div key={index} className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Franja {index + 1}
+                      </p>
+                      <button
+                        type="button"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600"
+                        aria-label={`Eliminar franja ${index + 1} del ${SCHEDULE_DAY_NAMES[day]}`}
+                        onClick={() => setDay(day, intervals.filter((_, current) => current !== index))}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap items-end gap-3">
                       {!interval.isAllDay ? (
                         <>
-                          <Input
-                            type="time"
-                            aria-label={`Hora de apertura del ${SCHEDULE_DAY_NAMES[day]}`}
-                            value={interval.startsAt ?? ''}
-                            onChange={(event) => updateInterval(day, index, { startsAt: event.target.value })}
-                            className="w-32"
-                          />
-                          <span className="pb-2 text-sm text-gray-400">a</span>
-                          <Input
-                            type="time"
-                            aria-label={`Hora de cierre del ${SCHEDULE_DAY_NAMES[day]}`}
-                            value={interval.endsAt ?? ''}
-                            onChange={(event) => updateInterval(day, index, { endsAt: event.target.value })}
-                            className="w-32"
-                          />
+                          <div className="min-w-[132px] flex-1 sm:max-w-[160px]">
+                            <Input
+                              label="Desde"
+                              type="time"
+                              aria-label={`Hora inicial de la franja ${index + 1} del ${SCHEDULE_DAY_NAMES[day]}`}
+                              value={interval.startsAt ?? ''}
+                              onChange={(event) => updateInterval(day, index, { startsAt: event.target.value })}
+                            />
+                          </div>
+                          <div className="min-w-[132px] flex-1 sm:max-w-[160px]">
+                            <Input
+                              label="Hasta"
+                              type="time"
+                              aria-label={`Hora final de la franja ${index + 1} del ${SCHEDULE_DAY_NAMES[day]}`}
+                              value={interval.endsAt ?? ''}
+                              onChange={(event) => updateInterval(day, index, { endsAt: event.target.value })}
+                            />
+                          </div>
                         </>
                       ) : (
                         <div className="flex h-10 items-center text-sm font-medium text-indigo-700">Abierto 24 horas</div>
@@ -190,14 +214,6 @@ function WeeklyScheduleEditor({
                         </label>
                       )}
 
-                      <button
-                        type="button"
-                        className="ml-auto flex h-10 w-10 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600"
-                        aria-label="Eliminar franja"
-                        onClick={() => setDay(day, intervals.filter((_, current) => current !== index))}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
                     </div>
                   </div>
                 ))}
@@ -205,12 +221,12 @@ function WeeklyScheduleEditor({
                 <Button
                   type="button"
                   size="sm"
-                  variant="ghost"
-                  onClick={() => setDay(day, [...intervals, createInterval()])}
+                  variant={intervals.length === 0 ? 'ghost' : 'secondary'}
+                  onClick={() => setDay(day, [...intervals, intervals.length === 0 ? createInterval() : createNextInterval(intervals)])}
                   disabled={intervals.some((interval) => interval.isAllDay)}
                 >
                   <Plus className="mr-1 h-3.5 w-3.5" />
-                  {intervals.length === 0 ? 'Abrir este día' : 'Agregar franja'}
+                  {intervals.length === 0 ? 'Abrir este día' : 'Agregar otra franja'}
                 </Button>
               </div>
             </div>
@@ -221,8 +237,8 @@ function WeeklyScheduleEditor({
   );
 }
 
-export function LocationScheduleEditor({ location, onClose, onSaved }: LocationScheduleEditorProps) {
-  const [tab, setTab] = useState<EditorTab>('business');
+export function LocationScheduleEditor({ location, onClose, onSaved, initialTab = 'ordering' }: LocationScheduleEditorProps) {
+  const [tab, setTab] = useState<EditorTab>(initialTab);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [businessSchedule, setBusinessSchedule] = useState<WeeklySchedule>(createEmptyWeek);
@@ -426,7 +442,12 @@ export function LocationScheduleEditor({ location, onClose, onSaved }: LocationS
             {orderMode === 'custom' && (
               <div>
                 <h4 className="text-sm font-semibold text-gray-900">Horario exclusivo para pedidos</h4>
-                <p className="mb-3 mt-1 text-xs text-gray-500">Puedes usar varias franjas y horarios nocturnos.</p>
+                <div className="mb-3 mt-2 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+                  <p className="font-medium">Puedes recibir pedidos en varios turnos el mismo día.</p>
+                  <p className="mt-1 text-xs leading-5 text-indigo-700">
+                    Ejemplo: lunes de 10:00 a 15:00 y de 18:00 a 22:00. Durante el cierre intermedio, la tienda seguirá visible pero no permitirá finalizar pedidos.
+                  </p>
+                </div>
                 <WeeklyScheduleEditor value={orderingSchedule} onChange={setOrderingSchedule} />
               </div>
             )}

@@ -57,3 +57,47 @@ describe('store creation operating region validation', () => {
     await expect(storeCreationSchema.validateAt('currency', { currency: 'USD' })).rejects.toThrow(/COP/);
   });
 });
+
+describe('store creation split business hours', () => {
+  it('accepts an intermediate closing inside the opening hours', async () => {
+    await expect(storeCreationSchema.validateAt('businessHours[0]', {
+      businessHours: [{
+        dayOfWeek: 1,
+        isOpen: true,
+        opensAt: '10:00',
+        closesAt: '22:00',
+        breakStartsAt: '15:00',
+        breakEndsAt: '18:00',
+      }],
+    })).resolves.toMatchObject({
+      breakStartsAt: '15:00',
+      breakEndsAt: '18:00',
+    });
+  });
+
+  it('rejects an intermediate closing outside the opening hours', async () => {
+    await expect(storeCreationSchema.validateAt('businessHours[0]', {
+      businessHours: [{
+        dayOfWeek: 1,
+        isOpen: true,
+        opensAt: '10:00',
+        closesAt: '22:00',
+        breakStartsAt: '09:00',
+        breakEndsAt: '18:00',
+      }],
+    })).rejects.toThrow(/dentro del horario/);
+  });
+
+  it('requires both intermediate closing times', async () => {
+    await expect(storeCreationSchema.validateAt('businessHours[0]', {
+      businessHours: [{
+        dayOfWeek: 1,
+        isOpen: true,
+        opensAt: '10:00',
+        closesAt: '22:00',
+        breakStartsAt: '15:00',
+        breakEndsAt: null,
+      }],
+    })).rejects.toThrow(/dos horas/);
+  });
+});

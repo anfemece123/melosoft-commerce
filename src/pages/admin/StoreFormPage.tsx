@@ -154,6 +154,31 @@ const DOCUMENT_TYPE_OPTIONS = [
 
 const DAY_LABELS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
+function minutesToTime(value: number): string {
+  const hours = Math.floor(value / 60).toString().padStart(2, '0');
+  const minutes = (value % 60).toString().padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+function suggestedBreak(opensAt: string | null | undefined, closesAt: string | null | undefined) {
+  const toMinutes = (value: string | null | undefined) => {
+    if (!value || !/^\d{2}:\d{2}$/.test(value)) return null;
+    const [hours, minutes] = value.split(':').map(Number);
+    return hours * 60 + minutes;
+  };
+  const start = toMinutes(opensAt);
+  const end = toMinutes(closesAt);
+  if (start === null || end === null || end <= start) {
+    return { breakStartsAt: '12:00', breakEndsAt: '14:00' };
+  }
+
+  const third = Math.max(1, Math.floor((end - start) / 3));
+  return {
+    breakStartsAt: minutesToTime(start + third),
+    breakEndsAt: minutesToTime(end - third),
+  };
+}
+
 const DEFAULT_BUSINESS_HOURS: StoreCreationFormValues['businessHours'] = [0, 1, 2, 3, 4, 5, 6].map((day) => ({
   dayOfWeek: day,
   isOpen: day >= 1 && day <= 5,
@@ -514,7 +539,7 @@ export function StoreFormPage() {
     formik.submitCount > 0 && Array.isArray(formik.errors.businessHours)
       ? (formik.errors.businessHours as Array<Record<string, string> | undefined>).map((rowErr) => {
           if (!rowErr || typeof rowErr !== 'object') return undefined;
-          return rowErr.opensAt ?? rowErr.closesAt;
+          return rowErr.opensAt ?? rowErr.closesAt ?? rowErr.breakStartsAt ?? rowErr.breakEndsAt;
         })
       : [];
 
@@ -1258,37 +1283,38 @@ export function StoreFormPage() {
             <SectionHeader
               icon={<Clock className="w-4 h-4 text-indigo-600" />}
               title="Horario del establecimiento"
-              description="Horario visible al público en el ecommerce. Opcional — puedes ajustarlo después desde la configuración de la tienda."
+              description="Horario visible al público. En restaurantes también define cuándo se reciben pedidos; después puede personalizarse por sede."
             />
             <div className="space-y-2">
               {formik.values.businessHours.map((hour, idx) => (
                 <div
                   key={hour.dayOfWeek}
                   className={cn(
-                    'grid grid-cols-12 gap-2 items-center py-2 px-1 rounded-lg text-sm',
-                    hour.isOpen ? 'bg-green-50' : 'bg-gray-50'
+                    'rounded-xl border px-3 py-3 text-sm',
+                    hour.isOpen ? 'border-green-100 bg-green-50/70' : 'border-gray-100 bg-gray-50'
                   )}
                 >
-                  {/* Day toggle */}
-                  <div className="col-span-3 flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={hour.isOpen}
-                      onChange={(e) => {
-                        const updated = [...formik.values.businessHours];
-                        updated[idx] = { ...updated[idx], isOpen: e.target.checked };
-                        void formik.setFieldValue('businessHours', updated);
-                      }}
-                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span className={cn('font-medium text-xs', hour.isOpen ? 'text-gray-800' : 'text-gray-400')}>
-                      {DAY_LABELS[hour.dayOfWeek]}
-                    </span>
-                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="flex min-w-[110px] cursor-pointer items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={hour.isOpen}
+                        onChange={(e) => {
+                          const updated = [...formik.values.businessHours];
+                          updated[idx] = { ...updated[idx], isOpen: e.target.checked };
+                          void formik.setFieldValue('businessHours', updated);
+                        }}
+                        className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span className={cn('text-xs font-medium', hour.isOpen ? 'text-gray-800' : 'text-gray-400')}>
+                        {DAY_LABELS[hour.dayOfWeek]}
+                      </span>
+                    </label>
 
-                  {hour.isOpen ? (
-                    <>
-                      <div className="col-span-4">
+                    {hour.isOpen ? (
+                      <>
+                        <label className="min-w-[120px] flex-1 sm:max-w-[150px]">
+                          <span className="mb-1 block text-[11px] font-medium text-gray-500">Abre</span>
                         <input
                           type="time"
                           value={hour.opensAt ?? ''}
@@ -1297,11 +1323,11 @@ export function StoreFormPage() {
                             updated[idx] = { ...updated[idx], opensAt: e.target.value };
                             void formik.setFieldValue('businessHours', updated);
                           }}
-                          className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:ring-1 focus:ring-indigo-400 focus:outline-none"
+                          className="w-full rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
                         />
-                      </div>
-                      <div className="col-span-1 text-center text-gray-400 text-xs">—</div>
-                      <div className="col-span-4">
+                        </label>
+                        <label className="min-w-[120px] flex-1 sm:max-w-[150px]">
+                          <span className="mb-1 block text-[11px] font-medium text-gray-500">Cierra</span>
                         <input
                           type="time"
                           value={hour.closesAt ?? ''}
@@ -1310,15 +1336,70 @@ export function StoreFormPage() {
                             updated[idx] = { ...updated[idx], closesAt: e.target.value };
                             void formik.setFieldValue('businessHours', updated);
                           }}
-                          className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:ring-1 focus:ring-indigo-400 focus:outline-none"
+                          className="w-full rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
                         />
+                        </label>
+                        <button
+                          type="button"
+                          className="ml-auto rounded-lg px-3 py-2 text-xs font-medium text-indigo-700 hover:bg-indigo-50"
+                          onClick={() => {
+                            const updated = [...formik.values.businessHours];
+                            const hasBreak = Boolean(hour.breakStartsAt || hour.breakEndsAt);
+                            updated[idx] = {
+                              ...updated[idx],
+                              ...(hasBreak
+                                ? { breakStartsAt: null, breakEndsAt: null }
+                                : suggestedBreak(hour.opensAt, hour.closesAt)),
+                            };
+                            void formik.setFieldValue('businessHours', updated);
+                          }}
+                        >
+                          {hour.breakStartsAt || hour.breakEndsAt ? 'Quitar cierre intermedio' : '+ Agregar cierre intermedio'}
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-xs italic text-gray-400">Cerrado</span>
+                    )}
+                  </div>
+
+                  {hour.isOpen && (hour.breakStartsAt || hour.breakEndsAt) && (
+                    <div className="mt-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-3 sm:ml-[122px]">
+                      <p className="mb-2 text-xs font-medium text-amber-900">Cierre intermedio</p>
+                      <div className="flex flex-wrap items-end gap-3">
+                        <label className="min-w-[120px] flex-1 sm:max-w-[150px]">
+                          <span className="mb-1 block text-[11px] text-amber-800">Deja de recibir a las</span>
+                          <input
+                            type="time"
+                            value={hour.breakStartsAt ?? ''}
+                            onChange={(e) => {
+                              const updated = [...formik.values.businessHours];
+                              updated[idx] = { ...updated[idx], breakStartsAt: e.target.value };
+                              void formik.setFieldValue('businessHours', updated);
+                            }}
+                            className="w-full rounded-lg border border-amber-200 bg-white px-2 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                          />
+                        </label>
+                        <label className="min-w-[120px] flex-1 sm:max-w-[150px]">
+                          <span className="mb-1 block text-[11px] text-amber-800">Vuelve a recibir a las</span>
+                          <input
+                            type="time"
+                            value={hour.breakEndsAt ?? ''}
+                            onChange={(e) => {
+                              const updated = [...formik.values.businessHours];
+                              updated[idx] = { ...updated[idx], breakEndsAt: e.target.value };
+                              void formik.setFieldValue('businessHours', updated);
+                            }}
+                            className="w-full rounded-lg border border-amber-200 bg-white px-2 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                          />
+                        </label>
+                        <p className="pb-2 text-xs leading-5 text-amber-800">
+                          Se guardarán dos franjas independientes para este día.
+                        </p>
                       </div>
-                    </>
-                  ) : (
-                    <div className="col-span-9 text-xs text-gray-400 italic">Cerrado</div>
+                    </div>
                   )}
                   {businessHourRowErrors[idx] && (
-                    <p className="col-span-12 mt-0.5 text-xs text-red-600">{businessHourRowErrors[idx]}</p>
+                    <p className="mt-2 text-xs text-red-600 sm:ml-[122px]">{businessHourRowErrors[idx]}</p>
                   )}
                 </div>
               ))}
