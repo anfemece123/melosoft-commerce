@@ -80,17 +80,39 @@ export const paymentsService = {
     );
   },
 
+  // Plain INSERT, not `.upsert(..., { onConflict })` — Postgres requires
+  // table-wide SELECT privilege to resolve `ON CONFLICT DO UPDATE`'s
+  // conflict target, which migration 086 deliberately revoked (only
+  // column-level SELECT remains, to keep the raw Wompi secrets unreadable
+  // by `authenticated`). A plain INSERT/UPDATE only needs column-level
+  // privileges, which `authenticated` already has. The 23505 fallback
+  // covers the rare race where the row was created between this form
+  // loading and submitting.
   async upsertStorePaymentSettings(payload: StorePaymentSettingsUpsert): Promise<StorePaymentSettings> {
     const row = mapStorePaymentSettingsUpsertToRow(payload);
     const { data, error } = await supabase
       .from('store_payment_settings')
-      .upsert(row, { onConflict: 'store_id,provider_id' })
+      .insert(row)
       .select(SAFE_PAYMENT_SETTINGS_COLUMNS)
       .single();
-    if (error) throw new Error(error.message);
-    if (!data) throw new Error('No data returned after upsert');
+    if (!error) {
+      if (!data) throw new Error('No data returned after insert');
+      return mapStorePaymentSettingsRowToStorePaymentSettings(
+        data as Parameters<typeof mapStorePaymentSettingsRowToStorePaymentSettings>[0]
+      );
+    }
+    if (error.code !== '23505') throw new Error(error.message);
+    const { data: updated, error: updateError } = await supabase
+      .from('store_payment_settings')
+      .update(row)
+      .eq('store_id', payload.storeId)
+      .eq('provider_id', payload.providerId)
+      .select(SAFE_PAYMENT_SETTINGS_COLUMNS)
+      .single();
+    if (updateError) throw new Error(updateError.message);
+    if (!updated) throw new Error('No data returned after update');
     return mapStorePaymentSettingsRowToStorePaymentSettings(
-      data as Parameters<typeof mapStorePaymentSettingsRowToStorePaymentSettings>[0]
+      updated as Parameters<typeof mapStorePaymentSettingsRowToStorePaymentSettings>[0]
     );
   },
 
