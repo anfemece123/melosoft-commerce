@@ -1011,6 +1011,54 @@ export interface Database {
         };
         Relationships: [];
       };
+      product_videos: {
+        Row: {
+          id: string;
+          store_id: string;
+          product_id: string;
+          owner_id: string;
+          video_url: string;
+          storage_path: string;
+          mime_type: string;
+          file_size_bytes: number;
+          duration_seconds: number;
+          width: number;
+          height: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          product_id: string;
+          owner_id: string;
+          video_url: string;
+          storage_path: string;
+          mime_type: string;
+          file_size_bytes: number;
+          duration_seconds: number;
+          width: number;
+          height: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          product_id?: string;
+          owner_id?: string;
+          video_url?: string;
+          storage_path?: string;
+          mime_type?: string;
+          file_size_bytes?: number;
+          duration_seconds?: number;
+          width?: number;
+          height?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       product_variant_options: {
         Row: {
           id: string;
@@ -3739,6 +3787,9 @@ export type ProductRowUpdate = Database['public']['Tables']['products']['Update'
 
 export type ProductImageRow = Database['public']['Tables']['product_images']['Row'];
 export type ProductImageRowInsert = Database['public']['Tables']['product_images']['Insert'];
+export type ProductVideoRow = Database['public']['Tables']['product_videos']['Row'];
+export type ProductVideoRowInsert = Database['public']['Tables']['product_videos']['Insert'];
+export type ProductVideoRowUpdate = Database['public']['Tables']['product_videos']['Update'];
 export type ProductOptionGroupRow = Database['public']['Tables']['product_option_groups']['Row'];
 export type ProductOptionGroupRowInsert = Database['public']['Tables']['product_option_groups']['Insert'];
 export type ProductOptionGroupRowUpdate = Database['public']['Tables']['product_option_groups']['Update'];

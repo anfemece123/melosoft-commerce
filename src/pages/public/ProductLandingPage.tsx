@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { MessageCircle, AlertCircle, Lock, ShoppingBag, ChevronLeft, ChevronRight, ChevronDown, Package, UtensilsCrossed } from 'lucide-react';
+import { MessageCircle, AlertCircle, Lock, ShoppingBag, ChevronLeft, ChevronRight, ChevronDown, Package, UtensilsCrossed, PlayCircle } from 'lucide-react';
 import { getProductIcon } from '@/features/products/productDescriptionIcons';
 import { StorefrontActionButton } from '@/components/public/storefront/StorefrontActionButton';
 import { StorefrontBackButton } from '@/components/public/storefront/StorefrontBackButton';
@@ -102,6 +102,7 @@ function normalizePublicProduct(p: PublicProductPage | null): PublicProductPage 
     collections: Array.isArray(p.collections) ? p.collections : [],
     facetValues: Array.isArray(p.facetValues) ? p.facetValues : [],
     images: Array.isArray(p.images) ? p.images : [],
+    productVideo: p.productVideo ?? null,
     optionGroups: Array.isArray(p.optionGroups) ? p.optionGroups : [],
     hasVariants: p.hasVariants ?? false,
     hasOptions: p.hasOptions ?? false,
@@ -291,6 +292,7 @@ function ProductLandingContent({
   const [retryToken, setRetryToken] = useState(0);
   const [productAvailability, setProductAvailability] = useState<ProductAvailabilityState | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [activeMedia, setActiveMedia] = useState<'image' | 'video'>('image');
   const [openDetailKeys, setOpenDetailKeys] = useState<string[] | null>(null);
 
   useEffect(() => {
@@ -749,6 +751,7 @@ function ProductLandingContent({
   // makes that visible immediately instead of after a failed attempt.
   function handleVariantOptionSelect(optionId: string, valueId: string) {
     setActiveImageIndex(0);
+    setActiveMedia('image');
     setSelectedValueIds((current) => {
       const next: Record<string, string> = { ...current, [optionId]: valueId };
       for (const otherOptionId of Object.keys(next)) {
@@ -766,10 +769,12 @@ function ProductLandingContent({
   }
 
   function showPreviousImage() {
+    setActiveMedia('image');
     setActiveImageIndex((current) => (current - 1 + safeGalleryImages.length) % safeGalleryImages.length);
   }
 
   function showNextImage() {
+    setActiveMedia('image');
     setActiveImageIndex((current) => (current + 1) % safeGalleryImages.length);
   }
 
@@ -826,12 +831,15 @@ function ProductLandingContent({
           <section className="grid gap-3 lg:grid-cols-[56px_minmax(0,1fr)] lg:items-start">
             <div className="order-2 flex gap-2 overflow-x-auto pb-2 lg:order-1 lg:flex-col lg:overflow-visible lg:pb-0">
               {safeGalleryImages.map((image, index) => {
-                const selected = index === renderedActiveImageIndex;
+                const selected = activeMedia === 'image' && index === renderedActiveImageIndex;
                 return (
                   <button
                     key={`${image.imageUrl}-${index}`}
                     type="button"
-                    onClick={() => setActiveImageIndex(index)}
+                    onClick={() => {
+                      setActiveMedia('image');
+                      setActiveImageIndex(index);
+                    }}
                     className="w-12 shrink-0 overflow-hidden rounded-sm border transition lg:w-16"
                     style={{
                       borderColor: selected ? theme.text : theme.border,
@@ -851,17 +859,62 @@ function ProductLandingContent({
                   </button>
                 );
               })}
+              {currentProduct.productVideo && (
+                <button
+                  type="button"
+                  onClick={() => setActiveMedia('video')}
+                  className="relative w-12 shrink-0 overflow-hidden rounded-sm border transition lg:w-16"
+                  style={{
+                    borderColor: activeMedia === 'video' ? theme.text : theme.border,
+                    backgroundColor: theme.surface,
+                  }}
+                  aria-label="Ver video del producto"
+                >
+                  <div className="relative aspect-square">
+                    {currentProduct.mainImageUrl ? (
+                      <img
+                        src={currentProduct.mainImageUrl}
+                        alt=""
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      renderImageFallback('h-4 w-4')
+                    )}
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/35 text-white">
+                      <PlayCircle className="h-6 w-6" />
+                    </span>
+                  </div>
+                </button>
+              )}
             </div>
 
             <div className="order-1 lg:order-2">
               <div className="relative aspect-square overflow-hidden rounded-sm" style={{ backgroundColor: theme.surface }}>
-                <ProductImageZoom
-                  src={activeGalleryImage?.imageUrl || null}
-                  alt={activeGalleryImage?.altText || product.productName}
-                  fallback={renderImageFallback('h-10 w-10')}
-                />
+                {activeMedia === 'video' && currentProduct.productVideo ? (
+                  <video
+                    controls
+                    playsInline
+                    preload="none"
+                    poster={currentProduct.mainImageUrl ?? undefined}
+                    className="h-full w-full object-contain"
+                    aria-label={`Video de ${currentProduct.productName}`}
+                  >
+                    <source
+                      src={currentProduct.productVideo.videoUrl}
+                      type={currentProduct.productVideo.mimeType}
+                    />
+                    Tu navegador no puede reproducir este video.
+                  </video>
+                ) : (
+                  <ProductImageZoom
+                    src={activeGalleryImage?.imageUrl || null}
+                    alt={activeGalleryImage?.altText || product.productName}
+                    fallback={renderImageFallback('h-10 w-10')}
+                  />
+                )}
 
-                {safeGalleryImages.length > 1 && (
+                {activeMedia === 'image' && safeGalleryImages.length > 1 && (
                   <div className="absolute bottom-4 right-4 flex items-center gap-2">
                     <button
                       type="button"

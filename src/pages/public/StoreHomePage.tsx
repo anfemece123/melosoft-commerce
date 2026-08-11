@@ -50,6 +50,7 @@ import { writePublicScrollPosition } from '@/lib/storefront/publicScrollRestorat
 import { useResolvedStoreSlug } from '@/lib/storefront/storefrontDomainContext';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 import { resolveHeroCtaHref } from '@/lib/storefront/heroCta';
+import { getVariantPriceRange } from '@/lib/products/productVariants.utils';
 
 interface StoreHomeCachePayload {
   store: PublicStorePage | null;
@@ -111,7 +112,10 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
         setContentLoading(true);
       }
       try {
-        const storeData = await storesService.getPublicStoreBySlug(storeSlug);
+        // PublicLayout resolves the store branding before mounting the page.
+        // Reuse it when available so the first paint does not issue a second
+        // identical request while the storefront skeleton is already visible.
+        const storeData = storeBranding ?? await storesService.getPublicStoreBySlug(storeSlug);
         setStore(storeData);
         setStoreResolved(true);
         if (!storeData?.storeId) {
@@ -155,7 +159,7 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
       }
     }
     void load();
-  }, [cacheKey, cachedPayload, storeSlug, retryToken]);
+  }, [cacheKey, cachedPayload, storeBranding, storeSlug, retryToken]);
 
   useEffect(() => {
     const isReady = !contentLoading;
@@ -452,7 +456,7 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
                             </span>
                           </div>
                         )}
-                        {!isUnavailable && hasActiveDiscount(product.regularPrice, product.salePrice) ? (
+                        {!isUnavailable && !product.hasVariants && hasActiveDiscount(product.regularPrice, product.salePrice) ? (
                           <div className="absolute left-3 top-3">
                             <DiscountBadge
                               percentage={calculateDiscountPercentage(
@@ -486,7 +490,20 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
                         </div>}
                         <div className="mt-1.5 min-h-[2rem]">
                           <div className="min-w-0">
-                            {hasActiveDiscount(product.regularPrice, product.salePrice) ? (
+                            {product.hasVariants ? (() => {
+                              const range = getVariantPriceRange(product);
+                              return (
+                                <span className="text-base font-bold" style={{ color: theme.text }}>
+                                  {range && range.min !== range.max
+                                    ? `Desde ${formatCurrency(range.min, 'es-CO', store.currency)}`
+                                    : formatCurrency(
+                                        range?.min ?? getActivePrice(product.regularPrice, product.salePrice),
+                                        'es-CO',
+                                        store.currency
+                                      )}
+                                </span>
+                              );
+                            })() : hasActiveDiscount(product.regularPrice, product.salePrice) ? (
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="text-base font-bold" style={{ color: theme.text }}>
                                   {formatCurrency(

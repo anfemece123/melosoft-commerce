@@ -1,5 +1,4 @@
 import type { CSSProperties } from 'react';
-import { Hamburger } from 'lucide-react';
 
 interface PublicStoreLogoProps {
   logoUrl: string | null;
@@ -20,7 +19,6 @@ export function PublicStoreLogo({
   outerClassName = '',
   outerStyle,
   imageClassName = '',
-  iconClassName = '',
 }: PublicStoreLogoProps) {
   return (
     <div
@@ -34,14 +32,32 @@ export function PublicStoreLogo({
           className={`h-full w-full rounded-full object-cover ${imageClassName}`.trim()}
         />
       ) : (
-        <div className="flex h-full w-full items-center justify-center bg-white">
-          <Hamburger
-            className={iconClassName || 'h-1/2 w-1/2'}
-            style={{ color: fallbackColor }}
-            strokeWidth={2.2}
-          />
+        <div
+          className="flex h-full w-full items-center justify-center"
+          style={{ backgroundColor: fallbackColor, color: '#ffffff' }}
+        >
+          <span
+            className="text-xl font-bold tracking-tight"
+            aria-hidden="true"
+          >
+            {getStoreInitials(storeName)}
+          </span>
         </div>
       )}
     </div>
   );
+}
+
+/**
+ * A missing store logo should never turn into a food-specific icon. A compact
+ * monogram is deterministic, brand-neutral and still identifies the store
+ * while the owner uploads a logo.
+ */
+function getStoreInitials(storeName: string): string {
+  const words = storeName.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return 'M';
+  return words
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? '')
+    .join('');
 }

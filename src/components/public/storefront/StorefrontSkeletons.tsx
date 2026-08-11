@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, Package, Search, ShoppingCart, UtensilsCrossed } from 'lucide-react';
-import { PublicStoreLogo } from './PublicStoreLogo';
+import { ArrowLeft, ChevronRight, Package, UtensilsCrossed } from 'lucide-react';
 import { buildStorefrontTheme, STOREFRONT_CONTAINER_CLASS, type StorefrontTheme } from './storefrontTheme';
 import type { PublicStorePage } from '@/types/common.types';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
@@ -30,105 +29,6 @@ function buildThemeFromBranding(branding?: StorefrontBrandingLike | null) {
     textColor: branding?.textColor,
     buttonRadius: branding?.buttonRadius,
   });
-}
-
-function HomeSkeletonHeader({
-  branding,
-  hasHero,
-  showCart = false,
-}: {
-  branding?: StorefrontBrandingLike | null;
-  hasHero?: boolean;
-  showCart?: boolean;
-}) {
-  const theme = buildThemeFromBranding(branding);
-  const storeName = branding?.storeName?.trim() || 'Cargando tienda';
-
-  return (
-    <header
-      className={[
-        'relative z-40',
-        hasHero ? 'border-transparent' : 'border-b',
-      ].join(' ')}
-      style={{
-        backgroundColor: hasHero ? 'transparent' : theme.background,
-        borderColor: theme.border,
-        backdropFilter: hasHero ? 'none' : 'blur(20px)',
-        WebkitBackdropFilter: hasHero ? 'none' : 'blur(20px)',
-      }}
-    >
-      <div className={`relative mx-auto ${STOREFRONT_CONTAINER_CLASS} px-4 py-4 md:px-6`}>
-        <div className="flex items-center justify-between gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-          <div className="flex min-w-0 flex-1 items-center gap-3 md:gap-4 lg:flex-none">
-            <PublicStoreLogo
-              logoUrl={branding?.logoUrl ?? null}
-              storeName={storeName}
-              sizeClassName="h-[52px] w-[52px] md:h-[64px] md:w-[64px]"
-              fallbackColor={theme.primary}
-              outerClassName="border shadow-sm shrink-0"
-              outerStyle={{
-                borderColor: theme.border,
-                backgroundColor: theme.surface,
-                boxShadow: `0 10px 24px ${theme.shadow}`,
-              }}
-            />
-            <div className="min-w-0 flex-1">
-              <p className="line-clamp-2 max-w-full break-words text-[18px] font-semibold leading-[1.15] tracking-[-0.03em] sm:text-[22px] md:text-[26px] lg:block lg:truncate lg:leading-none" style={{ color: theme.text }}>
-                {storeName}
-              </p>
-            </div>
-          </div>
-
-          <div className="hidden items-center justify-center gap-4 lg:flex">
-            <Skeleton className="h-3 w-12 rounded-full" style={{ backgroundColor: theme.softPrimary }} />
-            <Skeleton className="h-3 w-16 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
-            <Skeleton className="h-3 w-20 rounded-full" style={{ backgroundColor: theme.surfaceAlt }} />
-          </div>
-
-          <div className="flex items-center justify-end gap-2 md:gap-3">
-            <div
-              className="relative hidden h-10 min-w-[190px] max-w-[250px] rounded-md border lg:block"
-              style={{ borderColor: theme.border, backgroundColor: theme.surface }}
-            >
-              <Search
-                className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2"
-                style={{ color: theme.mutedText }}
-              />
-            </div>
-
-            {showCart ? (
-              <button
-                type="button"
-                className="flex h-11 w-11 items-center justify-center rounded-full border shadow-sm md:h-12 md:w-12"
-                style={{ borderColor: theme.border, backgroundColor: theme.surface, color: theme.text }}
-              >
-                <ShoppingCart className="h-5 w-5 md:h-6 md:w-6" />
-              </button>
-            ) : null}
-
-            <div
-              className="flex h-11 w-11 items-center justify-center rounded-full border shadow-sm lg:hidden"
-              style={{ borderColor: theme.border, backgroundColor: theme.surface }}
-            >
-              <Skeleton className="h-4 w-4 rounded-sm" style={{ backgroundColor: theme.softPrimary }} />
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-3 lg:hidden">
-          <div
-            className="relative h-10 rounded-md border"
-            style={{ borderColor: theme.border, backgroundColor: theme.surface }}
-          >
-            <Search
-              className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2"
-              style={{ color: theme.mutedText }}
-            />
-          </div>
-        </div>
-      </div>
-    </header>
-  );
 }
 
 /** Single product/menu-item card placeholder — mirrors `StorefrontProductCard`'s
@@ -215,11 +115,9 @@ export function StorefrontProductGridSkeleton({
 export function StorefrontHomeSkeleton({
   branding,
   hasHero = true,
-  showCart = false,
 }: {
   branding?: StorefrontBrandingLike | null;
   hasHero?: boolean;
-  showCart?: boolean;
 }) {
   const theme = buildThemeFromBranding(branding);
   const isMenu = branding?.catalogType === 'menu';
@@ -236,8 +134,6 @@ export function StorefrontHomeSkeleton({
             : theme.background,
         }}
       >
-        <HomeSkeletonHeader branding={branding} hasHero={hasHero} showCart={showCart} />
-
         {hasHero ? (
           <section className="w-full pb-8 pt-0 md:pb-12" aria-hidden="true">
             <div className="relative overflow-hidden px-6 pb-10 pt-[130px] md:px-10 md:pb-12 md:pt-[144px] lg:px-14">
@@ -278,19 +174,13 @@ export function StorefrontHomeSkeleton({
                       />
                     </div>
                     <div
-                      className="absolute right-[-6px] top-5 flex h-[94px] w-[94px] items-center justify-center rounded-full border-[3px] p-[4px] sm:right-0 sm:top-8 sm:h-[110px] sm:w-[110px] md:top-10 md:h-[132px] md:w-[132px]"
+                      className="absolute right-[-6px] top-5 h-[94px] w-[94px] rounded-full border-[3px] p-[4px] sm:right-0 sm:top-8 sm:h-[110px] sm:w-[110px] md:top-10 md:h-[132px] md:w-[132px]"
                       style={{
                         borderColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.16)' : '#d6dce2',
                         backgroundColor: theme.mode === 'dark' ? 'rgba(15,23,42,0.9)' : 'rgba(255,255,255,0.96)',
                       }}
                     >
-                      <PublicStoreLogo
-                        logoUrl={branding?.logoUrl ?? null}
-                        storeName={branding?.storeName?.trim() || 'Tienda'}
-                        sizeClassName="h-full w-full"
-                        fallbackColor={theme.primary}
-                        outerClassName={theme.mode === 'dark' ? 'border border-white/10 bg-slate-950' : 'border border-gray-200 bg-white'}
-                      />
+                      <Skeleton className="h-full w-full rounded-full" style={{ backgroundColor: theme.softPrimary }} />
                     </div>
                   </div>
                 </div>

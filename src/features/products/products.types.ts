@@ -21,6 +21,22 @@ export interface ProductImage {
   createdAt: string;
 }
 
+export interface ProductVideo {
+  id: string;
+  storeId: string;
+  productId: string;
+  ownerId: string;
+  videoUrl: string;
+  storagePath: string;
+  mimeType: 'video/mp4' | 'video/webm';
+  fileSizeBytes: number;
+  durationSeconds: number;
+  width: number;
+  height: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Product {
   id: string;
   storeId: string;

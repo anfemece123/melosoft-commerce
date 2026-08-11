@@ -37,6 +37,7 @@ import { ProductFacetAssignments } from '@/components/admin/ProductFacetAssignme
 import { ProductOptionsEditor } from '@/components/admin/ProductOptionsEditor';
 import { ProductVariantsEditor } from '@/components/admin/ProductVariantsEditor';
 import { ProductDescriptionSectionsEditor } from '@/components/admin/ProductDescriptionSectionsEditor';
+import { ProductVideoUploadField, type ProductVideoDraft } from '@/components/admin/ProductVideoUploadField';
 import { StockAdjustmentModal } from '@/components/admin/StockAdjustmentModal';
 import { MoneyInput } from '@/components/forms/MoneyInput';
 import { IntegerInput } from '@/components/forms/IntegerInput';
@@ -76,6 +77,7 @@ import type { ProductDescriptionSection, PublicStoreCategory, PublicStoreCollect
 import type { StoreFacet } from '@/features/facets/facets.types';
 import { IMAGE_ASSET_PRESETS } from '@/lib/images/imageAssetPresets';
 import { disposeLoadedImageFile, type LoadedImageFile, validateImageFile } from '@/lib/images/imageFile.utils';
+import { disposeLoadedProductVideo, validateProductVideoFile } from '@/lib/videos/videoFile.utils';
 
 const MAX_IMAGES = 5;
 
@@ -269,6 +271,11 @@ export function ProductFormPage() {
 
   const [galleryItems, setGalleryItems] = useState<ProductGalleryItem[]>([]);
   const galleryItemsRef = useRef<ProductGalleryItem[]>([]);
+  const [productVideo, setProductVideo] = useState<ProductVideoDraft | null>(null);
+  const productVideoRef = useRef<ProductVideoDraft | null>(null);
+  const [confirmDeleteVideo, setConfirmDeleteVideo] = useState(false);
+  const [videoActionLoading, setVideoActionLoading] = useState(false);
+  const [videoPreparing, setVideoPreparing] = useState(false);
   const [deletingImageId, setDeletingImageId] = useState<string | null>(null);
   const [loadingProduct, setLoadingProduct] = useState(isEditing);
   const [productNotFound, setProductNotFound] = useState(false);
@@ -301,10 +308,20 @@ export function ProductFormPage() {
     galleryItemsRef.current = galleryItems;
   }, [galleryItems]);
 
+  useEffect(() => {
+    productVideoRef.current = productVideo;
+  }, [productVideo]);
+
   useEffect(() => () => {
     galleryItemsRef.current.forEach((item) => {
       if (item.kind === 'pending') URL.revokeObjectURL(item.previewUrl);
     });
+  }, []);
+
+  useEffect(() => () => {
+    if (productVideoRef.current?.kind === 'pending') {
+      disposeLoadedProductVideo(productVideoRef.current);
+    }
   }, []);
 
   const defaultProductType = isMenu ? 'menu_item' : 'physical_product';
@@ -425,6 +442,19 @@ export function ProductFormPage() {
         const saved = isEditing && productId
           ? await productsService.updateProduct(productId, basePayload)
           : await productsService.createProduct({ ...basePayload, stock: 0 });
+
+        let videoUploadError: string | null = null;
+        if (productVideo?.kind === 'pending') {
+          try {
+            await productsService.uploadProductVideo(storeId, saved.id, productVideo.file, {
+              durationSeconds: productVideo.durationSeconds,
+              width: productVideo.width,
+              height: productVideo.height,
+            });
+          } catch (videoError) {
+            videoUploadError = mapSupabaseError(videoError);
+          }
+        }
 
         // Upload new files in their visual positions, then persist the full
         // mixed existing/new order atomically. Position zero is always the
@@ -631,7 +661,7 @@ export function ProductFormPage() {
 
         const label = entitySingular.charAt(0).toUpperCase() + entitySingular.slice(1);
 
-        if (stockFailures.length > 0 || imageFailures.length > 0) {
+        if (stockFailures.length > 0 || imageFailures.length > 0 || videoUploadError) {
           // Don't claim success when a variant's initial stock movement or
           // pending image upload failed — the variant/product data is
           // already saved correctly, but say the partial failure out loud
@@ -642,6 +672,9 @@ export function ProductFormPage() {
           }
           if (imageFailures.length > 0) {
             parts.push(`no se pudieron subir imágenes de ${imageFailures.map((l) => `"${l}"`).join(', ')}`);
+          }
+          if (videoUploadError) {
+            parts.push('no se pudo guardar el video');
           }
           notify.error(
             `${label} guardado, pero ${parts.join(' y ')}. Puedes intentarlo nuevamente desde la edición del producto.`
@@ -716,9 +749,10 @@ export function ProductFormPage() {
     if (!productId) return;
     async function load() {
       if (!productId) return;
-      const [product, images] = await Promise.all([
+      const [product, images, video] = await Promise.all([
         productsService.getProductById(productId),
         productsService.getProductImages(productId),
+        productsService.getProductVideo(productId),
       ]);
       const optionGroupsData = await productOptionsService.getProductOptionGroups(productId);
       if (product) {
@@ -755,6 +789,7 @@ export function ProductFormPage() {
           kind: 'existing' as const,
           image,
         })));
+        setProductVideo(video ? { kind: 'existing', video } : null);
         setDescriptionSections(product.descriptionSections ?? []);
         setSelectedCategoryId(product.categoryId);
         setSelectedCollectionIds(product.collections.map((collection) => collection.id));
@@ -922,6 +957,48 @@ export function ProductFormPage() {
     e.target.value = '';
   }
 
+  async function handleVideoSelect(file: File) {
+    setVideoPreparing(true);
+    try {
+      const loaded = await validateProductVideoFile(file);
+      if (productVideo?.kind === 'pending') disposeLoadedProductVideo(productVideo);
+      setProductVideo({ kind: 'pending', ...loaded });
+      notify.success('Video preparado. Guarda el producto para publicarlo.');
+    } catch (error) {
+      notify.error(error instanceof Error ? error.message : 'No se pudo preparar el video.');
+    } finally {
+      setVideoPreparing(false);
+    }
+  }
+
+  function handleVideoRemoveRequest() {
+    if (!productVideo) return;
+    if (productVideo.kind === 'pending') {
+      disposeLoadedProductVideo(productVideo);
+      setProductVideo(null);
+      return;
+    }
+    setConfirmDeleteVideo(true);
+  }
+
+  async function handleVideoDeleteConfirmed() {
+    if (!productVideo || productVideo.kind !== 'existing' || !productId) {
+      setConfirmDeleteVideo(false);
+      return;
+    }
+    setVideoActionLoading(true);
+    try {
+      await productsService.deleteProductVideo(productId);
+      setProductVideo(null);
+      notify.success('Video eliminado.');
+    } catch (error) {
+      notify.fromError(error);
+    } finally {
+      setVideoActionLoading(false);
+      setConfirmDeleteVideo(false);
+    }
+  }
+
   function removePendingFile(key: string) {
     const item = galleryItems.find((candidate) => candidate.key === key);
     if (item?.kind === 'pending') URL.revokeObjectURL(item.previewUrl);
@@ -979,6 +1056,11 @@ export function ProductFormPage() {
   }
 
   const totalImages = galleryItems.length;
+  const productVideoPosterUrl = galleryItems[0]?.kind === 'existing'
+    ? galleryItems[0].image.imageUrl
+    : galleryItems[0]?.kind === 'pending'
+      ? galleryItems[0].previewUrl
+      : null;
 
   if (loadingProduct) {
     return (
@@ -1262,6 +1344,14 @@ export function ProductFormPage() {
             </DndContext>
           </CardBody>
         </Card>
+
+        <ProductVideoUploadField
+          value={productVideo}
+          posterUrl={productVideoPosterUrl}
+          disabled={formik.isSubmitting || videoActionLoading || videoPreparing}
+          onSelect={(file) => void handleVideoSelect(file)}
+          onRemove={handleVideoRemoveRequest}
+        />
 
         {/* Pricing & discount */}
         <Card>
@@ -1743,6 +1833,16 @@ export function ProductFormPage() {
           if (confirmDeleteImage) void handleDeleteExistingConfirmed(confirmDeleteImage);
         }}
         onCancel={() => setConfirmDeleteImage(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmDeleteVideo}
+        title="Eliminar video"
+        message="¿Estás seguro de que quieres eliminar el video de este producto? La imagen principal no se modificará."
+        confirmLabel="Eliminar video"
+        variant="danger"
+        onConfirm={() => void handleVideoDeleteConfirmed()}
+        onCancel={() => setConfirmDeleteVideo(false)}
       />
 
       <ImageCropDialog

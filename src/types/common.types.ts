@@ -372,6 +372,7 @@ export interface PublicProductPage {
   specialInstructionsMaxLength: number;
   mainImageUrl: string | null;
   images: PublicProductImage[];
+  productVideo: PublicProductVideo | null;
   optionGroups: PublicProductOptionGroup[];
   category: string | null;
   categoryId: string | null;
@@ -412,6 +413,14 @@ export interface PublicProductImage {
   altText: string | null;
   sortOrder: number;
   isPrimary: boolean;
+}
+
+export interface PublicProductVideo {
+  videoUrl: string;
+  mimeType: 'video/mp4' | 'video/webm';
+  durationSeconds: number;
+  width: number;
+  height: number;
 }
 
 export interface PublicProductOptionGroup {

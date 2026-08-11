@@ -5,6 +5,7 @@ import type {
   ProductInsert,
   ProductUpdate,
   ProductImage,
+  ProductVideo,
   ProductCountStats,
   ProductImageCandidatePage,
   ProductLinkOption,
@@ -19,7 +20,15 @@ import {
   mapPublicProductPageRowToPublicProductPage,
   mapPublicCatalogNavigationProductRow,
   mapProductImageRowToProductImage,
+  mapProductVideoRowToProductVideo,
 } from './products.mapper';
+import {
+  PRODUCT_VIDEO_MAX_BYTES,
+  PRODUCT_VIDEO_MAX_DURATION_SECONDS,
+  PRODUCT_VIDEO_MAX_HEIGHT,
+  PRODUCT_VIDEO_MAX_WIDTH,
+  isProductVideoMimeType,
+} from '@/lib/videos/videoFile.utils';
 
 async function removeStorageFolderFiles(bucket: string, folder: string): Promise<void> {
   const { data: files, error: listError } = await supabase.storage.from(bucket).list(folder);
@@ -353,8 +362,13 @@ export const productsService = {
       throw new Error(error.message);
     }
     if (!data) return null;
-    const [product] = await attachPublicStorefrontData([mapPublicProductPageRowToPublicProductPage(data)]);
+    const mappedProduct = mapPublicProductPageRowToPublicProductPage(data);
+    const [[product], productVideo] = await Promise.all([
+      attachPublicStorefrontData([mappedProduct]),
+      productsService.getPublicProductVideo(mappedProduct.productId),
+    ]);
     if (!product) return null;
+    product.productVideo = productVideo;
     return product;
   },
 
@@ -599,6 +613,19 @@ export const productsService = {
       if (storageError) throw new Error(storageError.message);
     }
 
+    const { data: video, error: videoError } = await supabase
+      .from('product_videos')
+      .select('storage_path')
+      .eq('product_id', id)
+      .maybeSingle();
+    if (videoError) throw new Error(videoError.message);
+    if (video?.storage_path) {
+      const { error: videoStorageError } = await supabase.storage
+        .from('store-videos')
+        .remove([video.storage_path]);
+      if (videoStorageError) throw new Error(videoStorageError.message);
+    }
+
     const { data: offers, error: offersError } = await supabase
       .from('offers')
       .select('id')
@@ -731,6 +758,123 @@ export const productsService = {
     }
     const { error } = await supabase.from('product_images').delete().eq('id', imageId);
     if (error) throw new Error(error.message);
+  },
+
+  async getProductVideo(productId: string): Promise<ProductVideo | null> {
+    const { data, error } = await supabase
+      .from('product_videos')
+      .select('*')
+      .eq('product_id', productId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? mapProductVideoRowToProductVideo(data) : null;
+  },
+
+  async uploadProductVideo(
+    storeId: string,
+    productId: string,
+    file: File,
+    metadata: { durationSeconds: number; width: number; height: number },
+  ): Promise<ProductVideo> {
+    if (!isProductVideoMimeType(file.type)) throw new Error('Usa un video MP4 o WebM.');
+    if (file.size <= 0 || file.size > PRODUCT_VIDEO_MAX_BYTES) {
+      throw new Error('El video supera el peso máximo permitido de 20 MB.');
+    }
+    if (
+      metadata.durationSeconds <= 0
+      || metadata.durationSeconds > PRODUCT_VIDEO_MAX_DURATION_SECONDS + 0.05
+      || metadata.width <= 0
+      || metadata.height <= 0
+      || metadata.width > PRODUCT_VIDEO_MAX_WIDTH
+      || metadata.height > PRODUCT_VIDEO_MAX_HEIGHT
+    ) {
+      throw new Error('El video no cumple los límites de duración o resolución.');
+    }
+
+    const ownerId = await getOwnerId();
+    const extension = file.type === 'video/webm' ? 'webm' : 'mp4';
+    const storagePath = `${ownerId}/stores/${storeId}/products/${productId}/video/${crypto.randomUUID()}.${extension}`;
+    const { error: uploadError } = await supabase.storage
+      .from('store-videos')
+      .upload(storagePath, file, {
+        upsert: false,
+        contentType: file.type,
+        cacheControl: '31536000',
+      });
+    if (uploadError) throw new Error(uploadError.message);
+
+    const { data: publicUrlData } = supabase.storage.from('store-videos').getPublicUrl(storagePath);
+    const { data: previous, error: previousError } = await supabase
+      .from('product_videos')
+      .select('storage_path')
+      .eq('product_id', productId)
+      .maybeSingle();
+    if (previousError) {
+      await supabase.storage.from('store-videos').remove([storagePath]);
+      throw new Error(previousError.message);
+    }
+
+    const { data, error } = await supabase
+      .from('product_videos')
+      .upsert({
+        store_id: storeId,
+        product_id: productId,
+        owner_id: ownerId,
+        video_url: publicUrlData.publicUrl,
+        storage_path: storagePath,
+        mime_type: file.type,
+        file_size_bytes: file.size,
+        duration_seconds: Number(metadata.durationSeconds.toFixed(2)),
+        width: metadata.width,
+        height: metadata.height,
+      }, { onConflict: 'product_id' })
+      .select()
+      .single();
+    if (error || !data) {
+      await supabase.storage.from('store-videos').remove([storagePath]);
+      throw new Error(error?.message ?? 'No se pudo guardar el video del producto.');
+    }
+
+    if (previous?.storage_path && previous.storage_path !== storagePath) {
+      const { error: cleanupError } = await supabase.storage
+        .from('store-videos')
+        .remove([previous.storage_path]);
+      if (cleanupError) console.error('[Videos] No se pudo limpiar el archivo anterior.', cleanupError);
+    }
+    return mapProductVideoRowToProductVideo(data);
+  },
+
+  async deleteProductVideo(productId: string): Promise<void> {
+    const { data: video, error: readError } = await supabase
+      .from('product_videos')
+      .select('storage_path')
+      .eq('product_id', productId)
+      .maybeSingle();
+    if (readError) throw new Error(readError.message);
+    if (!video) return;
+    const { error: storageError } = await supabase.storage
+      .from('store-videos')
+      .remove([video.storage_path]);
+    if (storageError) throw new Error(storageError.message);
+    const { error } = await supabase.from('product_videos').delete().eq('product_id', productId);
+    if (error) throw new Error(error.message);
+  },
+
+  async getPublicProductVideo(productId: string) {
+    const { data, error } = await supabase
+      .from('product_videos')
+      .select('video_url, mime_type, duration_seconds, width, height')
+      .eq('product_id', productId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) return null;
+    return {
+      videoUrl: data.video_url,
+      mimeType: data.mime_type === 'video/webm' ? 'video/webm' as const : 'video/mp4' as const,
+      durationSeconds: Number(data.duration_seconds),
+      width: data.width,
+      height: data.height,
+    };
   },
 
   async reorderProductImages(productId: string, imageIds: string[]): Promise<void> {

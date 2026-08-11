@@ -4,6 +4,7 @@ import type {
   ProductRowInsert,
   ProductRowUpdate,
   ProductImageRow,
+  ProductVideoRow,
   ProductOptionGroupRow,
   ProductOptionItemRow,
   ProductVariantOptionRow,
@@ -21,6 +22,7 @@ import type {
   ProductStatus,
   ProductType,
   PublicProductImage,
+  PublicProductVideo,
   PublicCatalogNavigationProduct,
   PublicProductPage,
   PublicProductVariant,
@@ -36,6 +38,7 @@ import type {
 import type {
   Product,
   ProductImage,
+  ProductVideo,
   ProductInsert,
   ProductOptionGroup,
   ProductOptionItem,
@@ -211,6 +214,34 @@ export function mapProductImageRowToProductImage(row: ProductImageRow): ProductI
   };
 }
 
+export function mapProductVideoRowToProductVideo(row: ProductVideoRow): ProductVideo {
+  return {
+    id: row.id,
+    storeId: row.store_id,
+    productId: row.product_id,
+    ownerId: row.owner_id,
+    videoUrl: row.video_url,
+    storagePath: row.storage_path,
+    mimeType: row.mime_type === 'video/webm' ? 'video/webm' : 'video/mp4',
+    fileSizeBytes: Number(row.file_size_bytes),
+    durationSeconds: Number(row.duration_seconds),
+    width: row.width,
+    height: row.height,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapProductVideoRowToPublicProductVideo(row: ProductVideoRow): PublicProductVideo {
+  return {
+    videoUrl: row.video_url,
+    mimeType: row.mime_type === 'video/webm' ? 'video/webm' : 'video/mp4',
+    durationSeconds: Number(row.duration_seconds),
+    width: row.width,
+    height: row.height,
+  };
+}
+
 export function mapProductOptionItemRowToProductOptionItem(row: ProductOptionItemRow): ProductOptionItem {
   return {
     id: row.id,
@@ -289,6 +320,7 @@ export function mapPublicProductPageRowToPublicProductPage(row: PublicProductPag
     specialInstructionsPlaceholder: row.special_instructions_placeholder ?? null,
     specialInstructionsMaxLength: row.special_instructions_max_length ?? 180,
     mainImageUrl: row.main_image_url,
+    productVideo: null,
     images: row.main_image_url
       ? [
           {

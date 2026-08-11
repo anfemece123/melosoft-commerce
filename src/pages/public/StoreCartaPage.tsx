@@ -4,7 +4,7 @@ import { cartaService } from '@/features/carta/cartaService';
 import type { PublicCartaPage } from '@/features/carta/carta.types';
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import { CartaMenu } from '@/components/public/carta/CartaMenu';
-import { LoadingScreen } from '@/components/ui/LoadingScreen';
+import { StorefrontPageLoader } from '@/components/public/storefront/StorefrontPageLoader';
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
 
 /** Sets/restores a robots noindex tag while `active` is true. Only used
@@ -65,17 +65,7 @@ export function StoreCartaPage() {
   useNoIndex(!branding?.cartaListed);
 
   if (loading) {
-    return (
-      <LoadingScreen
-        label=""
-        brandName={branding?.storeName ?? ''}
-        brandLogoUrl={branding?.logoUrl}
-        backgroundColor={theme.background}
-        textColor={theme.text}
-        accentColor={theme.primary}
-        markBackgroundColor={theme.surface}
-      />
-    );
+    return <StorefrontPageLoader label="Cargando carta digital…" />;
   }
 
   if (!page || page.categories.length === 0) {

@@ -12,6 +12,18 @@ body {
   margin: 0;
 }
 
+@keyframes melosoft-loader-progress {
+  0% {
+    transform: translateX(-135%);
+  }
+  50% {
+    transform: translateX(105%);
+  }
+  100% {
+    transform: translateX(270%);
+  }
+}
+
 /* Hides the scrollbar on horizontally-scrolling carousels (product
    carousels, gallery) while keeping native touch/wheel scroll intact. */
 .no-scrollbar {

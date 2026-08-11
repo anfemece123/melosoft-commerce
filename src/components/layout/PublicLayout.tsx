@@ -100,7 +100,7 @@ export function PublicLayout() {
   }, [storeSlug, brandingRetryToken]);
 
   if (storeSlug && loading && !branding) {
-    return <StorefrontPageLoader branding={null} label="Cargando tienda…" />;
+    return <StorefrontPageLoader label="Preparando tu experiencia…" />;
   }
 
   if (storeSlug && brandingError && !branding) {
@@ -125,7 +125,7 @@ export function PublicLayout() {
       {storeSlug ? (
         <PublicLocationProvider storeSlug={storeSlug}>
           <CartProvider key={storeSlug} storeSlug={storeSlug}>
-            <PublicStoreShell storeSlug={storeSlug} branding={branding} loading={loading} />
+            <PublicStoreShell storeSlug={storeSlug} branding={branding} />
           </CartProvider>
         </PublicLocationProvider>
       ) : (
@@ -140,11 +140,9 @@ export function PublicLayout() {
 function PublicStoreShell({
   storeSlug,
   branding,
-  loading,
 }: {
   storeSlug: string;
   branding: PublicStorePage | null;
-  loading: boolean;
 }) {
   const location = useLocation();
   const { mode: domainMode } = useStorefrontDomain();
@@ -388,11 +386,7 @@ function PublicStoreShell({
           />
         ) : null}
 
-        {loading && branding ? (
-          <StorefrontPageLoader branding={branding} label="Preparando la experiencia de esta empresa." />
-        ) : (
-          <Outlet />
-        )}
+        <Outlet />
 
         {showWhatsappButton && whatsappHref ? (
           <WhatsappFloatingButton

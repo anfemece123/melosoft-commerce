@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Outlet, matchPath, useLocation } from 'react-router-dom';
 import { storesService } from '@/features/stores/storesService';
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
-import { LoadingScreen } from '@/components/ui/LoadingScreen';
+import { StorefrontPageLoader } from '@/components/public/storefront/StorefrontPageLoader';
 import {
   isStorefrontHostnameMode,
   useStorefrontDomain,
@@ -59,17 +59,7 @@ export function PublicCartaLayout() {
   });
 
   if (loading) {
-    return (
-      <LoadingScreen
-        label=""
-        brandName={branding?.storeName ?? ''}
-        brandLogoUrl={branding?.logoUrl}
-        backgroundColor={theme.background}
-        textColor={theme.text}
-        accentColor={theme.primary}
-        markBackgroundColor={theme.surface}
-      />
-    );
+    return <StorefrontPageLoader label="Cargando carta digital…" />;
   }
 
   return (
