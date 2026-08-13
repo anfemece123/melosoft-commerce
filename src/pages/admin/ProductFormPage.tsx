@@ -31,6 +31,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DiscountBadge } from '@/components/ui/DiscountBadge';
 import { PanelLoadingState } from '@/components/ui/LoadingScreen';
 import { ImageCropDialog } from '@/components/admin/ImageCropDialog';
+import { VideoCropDialog } from '@/components/admin/VideoCropDialog';
 import { ProductCategorySelect } from '@/components/admin/ProductCategorySelect';
 import { ProductCollectionsMultiSelect } from '@/components/admin/ProductCollectionsMultiSelect';
 import { ProductFacetAssignments } from '@/components/admin/ProductFacetAssignments';
@@ -77,7 +78,7 @@ import type { ProductDescriptionSection, PublicStoreCategory, PublicStoreCollect
 import type { StoreFacet } from '@/features/facets/facets.types';
 import { IMAGE_ASSET_PRESETS } from '@/lib/images/imageAssetPresets';
 import { disposeLoadedImageFile, type LoadedImageFile, validateImageFile } from '@/lib/images/imageFile.utils';
-import { disposeLoadedProductVideo, validateProductVideoFile } from '@/lib/videos/videoFile.utils';
+import { disposeLoadedProductVideo, validateProductVideoFile, type LoadedProductVideo } from '@/lib/videos/videoFile.utils';
 
 const MAX_IMAGES = 5;
 
@@ -273,6 +274,8 @@ export function ProductFormPage() {
   const galleryItemsRef = useRef<ProductGalleryItem[]>([]);
   const [productVideo, setProductVideo] = useState<ProductVideoDraft | null>(null);
   const productVideoRef = useRef<ProductVideoDraft | null>(null);
+  const [videoCropSource, setVideoCropSource] = useState<LoadedProductVideo | null>(null);
+  const videoCropSourceRef = useRef<LoadedProductVideo | null>(null);
   const [confirmDeleteVideo, setConfirmDeleteVideo] = useState(false);
   const [videoActionLoading, setVideoActionLoading] = useState(false);
   const [videoPreparing, setVideoPreparing] = useState(false);
@@ -322,6 +325,7 @@ export function ProductFormPage() {
     if (productVideoRef.current?.kind === 'pending') {
       disposeLoadedProductVideo(productVideoRef.current);
     }
+    disposeLoadedProductVideo(videoCropSourceRef.current);
   }, []);
 
   const defaultProductType = isMenu ? 'menu_item' : 'physical_product';
@@ -961,14 +965,31 @@ export function ProductFormPage() {
     setVideoPreparing(true);
     try {
       const loaded = await validateProductVideoFile(file);
-      if (productVideo?.kind === 'pending') disposeLoadedProductVideo(productVideo);
-      setProductVideo({ kind: 'pending', ...loaded });
-      notify.success('Video preparado. Guarda el producto para publicarlo.');
+      videoCropSourceRef.current = loaded;
+      setVideoCropSource(loaded);
     } catch (error) {
       notify.error(error instanceof Error ? error.message : 'No se pudo preparar el video.');
     } finally {
       setVideoPreparing(false);
     }
+  }
+
+  function cancelVideoCrop() {
+    disposeLoadedProductVideo(videoCropSourceRef.current);
+    videoCropSourceRef.current = null;
+    setVideoCropSource(null);
+  }
+
+  async function confirmVideoCrop(loaded: LoadedProductVideo) {
+    if (productVideoRef.current?.kind === 'pending') {
+      disposeLoadedProductVideo(productVideoRef.current);
+    }
+    setProductVideo({ kind: 'pending', ...loaded });
+    productVideoRef.current = { kind: 'pending', ...loaded };
+    disposeLoadedProductVideo(videoCropSourceRef.current);
+    videoCropSourceRef.current = null;
+    setVideoCropSource(null);
+    notify.success('Video recortado y preparado. Guarda el producto para publicarlo.');
   }
 
   function handleVideoRemoveRequest() {
@@ -1056,11 +1077,6 @@ export function ProductFormPage() {
   }
 
   const totalImages = galleryItems.length;
-  const productVideoPosterUrl = galleryItems[0]?.kind === 'existing'
-    ? galleryItems[0].image.imageUrl
-    : galleryItems[0]?.kind === 'pending'
-      ? galleryItems[0].previewUrl
-      : null;
 
   if (loadingProduct) {
     return (
@@ -1347,7 +1363,6 @@ export function ProductFormPage() {
 
         <ProductVideoUploadField
           value={productVideo}
-          posterUrl={productVideoPosterUrl}
           disabled={formik.isSubmitting || videoActionLoading || videoPreparing}
           onSelect={(file) => void handleVideoSelect(file)}
           onRemove={handleVideoRemoveRequest}
@@ -1854,6 +1869,13 @@ export function ProductFormPage() {
           setActiveCrop(null);
         }}
         onConfirm={appendPendingFile}
+      />
+
+      <VideoCropDialog
+        open={videoCropSource !== null}
+        file={videoCropSource}
+        onCancel={cancelVideoCrop}
+        onConfirm={confirmVideoCrop}
       />
 
       {isEditing && productId && storeId && (

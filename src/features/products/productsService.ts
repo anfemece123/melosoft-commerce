@@ -792,16 +792,17 @@ export const productsService = {
     }
 
     const ownerId = await getOwnerId();
-    const extension = file.type === 'video/webm' ? 'webm' : 'mp4';
+    const normalizedMimeType = file.type.startsWith('video/webm') ? 'video/webm' : 'video/mp4';
+    const extension = normalizedMimeType === 'video/webm' ? 'webm' : 'mp4';
     const storagePath = `${ownerId}/stores/${storeId}/products/${productId}/video/${crypto.randomUUID()}.${extension}`;
     const { error: uploadError } = await supabase.storage
       .from('store-videos')
       .upload(storagePath, file, {
         upsert: false,
-        contentType: file.type,
+        contentType: normalizedMimeType,
         cacheControl: '31536000',
       });
-    if (uploadError) throw new Error(uploadError.message);
+    if (uploadError) throw new Error(`store-videos: ${uploadError.message}`);
 
     const { data: publicUrlData } = supabase.storage.from('store-videos').getPublicUrl(storagePath);
     const { data: previous, error: previousError } = await supabase
@@ -822,7 +823,7 @@ export const productsService = {
         owner_id: ownerId,
         video_url: publicUrlData.publicUrl,
         storage_path: storagePath,
-        mime_type: file.type,
+        mime_type: normalizedMimeType,
         file_size_bytes: file.size,
         duration_seconds: Number(metadata.durationSeconds.toFixed(2)),
         width: metadata.width,

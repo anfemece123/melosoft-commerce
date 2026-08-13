@@ -14,7 +14,6 @@ export type ProductVideoDraft =
 
 interface ProductVideoUploadFieldProps {
   value: ProductVideoDraft | null;
-  posterUrl: string | null;
   disabled?: boolean;
   onSelect: (file: File) => void;
   onRemove: () => void;
@@ -22,7 +21,6 @@ interface ProductVideoUploadFieldProps {
 
 export function ProductVideoUploadField({
   value,
-  posterUrl,
   disabled = false,
   onSelect,
   onRemove,
@@ -30,6 +28,8 @@ export function ProductVideoUploadField({
   const src = value?.kind === 'existing' ? value.video.videoUrl : value?.previewUrl ?? null;
   const duration = value?.kind === 'existing' ? value.video.durationSeconds : value?.durationSeconds;
   const bytes = value?.kind === 'existing' ? value.video.fileSizeBytes : value?.file.size;
+  const width = value?.kind === 'existing' ? value.video.width : value?.width;
+  const height = value?.kind === 'existing' ? value.video.height : value?.height;
 
   return (
     <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-4">
@@ -49,19 +49,18 @@ export function ProductVideoUploadField({
         <div className="flex flex-col gap-4 rounded-xl border border-gray-100 bg-gray-50 p-3 sm:flex-row sm:items-start">
           <video
             src={src}
-            poster={posterUrl ?? undefined}
             controls
             muted
             playsInline
             preload="metadata"
-            className="aspect-video w-full max-w-sm rounded-lg bg-black object-contain"
+            className="aspect-square w-full max-w-sm rounded-lg bg-black object-cover"
           />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-gray-800">
               {value?.kind === 'pending' ? 'Video listo para guardar' : 'Video guardado'}
             </p>
             <p className="mt-1 text-xs text-gray-500">
-              {formatVideoDuration(duration ?? 0)} · {formatVideoBytes(bytes ?? 0)}
+              {formatVideoDuration(duration ?? 0)} · {width ?? 0}×{height ?? 0} px · {formatVideoBytes(bytes ?? 0)}
             </p>
             {value?.kind === 'pending' && (
               <p className="mt-2 text-xs text-amber-700">Se reemplazará el video anterior al guardar el producto.</p>
@@ -98,7 +97,7 @@ export function ProductVideoUploadField({
         <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 px-4 py-8 text-center transition-colors hover:border-indigo-400 hover:bg-indigo-50/40">
           <Film className="h-8 w-8 text-gray-300" />
           <span className="mt-2 text-sm font-medium text-gray-700">Agregar video</span>
-          <span className="mt-1 text-xs text-gray-500">MP4 o WebM · máximo {PRODUCT_VIDEO_MAX_DURATION_SECONDS} segundos y {formatVideoBytes(PRODUCT_VIDEO_MAX_BYTES)}</span>
+          <span className="mt-1 text-xs text-gray-500">MP4 o WebM · se ajusta al formato cuadrado del producto (hasta 1200×1200) · máximo {PRODUCT_VIDEO_MAX_DURATION_SECONDS} segundos y {formatVideoBytes(PRODUCT_VIDEO_MAX_BYTES)}</span>
           <input
             type="file"
             accept="video/mp4,video/webm"

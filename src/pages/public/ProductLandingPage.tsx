@@ -40,6 +40,7 @@ import { DiscountBadge } from '@/components/ui/DiscountBadge';
 import { StorefrontMediaFrame } from '@/components/public/storefront/StorefrontMediaFrame';
 import { ProductImageZoom } from '@/components/public/storefront/ProductImageZoom';
 import { ProductReviewsSection } from '@/components/public/storefront/ProductReviewsSection';
+import { ProductVideoPlayer, ProductVideoThumbnail } from '@/components/public/storefront/ProductVideoPlayer';
 import { StorefrontRatingStars } from '@/components/public/storefront/StorefrontRatingStars';
 import { buildStorefrontTheme, withAlpha, STOREFRONT_CONTAINER_CLASS } from '@/components/public/storefront/storefrontTheme';
 import {
@@ -871,16 +872,7 @@ function ProductLandingContent({
                   aria-label="Ver video del producto"
                 >
                   <div className="relative aspect-square">
-                    {currentProduct.mainImageUrl ? (
-                      <img
-                        src={currentProduct.mainImageUrl}
-                        alt=""
-                        loading="lazy"
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      renderImageFallback('h-4 w-4')
-                    )}
+                    <ProductVideoThumbnail videoUrl={currentProduct.productVideo.videoUrl} />
                     <span className="absolute inset-0 flex items-center justify-center bg-black/35 text-white">
                       <PlayCircle className="h-6 w-6" />
                     </span>
@@ -892,20 +884,11 @@ function ProductLandingContent({
             <div className="order-1 lg:order-2">
               <div className="relative aspect-square overflow-hidden rounded-sm" style={{ backgroundColor: theme.surface }}>
                 {activeMedia === 'video' && currentProduct.productVideo ? (
-                  <video
-                    controls
-                    playsInline
-                    preload="none"
-                    poster={currentProduct.mainImageUrl ?? undefined}
-                    className="h-full w-full object-contain"
-                    aria-label={`Video de ${currentProduct.productName}`}
-                  >
-                    <source
-                      src={currentProduct.productVideo.videoUrl}
-                      type={currentProduct.productVideo.mimeType}
-                    />
-                    Tu navegador no puede reproducir este video.
-                  </video>
+                  <ProductVideoPlayer
+                    videoUrl={currentProduct.productVideo.videoUrl}
+                    mimeType={currentProduct.productVideo.mimeType}
+                    productName={currentProduct.productName}
+                  />
                 ) : (
                   <ProductImageZoom
                     src={activeGalleryImage?.imageUrl || null}

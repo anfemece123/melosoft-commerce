@@ -93,7 +93,17 @@ export function mapSupabaseError(err: unknown): string {
   }
 
   if (message.includes('Bucket not found')) {
+    if (message.includes('store-videos')) {
+      return 'El almacenamiento de videos aún no está configurado. Ejecuta las migraciones 141 y 142 en Supabase y vuelve a intentarlo.';
+    }
     return 'El almacenamiento no está configurado correctamente.';
+  }
+  if (
+    message.includes('product_videos_dimensions_valid')
+    || message.includes('relation "product_videos" does not exist')
+    || message.includes('relation \'product_videos\' does not exist')
+  ) {
+    return 'La base de datos aún no está actualizada para videos cuadrados. Ejecuta las migraciones 141 y 142 en Supabase y vuelve a intentarlo.';
   }
   if (message.includes('The resource already exists')) {
     return 'Ya existe un archivo con ese nombre. Intenta subir de nuevo.';
