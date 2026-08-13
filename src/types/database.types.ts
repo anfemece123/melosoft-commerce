@@ -3302,6 +3302,17 @@ export interface Database {
         };
         Relationships: [];
       };
+      public_product_videos: {
+        Row: {
+          product_id: string;
+          video_url: string;
+          mime_type: string;
+          duration_seconds: number;
+          width: number;
+          height: number;
+        };
+        Relationships: [];
+      };
       public_product_option_groups: {
         Row: {
           id: string;
@@ -3850,6 +3861,7 @@ export type PublicCartaPageRow = Database['public']['Views']['public_carta_pages
 export type PublicProductPageRow = Database['public']['Views']['public_product_pages']['Row'];
 export type PublicProductFacetValueRow = Database['public']['Views']['public_product_facet_values']['Row'];
 export type PublicProductImageRow = Database['public']['Views']['public_product_images']['Row'];
+export type PublicProductVideoRow = Database['public']['Views']['public_product_videos']['Row'];
 export type PublicStoreHeroSlideRow = Database['public']['Views']['public_store_hero_slides']['Row'];
 export type PublicStoreHomeSectionRow = Database['public']['Views']['public_store_home_sections']['Row'];
 export type PublicStoreHomeSectionItemRow = Database['public']['Views']['public_store_home_section_items']['Row'];

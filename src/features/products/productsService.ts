@@ -863,7 +863,7 @@ export const productsService = {
 
   async getPublicProductVideo(productId: string) {
     const { data, error } = await supabase
-      .from('product_videos')
+      .from('public_product_videos')
       .select('video_url, mime_type, duration_seconds, width, height')
       .eq('product_id', productId)
       .maybeSingle();
