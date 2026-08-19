@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   X, User, Phone, MapPin, Home, Store, Clock, CreditCard,
   StickyNote, ChevronRight, Loader2, ShoppingBag, Check, Copy,
-  ExternalLink, PackageCheck, Truck, Pencil, History,
+  ExternalLink, PackageCheck, Truck, Pencil, History, Tag,
 } from 'lucide-react';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { getFulfillmentMethodLabel, normalizeFulfillmentMethod } from '@/lib/orders/fulfillmentLabels';
@@ -461,6 +461,18 @@ export function OrderDetailDrawer({
                 </span>
               </div>
             </Section>
+
+            {order.partnerCode && (
+              <Section title="Atribución comercial">
+                <div className="flex items-start gap-2 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2.5">
+                  <Tag className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
+                  <div className="text-sm text-violet-900">
+                    <p>Este pedido llegó por <strong>{order.partnerName ?? 'un partner'}</strong>.</p>
+                    <p className="mt-0.5 text-xs text-violet-700">Código: <span className="font-mono font-semibold">{order.partnerCode}</span>{order.discountAmount > 0 ? ` · Descuento: ${formatCurrency(order.discountAmount, 'es-CO', order.currency)}` : ''}</p>
+                  </div>
+                </div>
+              </Section>
+            )}
 
             {/* Notes */}
             {order.notes && (

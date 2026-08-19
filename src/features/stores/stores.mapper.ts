@@ -205,6 +205,7 @@ export function mapPublicStorePageRowToPublicStorePage(row: PublicStorePageRow):
     whatsappButtonLayout: row.whatsapp_button_layout === 'inline' ? 'inline' : 'floating',
     cartaEnabled: row.carta_enabled,
     cartaListed: row.carta_listed,
+    partnerCodesEnabled: row.partner_codes_enabled,
   };
 }
 
@@ -435,6 +436,7 @@ export function mapStoreLimitRowToStoreLimit(row: StoreLimitRow): StoreLimit {
     canUsePayments: row.can_use_payments,
     canUseCustomDomain: row.can_use_custom_domain,
     canUseAdvancedTheme: row.can_use_advanced_theme,
+    canUsePartnerCodes: row.can_use_partner_codes,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -450,6 +452,7 @@ export function mapStoreLimitUpdateToRow(data: StoreLimitUpdate): StoreLimitRowU
   if (data.canUsePayments !== undefined) row.can_use_payments = data.canUsePayments;
   if (data.canUseCustomDomain !== undefined) row.can_use_custom_domain = data.canUseCustomDomain;
   if (data.canUseAdvancedTheme !== undefined) row.can_use_advanced_theme = data.canUseAdvancedTheme;
+  if (data.canUsePartnerCodes !== undefined) row.can_use_partner_codes = data.canUsePartnerCodes;
   return row;
 }
 

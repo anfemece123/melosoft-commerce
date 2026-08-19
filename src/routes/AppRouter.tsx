@@ -33,6 +33,7 @@ import { OrdersPage } from '@/pages/admin/OrdersPage';
 import { PaymentsPage } from '@/pages/admin/PaymentsPage';
 import { WhatsappSettingsPage } from '@/pages/admin/WhatsappSettingsPage';
 import { ReviewsPage } from '@/pages/admin/ReviewsPage';
+import { PartnersPage } from '@/pages/admin/PartnersPage';
 import { PlatformWhatsappConnectionsPage } from '@/pages/admin/PlatformWhatsappConnectionsPage';
 import { MyStoresPage } from '@/pages/admin/MyStoresPage';
 import { StoreHomePage } from '@/pages/public/StoreHomePage';
@@ -109,6 +110,7 @@ export function AppRouter() {
                 <Route path="/admin/stores/:storeId/orders" element={<OrdersPage />} />
                 <Route path="/admin/stores/:storeId/payments" element={<PaymentsPage />} />
                 <Route path="/admin/stores/:storeId/reviews" element={<ReviewsPage />} />
+                <Route path="/admin/stores/:storeId/partners" element={<PartnersPage />} />
                 <Route path="/admin/stores/:storeId/whatsapp" element={<WhatsappSettingsPage />} />
               </Route>
             </Route>

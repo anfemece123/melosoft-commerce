@@ -175,6 +175,7 @@ export interface StoreLimit {
   canUsePayments: boolean;
   canUseCustomDomain: boolean;
   canUseAdvancedTheme: boolean;
+  canUsePartnerCodes: boolean;
   createdAt: string;
   updatedAt: string;
 }

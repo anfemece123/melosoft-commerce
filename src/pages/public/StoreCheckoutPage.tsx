@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ShoppingBag } from 'lucide-react';
+import { ShoppingBag, Tag } from 'lucide-react';
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import { useCartCheckout } from '@/components/public/cart/useCartCheckout';
@@ -19,6 +19,8 @@ import { formatCurrency } from '@/utils/formatCurrency';
 import { useResolvedStoreSlug } from '@/lib/storefront/storefrontDomainContext';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 import { OrderingStatusNotice } from '@/components/public/cart/OrderingStatusNotice';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
 
 export function StoreCheckoutPage() {
   const { storeSlug: routeStoreSlug } = useParams<{ storeSlug: string }>();
@@ -50,6 +52,7 @@ export function StoreCheckoutPage() {
     nationalShippingFreeFrom: branding?.nationalShippingFreeFrom,
     cashOnDeliveryEnabled: branding?.cashOnDeliveryEnabled,
     onlineCheckoutEnabled: branding?.onlineCheckoutEnabled,
+    partnerCodesEnabled: branding?.partnerCodesEnabled ?? false,
     whatsappOrderUpdatesRequired: branding?.whatsappOrderUpdatesRequired ?? false,
   });
 
@@ -258,6 +261,58 @@ export function StoreCheckoutPage() {
                   />
                 </div>
 
+                {branding.partnerCodesEnabled && (
+                  <div className="border-t border-b px-1 py-4" style={{ borderColor: theme.border }}>
+                    <div className="mb-3 flex items-center gap-2">
+                      <Tag className="h-4 w-4" style={{ color: theme.primary }} />
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: theme.text }}>
+                          Código de descuento
+                        </p>
+                        <p className="text-xs" style={{ color: theme.mutedText }}>
+                          Si llegaste por un partner, ingresa su código aquí.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        aria-label="Código de descuento"
+                        value={checkout.partnerCodeInput}
+                        onChange={(event) => checkout.setPartnerCodeInput(event.target.value.toUpperCase())}
+                        placeholder="Ej. ANA10"
+                        disabled={checkout.isApplyingPartnerCode || checkout.step === 'submitting'}
+                        className="uppercase"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        isLoading={checkout.isApplyingPartnerCode}
+                        disabled={checkout.step === 'submitting'}
+                        onClick={() => void checkout.applyPartnerCode()}
+                      >
+                        Aplicar
+                      </Button>
+                    </div>
+                    {checkout.partnerCodeQuote && (
+                      <div className="mt-2 flex items-center justify-between gap-2 text-xs text-green-700">
+                        <span>
+                          Código <strong>{checkout.partnerCodeQuote.code}</strong> aplicado: ahorro{' '}
+                          {formatCurrency(checkout.partnerCodeQuote.discountAmount, 'es-CO', branding.currency)}
+                        </span>
+                        <button type="button" className="font-semibold underline" onClick={checkout.removePartnerCode}>
+                          Quitar
+                        </button>
+                      </div>
+                    )}
+                    {checkout.partnerCodeError && (
+                      <p role="alert" className="mt-2 text-xs text-red-600">
+                        {checkout.partnerCodeError}
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <div className="border-t px-1 py-4 text-sm" style={{ borderColor: theme.border }}>
                   {checkout.hasAnyPaymentMethod ? (
                     <div className="mb-4 space-y-3 border-b pb-4" style={{ borderColor: theme.border }}>
@@ -297,6 +352,14 @@ export function StoreCheckoutPage() {
                       {formatCurrency(checkout.subtotalPrice, 'es-CO', branding.currency)}
                     </span>
                   </div>
+                  {checkout.discountAmount > 0 && (
+                    <div className="mt-3 flex items-center justify-between">
+                      <span style={{ color: theme.mutedText }}>Descuento</span>
+                      <span className="font-medium text-green-700">
+                        -{formatCurrency(checkout.discountAmount, 'es-CO', branding.currency)}
+                      </span>
+                    </div>
+                  )}
                   <div className="mt-3 flex items-center justify-between">
                     <span style={{ color: theme.mutedText }}>Envío</span>
                     <span style={{ color: checkout.shippingIsFree ? theme.primary : theme.text }}>

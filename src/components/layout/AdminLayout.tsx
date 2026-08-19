@@ -20,13 +20,14 @@ import {
   ExternalLink,
   ArrowLeftRight,
   Star,
+  Handshake,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { logout } from '@/features/auth/authSlice';
 import { authService } from '@/features/auth/authService';
 import { selectIsPlatformAdmin } from '@/features/auth/auth.selectors';
-import { selectCurrentStore, selectMyMemberships } from '@/features/stores/stores.selectors';
+import { selectCurrentBusinessLimits, selectCurrentStore, selectMyMemberships } from '@/features/stores/stores.selectors';
 import { PendingOrdersBadgeProvider } from '@/features/orders/PendingOrdersBadgeContext';
 import { usePendingOrdersBadge } from '@/features/orders/usePendingOrdersBadge';
 import { domainsService } from '@/features/domains/domainsService';
@@ -68,6 +69,7 @@ function AdminLayoutContent() {
   const user = useAppSelector((s) => s.auth.user);
   const myMemberships = useAppSelector(selectMyMemberships);
   const currentStore = useAppSelector(selectCurrentStore);
+  const currentLimits = useAppSelector(selectCurrentBusinessLimits);
 
   const isAdmin = useAppSelector(selectIsPlatformAdmin);
 
@@ -110,6 +112,7 @@ function AdminLayoutContent() {
     },
     { label: 'Pagos', to: `/admin/stores/${storeId}/payments`, icon: <CreditCard className="w-5 h-5" /> },
     { label: 'Reseñas', to: `/admin/stores/${storeId}/reviews`, icon: <Star className="w-5 h-5" /> },
+    ...(currentLimits?.canUsePartnerCodes ? [{ label: 'Partners', to: `/admin/stores/${storeId}/partners`, icon: <Handshake className="w-5 h-5" /> }] : []),
     { label: 'WhatsApp', to: `/admin/stores/${storeId}/whatsapp`, icon: <MessageCircle className="w-5 h-5" /> },
   ] : [];
 

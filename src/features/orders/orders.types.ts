@@ -60,6 +60,8 @@ export interface Order {
   subtotal: number;
   shippingAmount: number;
   discountAmount: number;
+  partnerCode: string | null;
+  partnerName: string | null;
   totalAmount: number;
   currency: string;
   status: OrderStatus;
@@ -123,6 +125,7 @@ export interface CreateWebOrderPayload {
   storeLocationId?: string | null;
   paymentMethod?: 'cash_on_delivery' | 'online';
   whatsappConsent?: boolean;
+  partnerCode?: string | null;
   items: WebOrderCartItem[];
 }
 

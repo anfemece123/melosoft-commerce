@@ -21,6 +21,8 @@ import type { WebOrderResult } from '@/features/orders/orders.types';
 import type { PaymentChoice } from './CheckoutPaymentSelector';
 import { locationsService } from '@/features/locations/locationsService';
 import { COLOMBIAN_MOBILE_MESSAGE, normalizeColombianMobile } from '@/lib/phone/phoneValidation';
+import { partnersService } from '@/features/partners/partnersService';
+import type { PartnerCodeQuote } from '@/features/partners/partners.types';
 
 export type DrawerStep = 'cart' | 'form' | 'submitting' | 'confirmed' | 'redirecting_to_wompi';
 
@@ -36,6 +38,7 @@ interface UseCartCheckoutParams {
   nationalShippingFreeFrom?: number | null;
   cashOnDeliveryEnabled?: boolean | null;
   onlineCheckoutEnabled?: boolean | null;
+  partnerCodesEnabled?: boolean;
   whatsappOrderUpdatesRequired?: boolean;
 }
 
@@ -51,6 +54,7 @@ export function useCartCheckout({
   nationalShippingFreeFrom,
   cashOnDeliveryEnabled,
   onlineCheckoutEnabled,
+  partnerCodesEnabled = false,
   whatsappOrderUpdatesRequired = false,
 }: UseCartCheckoutParams) {
   const { items, totalItems, totalPrice, updateQuantity, removeItem, clearCart } = useCart();
@@ -58,6 +62,14 @@ export function useCartCheckout({
 
   const [step, setStep] = useState<DrawerStep>(initialStep);
   const [orderResult, setOrderResult] = useState<WebOrderResult | null>(null);
+  const [partnerCodeInput, setPartnerCodeInput] = useState('');
+  const [partnerCodeQuote, setPartnerCodeQuote] = useState<PartnerCodeQuote | null>(null);
+  const [partnerCodeSubtotal, setPartnerCodeSubtotal] = useState<number | null>(null);
+  const [partnerCodeError, setPartnerCodeError] = useState<string | null>(null);
+  const [isApplyingPartnerCode, setIsApplyingPartnerCode] = useState(false);
+  const appliedPartnerCode = partnerCodesEnabled && partnerCodeQuote && partnerCodeSubtotal === totalPrice
+    ? partnerCodeQuote
+    : null;
 
   // Payment method selection
   const showCod    = cashOnDeliveryEnabled !== false;
@@ -191,6 +203,7 @@ export function useCartCheckout({
               notes:                values.notes.trim() || null,
               storeLocationId:      operationalLocation.locationId,
               whatsappConsent:      values.whatsappConsent,
+              partnerCode:          appliedPartnerCode?.code ?? null,
               items: items.map(item => ({
                 productId:          item.productId,
                 variantId:          item.variantId ?? null,
@@ -229,6 +242,7 @@ export function useCartCheckout({
             storeLocationId:      operationalLocation.locationId,
             paymentMethod:        'cash_on_delivery',
             whatsappConsent:      values.whatsappConsent,
+            partnerCode:          appliedPartnerCode?.code ?? null,
             items: items.map(item => ({
               productId:          item.productId,
               variantId:          item.variantId ?? null,
@@ -264,6 +278,33 @@ export function useCartCheckout({
       void formik.setFieldValue('fulfillmentMethod', defaultFulfillment);
     }
   }, [availableFulfillmentMethods, defaultFulfillment, formik, formik.values.fulfillmentMethod]);
+
+  async function applyPartnerCode() {
+    const code = partnerCodeInput.trim();
+    if (!code) {
+      setPartnerCodeError('Escribe un código para aplicarlo.');
+      return;
+    }
+    setIsApplyingPartnerCode(true);
+    setPartnerCodeError(null);
+    try {
+      const quote = await partnersService.previewCode(storeSlug, code, totalPrice);
+      setPartnerCodeQuote(quote);
+      setPartnerCodeSubtotal(totalPrice);
+    } catch (err) {
+      setPartnerCodeQuote(null);
+      setPartnerCodeSubtotal(null);
+      setPartnerCodeError(err instanceof Error ? err.message : 'No pudimos validar el código.');
+    } finally {
+      setIsApplyingPartnerCode(false);
+    }
+  }
+
+  function removePartnerCode() {
+    setPartnerCodeQuote(null);
+    setPartnerCodeSubtotal(null);
+    setPartnerCodeError(null);
+  }
 
   const localDeliveryLocations = useMemo(
     () => getLocalDeliveryLocations(locations),
@@ -329,13 +370,15 @@ export function useCartCheckout({
       nationalShippingFreeFrom,
     ],
   );
-  const grandTotal = totalPrice + shipping.fee;
+  const discountAmount = appliedPartnerCode?.discountAmount ?? 0;
+  const grandTotal = Math.max(totalPrice + shipping.fee - discountAmount, 0);
 
   return {
     items,
     totalItems,
     totalPrice,
     subtotalPrice: totalPrice,
+    discountAmount,
     shippingAmount: shipping.fee,
     shippingThreshold: shipping.threshold,
     shippingIsFree: shipping.isFree,
@@ -357,5 +400,16 @@ export function useCartCheckout({
     availableFulfillmentMethods,
     hasFulfillmentChoice,
     formik,
+    partnerCodeInput,
+    setPartnerCodeInput,
+    partnerCodeQuote: appliedPartnerCode,
+    partnerCodeError: partnerCodeError ?? (
+      partnerCodeQuote && !appliedPartnerCode
+        ? 'El carrito cambió. Vuelve a aplicar el código para recalcular el descuento.'
+        : null
+    ),
+    isApplyingPartnerCode,
+    applyPartnerCode,
+    removePartnerCode,
   };
 }

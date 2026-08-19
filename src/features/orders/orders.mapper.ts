@@ -29,6 +29,8 @@ export function mapOrderRowToOrder(row: OrderRowWithItems): Order {
     subtotal: Number(row.subtotal),
     shippingAmount: Number(row.shipping_amount),
     discountAmount: Number(row.discount_amount),
+    partnerCode: row.partner_code ?? null,
+    partnerName: row.partner_name ?? null,
     totalAmount: Number(row.total_amount),
     currency: row.currency,
     status: row.status as OrderStatus,
@@ -104,6 +106,8 @@ export function mapOrderInsertToRow(data: OrderInsert): OrderRowInsert {
     subtotal: data.subtotal,
     shipping_amount: data.shippingAmount,
     discount_amount: data.discountAmount,
+    partner_code: data.partnerCode ?? null,
+    partner_name: data.partnerName ?? null,
     total_amount: data.totalAmount,
     currency: data.currency,
     status: data.status,
@@ -134,6 +138,8 @@ export function mapOrderUpdateToRow(data: OrderUpdate): OrderRowUpdate {
   if (data.subtotal !== undefined) row.subtotal = data.subtotal;
   if (data.shippingAmount !== undefined) row.shipping_amount = data.shippingAmount;
   if (data.discountAmount !== undefined) row.discount_amount = data.discountAmount;
+  if (data.partnerCode !== undefined) row.partner_code = data.partnerCode ?? null;
+  if (data.partnerName !== undefined) row.partner_name = data.partnerName ?? null;
   if (data.totalAmount !== undefined) row.total_amount = data.totalAmount;
   if (data.currency !== undefined) row.currency = data.currency;
   if (data.status !== undefined) row.status = data.status;

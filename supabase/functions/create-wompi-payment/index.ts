@@ -112,6 +112,7 @@ interface RequestBody {
   items?: CartItem[];
   redirect_url?: string;
   whatsapp_consent?: boolean;
+  partner_code?: string | null;
 }
 
 function normalizeColombianMobilePhone(value: unknown): string | null {
@@ -172,6 +173,7 @@ serve(async (req: Request) => {
     items = [],
     redirect_url,
     whatsapp_consent = false,
+    partner_code = null,
   } = body;
 
   // ── Validate required fields ──────────────────────────────
@@ -595,8 +597,8 @@ serve(async (req: Request) => {
   }
 
   const shippingAmount = calculateShippingAmount(subtotalAmount, fulfillment_method, commerceRow);
-  const totalAmount = subtotalAmount + shippingAmount;
-  const amountInCents = Math.round(totalAmount * 100);
+  let totalAmount = subtotalAmount + shippingAmount;
+  let amountInCents = Math.round(totalAmount * 100);
 
   // ── 6. Generate unique payment reference ────────────────────
   const shortId = crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
@@ -606,7 +608,7 @@ serve(async (req: Request) => {
   // ── 7. Compute integrity signature ──────────────────────────
   // SHA256(reference + amountInCents + currency + integritySecret)
   // The integrity secret never leaves the server.
-  const integritySignature = await buildIntegritySignature(
+  let integritySignature = await buildIntegritySignature(
     reference,
     amountInCents,
     'COP',
@@ -623,7 +625,7 @@ serve(async (req: Request) => {
     'signature:integrity': integritySignature,
     'redirect-url':        redirect_url,
   });
-  const checkoutUrl = `${wompiBaseUrl}?${params.toString()}`;
+  let checkoutUrl = `${wompiBaseUrl}?${params.toString()}`;
 
   // ── 9. Create checkout_session record ───────────────────────
   const twoHoursFromNow = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
@@ -672,6 +674,81 @@ serve(async (req: Request) => {
     }
     console.error('Failed to create checkout_session:', sessionErr?.message);
     return json({ error: 'Could not create checkout session' }, 500);
+  }
+
+  // A partner code is reserved after the session exists so the database can
+  // lock the code row and enforce global/per-customer usage limits atomically.
+  // The reservation RPC also recalculates the discount from the session
+  // subtotal; no amount supplied by the browser is trusted.
+  if (partner_code?.trim()) {
+    const { data: partnerQuote, error: partnerError } = await supabase.rpc(
+      'reserve_partner_code_for_checkout',
+      {
+        p_checkout_session_id: session.id,
+        p_code: partner_code.trim().toUpperCase(),
+        p_customer_phone: normalizedCustomerPhone,
+        p_customer_email: customer_email ?? null,
+      },
+    );
+    if (partnerError || !partnerQuote) {
+      await supabase
+        .from('checkout_sessions')
+        .update({ status: 'error', updated_at: new Date().toISOString() })
+        .eq('id', session.id);
+      const message = partnerError?.message ?? 'Could not reserve partner code';
+      if (message.includes('PARTNER_CODES_DISABLED')) {
+        return json({ error: 'Los códigos de partners no están habilitados para esta empresa.', code: 'PARTNER_CODES_DISABLED' }, 422);
+      }
+      if (message.includes('PARTNER_CODE_MINIMUM_NOT_MET')) {
+        return json({ error: 'El código requiere un subtotal mínimo.', code: 'PARTNER_CODE_MINIMUM_NOT_MET' }, 422);
+      }
+      if (message.includes('PARTNER_CODE_USAGE_LIMIT') || message.includes('PARTNER_CODE_CUSTOMER_LIMIT')) {
+        return json({ error: 'El código ya no tiene usos disponibles.', code: 'PARTNER_CODE_USAGE_LIMIT_REACHED' }, 422);
+      }
+      if (message.includes('PARTNER_CODE_EXPIRED') || message.includes('PARTNER_CODE_NOT_STARTED') || message.includes('PARTNER_CODE_INVALID')) {
+        return json({ error: 'El código no está disponible.', code: 'PARTNER_CODE_INVALID' }, 422);
+      }
+      console.error('Failed to reserve partner code:', message);
+      return json({ error: 'No se pudo aplicar el código de descuento.', code: 'PARTNER_CODE_RESERVATION_FAILED' }, 422);
+    }
+
+    const quote = partnerQuote as { discount_amount?: number };
+    const discountAmount = Number(quote.discount_amount ?? 0);
+    totalAmount = Math.max(subtotalAmount + shippingAmount - discountAmount, 0);
+    amountInCents = Math.round(totalAmount * 100);
+    integritySignature = await buildIntegritySignature(
+      reference,
+      amountInCents,
+      'COP',
+      settingsRow.integrity_secret_reference,
+    );
+    const finalParams = new URLSearchParams({
+      'public-key':          settingsRow.public_key,
+      'currency':            'COP',
+      'amount-in-cents':     String(amountInCents),
+      'reference':           reference,
+      'signature:integrity': integritySignature,
+      'redirect-url':        redirect_url,
+    });
+    checkoutUrl = `${wompiBaseUrl}?${finalParams.toString()}`;
+    const { error: checkoutUpdateError } = await supabase
+      .from('checkout_sessions')
+      .update({
+        amount_in_cents: amountInCents,
+        total_amount: totalAmount,
+        checkout_url: checkoutUrl,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', session.id);
+    if (checkoutUpdateError) {
+      await supabase.rpc('release_partner_code_for_checkout', { p_checkout_session_id: session.id });
+      await supabase
+        .from('checkout_sessions')
+        .update({ status: 'error', updated_at: new Date().toISOString() })
+        .eq('id', session.id);
+      console.error('Failed to persist partner checkout amount:', checkoutUpdateError.message);
+      return json({ error: 'Could not finalize checkout session' }, 500);
+    }
   }
 
   // ── 9.5. Reserve stock atomically for every item, all-or-nothing ────

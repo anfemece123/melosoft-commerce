@@ -225,6 +225,7 @@ export interface PublicStorePage {
   whatsappButtonLayout: WhatsappButtonLayout;
   cartaEnabled: boolean;
   cartaListed: boolean;
+  partnerCodesEnabled: boolean;
 }
 
 /** Stable destination persisted for each public-cover button. Entity targets

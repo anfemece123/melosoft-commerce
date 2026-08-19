@@ -112,7 +112,9 @@ export function RetailOrdersTable({
         o.customerName.toLowerCase().includes(q) ||
         (o.orderNumber ?? '').toLowerCase().includes(q) ||
         o.customerPhone.includes(q) ||
-        (o.city ?? '').toLowerCase().includes(q),
+        (o.city ?? '').toLowerCase().includes(q) ||
+        (o.partnerCode ?? '').toLowerCase().includes(q) ||
+        (o.partnerName ?? '').toLowerCase().includes(q),
       );
     }
     if (filters.status) result = result.filter(o => o.status === filters.status);

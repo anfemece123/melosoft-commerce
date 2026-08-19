@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import {
   Package, Tag, ShoppingCart, CreditCard, Settings,
   ArrowRight, Users, BarChart2, MapPin, Globe,
-  Building2, Copy, Check, ExternalLink, ShoppingBag,
+  Building2, Copy, Check, ExternalLink, ShoppingBag, Handshake,
 } from 'lucide-react';
 import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { setCurrentMembers } from '@/features/stores/storesSlice';
+import { setCurrentLimits, setCurrentMembers } from '@/features/stores/storesSlice';
 import { selectCurrentStore, selectCurrentCommerceSettings, selectCurrentBusinessLimits, selectMyMemberships } from '@/features/stores/stores.selectors';
 import { selectAuthProfile } from '@/features/auth/auth.selectors';
 import { storesService } from '@/features/stores/storesService';
@@ -20,6 +20,7 @@ import { productsService } from '@/features/products/productsService';
 import { isPlatformAdmin, canManageStore, canManageStoreMembers } from '@/utils/permissions';
 import type { ProductCountStats } from '@/features/products/products.types';
 import { domainsService } from '@/features/domains/domainsService';
+import { notify } from '@/lib/notifications';
 
 const CATALOG_TYPE_LABELS: Record<string, string> = {
   menu: 'Menú / Restaurante',
@@ -55,6 +56,7 @@ export function StoreDetailPage() {
   const dispatch = useAppDispatch();
   const [copied, setCopied] = useState(false);
   const [productStats, setProductStats] = useState<ProductCountStats | null>(null);
+  const [updatingPartnerModule, setUpdatingPartnerModule] = useState(false);
 
   const profile = useAppSelector(selectAuthProfile);
   const myMemberships = useAppSelector(selectMyMemberships);
@@ -97,6 +99,22 @@ export function StoreDetailPage() {
     } catch { /* clipboard blocked */ }
   }
 
+  async function togglePartnerModule() {
+    if (!storeId || !currentLimits || !isAdmin) return;
+    setUpdatingPartnerModule(true);
+    try {
+      const updated = await storesService.updateStoreLimits(storeId, {
+        canUsePartnerCodes: !currentLimits.canUsePartnerCodes,
+      });
+      dispatch(setCurrentLimits(updated));
+      notify.success(updated.canUsePartnerCodes ? 'Módulo Partners habilitado.' : 'Módulo Partners deshabilitado.');
+    } catch (error) {
+      notify.fromError(error, 'No pudimos actualizar el módulo Partners.');
+    } finally {
+      setUpdatingPartnerModule(false);
+    }
+  }
+
   const sections: ActionSection[] = [
     {
       title: 'Configuración',
@@ -122,6 +140,13 @@ export function StoreDetailPage() {
       description: 'Pedidos recibidos de clientes.',
       to: `/admin/stores/${storeId}/orders`,
       icon: <ShoppingCart className="w-5 h-5 text-green-600" />,
+    },
+    {
+      title: 'Partners y códigos',
+      description: 'Descuentos, atribución y comisiones por influencer.',
+      to: `/admin/stores/${storeId}/partners`,
+      icon: <Handshake className="w-5 h-5 text-pink-600" />,
+      requiresManage: true,
     },
     {
       title: 'Pagos',
@@ -378,6 +403,7 @@ export function StoreDetailPage() {
                   { label: 'Ofertas activas', value: currentLimits.maxActiveOffers },
                   { label: 'Pagos Wompi', value: currentLimits.canUsePayments ? 'Habilitado' : 'No' },
                   { label: 'Tema avanzado', value: currentLimits.canUseAdvancedTheme ? 'Sí' : 'No' },
+                  { label: 'Partners y códigos', value: currentLimits.canUsePartnerCodes ? 'Habilitado' : 'No' },
                 ].map(({ label, value }) => (
                   <div key={label}>
                     <p className="text-gray-400 text-xs uppercase tracking-wide">{label}</p>
@@ -385,6 +411,22 @@ export function StoreDetailPage() {
                   </div>
                 ))}
               </div>
+              {isAdmin && (
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">Módulo Partners y códigos</p>
+                    <p className="mt-1 text-xs text-gray-500">Controla si esta empresa puede crear códigos de influencers y registrar comisiones.</p>
+                  </div>
+                  <Button
+                    variant={currentLimits.canUsePartnerCodes ? 'outline' : 'primary'}
+                    size="sm"
+                    isLoading={updatingPartnerModule}
+                    onClick={() => void togglePartnerModule()}
+                  >
+                    {currentLimits.canUsePartnerCodes ? 'Deshabilitar módulo' : 'Habilitar módulo'}
+                  </Button>
+                </div>
+              )}
             </CardBody>
           </Card>
         </div>
