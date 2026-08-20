@@ -1,6 +1,6 @@
 import type { PublicProductOptionGroup } from '@/types/common.types';
 import type { StorefrontTheme } from '@/components/public/storefront/storefrontTheme';
-import type { ProductOptionSelections } from '@/lib/products/productOptions.utils';
+import { isSingleProductOptionGroup, type ProductOptionSelections } from '@/lib/products/productOptions.utils';
 import { formatCurrency } from '@/utils/formatCurrency';
 import { Check, ImageIcon } from 'lucide-react';
 
@@ -25,7 +25,8 @@ export function StorefrontProductCustomizer({
         const selectedCount = (selections[group.id] ?? []).length;
         const availableCount = group.items.filter((item) => item.isAvailable).length;
         const minimum = group.isRequired ? Math.max(group.minSelect, 1) : group.minSelect;
-        const helper = group.selectionType === 'single'
+        const isSingleSelection = isSingleProductOptionGroup(group);
+        const helper = isSingleSelection
           ? group.isRequired
             ? 'Elige 1 opción obligatoria.'
             : 'Puedes dejarlo sin seleccionar o elegir 1.'

@@ -40,6 +40,19 @@ function group(overrides: Partial<PublicProductOptionGroup> = {}): PublicProduct
 }
 
 describe('product option availability', () => {
+  it('replaces the previous option when a one-item group is configured as multiple', () => {
+    const oneChoiceGroup = group({
+      selectionType: 'multiple',
+      maxSelect: 1,
+      items: [
+        { ...group().items[0], id: 'cola' },
+        { ...group().items[0], id: 'juice', label: 'Jugo', isDefault: false },
+      ],
+    });
+
+    expect(toggleProductOptionSelection(oneChoiceGroup, { drinks: ['cola'] }, 'juice')).toEqual({ drinks: ['juice'] });
+  });
+
   it('does not preselect a default option that is sold out', () => {
     const soldOut = group({
       items: [{ ...group().items[0], isAvailable: false, unavailableReason: 'Agotado' }],

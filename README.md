@@ -113,6 +113,7 @@ Ve a `http://localhost:5173/login`.
 | `/admin/stores/:storeId/orders` | Pedidos de la tienda |
 | `/admin/stores/:storeId/payments` | Configuración de pagos |
 | `/admin/stores/:storeId/partners` | Partners, códigos de descuento y comisiones |
+| `/admin/stores/:storeId/accounting` | Ingresos, gastos y balance de la empresa |
 
 ### Públicas
 | Ruta | Descripción |
@@ -211,6 +212,12 @@ Partners comerciales e influencers por empresa, con reglas separadas de descuent
 
 ### partner_code_redemptions / partner_commissions
 Reservas atómicas durante checkout, atribución histórica de pedidos y ledger de comisiones. Las reservas de pagos online se liberan automáticamente cuando la sesión falla, vence o es rechazada.
+
+### accounting_entries / accounting_categories
+Libro simple de ingresos y gastos por empresa. Las ventas se registran automáticamente desde los pedidos; otros ingresos y gastos se agregan manualmente. Cada empresa recibe categorías iniciales (Ventas, Servicios, Inventario, Marketing, Nómina, Impuestos, entre otras), puede crear las suyas y desactivarlas sin borrar el historial. El módulo se habilita individualmente mediante `store_limits.can_use_accounting`.
+
+### store_product_option_library
+Biblioteca de adicionales reutilizables por empresa. Cada opción que se guarda en un plato se incorpora automáticamente a la biblioteca; al usarla en otro plato se copia como una opción independiente para permitir ajustes de precio, descripción y disponibilidad sin alterar los demás platos.
 
 ### payment_providers
 Proveedores de pago de la plataforma (seeded: Wompi). Solo lectura para usuarios normales.

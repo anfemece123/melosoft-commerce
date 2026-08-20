@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import type {
   ProductOptionGroupRow,
   ProductOptionItemRow,
+  StoreProductOptionLibraryRow,
 } from '@/types/database.types';
 import type { PublicProductOptionGroup, PublicProductOptionItem } from '@/types/common.types';
 import type { ProductOptionGroup, ProductOptionItem } from './products.types';
@@ -36,6 +37,20 @@ export interface ProductOptionGroupDraft {
   isRequired: boolean;
   isActive: boolean;
   items: ProductOptionItemDraft[];
+}
+
+export interface ProductOptionLibraryItem {
+  id: string;
+  storeId: string;
+  ownerId: string;
+  label: string;
+  description: string | null;
+  priceDelta: number;
+  linkedProductId: string | null;
+  linkedVariantId: string | null;
+  linkedQuantity: number;
+  priceMode: 'custom' | 'catalog';
+  isActive: boolean;
 }
 
 async function getOwnerId(): Promise<string> {
@@ -83,6 +98,22 @@ async function fetchOptionGroups(productId: string): Promise<ProductOptionGroup[
   return ((groups ?? []) as ProductOptionGroupRow[]).map((group) =>
     mapProductOptionGroupRowToProductOptionGroup(group, itemsByGroup.get(group.id) ?? [])
   );
+}
+
+function mapLibraryItem(row: StoreProductOptionLibraryRow): ProductOptionLibraryItem {
+  return {
+    id: row.id,
+    storeId: row.store_id,
+    ownerId: row.owner_id,
+    label: row.label,
+    description: row.description,
+    priceDelta: Number(row.price_delta),
+    linkedProductId: row.linked_product_id,
+    linkedVariantId: row.linked_variant_id,
+    linkedQuantity: row.linked_quantity,
+    priceMode: row.price_mode === 'catalog' ? 'catalog' : 'custom',
+    isActive: row.is_active,
+  };
 }
 
 interface PublicOptionGroupRow {
@@ -174,6 +205,54 @@ async function fetchPublicOptionGroups(productId: string): Promise<PublicProduct
 }
 
 export const productOptionsService = {
+  async getLibraryItems(storeId: string): Promise<ProductOptionLibraryItem[]> {
+    const { data, error } = await supabase
+      .from('store_product_option_library')
+      .select('*')
+      .eq('store_id', storeId)
+      .eq('is_active', true)
+      .order('label', { ascending: true });
+    if (error) throw new Error(error.message);
+    return ((data ?? []) as StoreProductOptionLibraryRow[]).map(mapLibraryItem);
+  },
+
+  async createLibraryItem(storeId: string, item: ProductOptionItemDraft): Promise<ProductOptionLibraryItem> {
+    const ownerId = await getOwnerId();
+    const label = item.label.trim();
+    if (!label) throw new Error('Escribe el nombre del adicional antes de guardarlo en la biblioteca.');
+    if (item.priceDelta === '' || Number(item.priceDelta) < 0) {
+      throw new Error(`Revisa el precio adicional de "${label}".`);
+    }
+
+    const { data, error } = await supabase
+      .from('store_product_option_library')
+      .insert({
+        store_id: storeId,
+        owner_id: ownerId,
+        label,
+        description: item.description?.trim() || null,
+        price_delta: Number(item.priceDelta),
+        linked_product_id: item.linkedProductId,
+        linked_variant_id: item.linkedVariantId,
+        linked_quantity: item.linkedQuantity === '' ? 1 : Number(item.linkedQuantity),
+        price_mode: item.linkedProductId ? item.priceMode : 'custom',
+        is_active: true,
+      })
+      .select('*')
+      .single();
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error('No se pudo guardar el adicional en la biblioteca.');
+    return mapLibraryItem(data as StoreProductOptionLibraryRow);
+  },
+
+  async deactivateLibraryItem(id: string): Promise<void> {
+    const { error } = await supabase
+      .from('store_product_option_library')
+      .update({ is_active: false })
+      .eq('id', id);
+    if (error) throw new Error(error.message);
+  },
+
   async getProductOptionGroups(productId: string): Promise<ProductOptionGroup[]> {
     return fetchOptionGroups(productId);
   },

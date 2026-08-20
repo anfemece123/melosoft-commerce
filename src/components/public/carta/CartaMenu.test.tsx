@@ -65,6 +65,8 @@ const page: PublicCartaPage = {
 describe('CartaMenu', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 });
   });
 
   it('renders one category at a time when the owner selects paginated navigation', () => {
@@ -93,6 +95,43 @@ describe('CartaMenu', () => {
 
     expect(screen.getByText('Lomo de la casa')).toBeTruthy();
     expect(screen.queryByText('Croquetas')).toBeNull();
+  });
+
+  it('scrolls to the category while leaving the sticky navigation and title visible', () => {
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 500 });
+    render(<CartaMenu page={{ ...page, navigationMode: 'continuous' }} theme={theme} />);
+
+    const navigation = screen.getByRole('navigation', { name: /Categorías de la carta/i });
+    const targetSection = document.querySelector('[data-carta-category="mains"]');
+    const target = targetSection?.parentElement;
+    expect(target).not.toBeNull();
+    vi.spyOn(navigation, 'getBoundingClientRect').mockReturnValue({ height: 88 } as DOMRect);
+    vi.spyOn(target!, 'getBoundingClientRect').mockReturnValue({ top: 920 } as DOMRect);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fuertes' }));
+
+    expect(scrollTo).toHaveBeenCalledWith({ top: 1316, behavior: 'smooth' });
+  });
+
+  it('distributes mobile category buttons across two rows without horizontal scrolling', () => {
+    const manyCategories = Array.from({ length: 6 }, (_, index) => ({
+      ...page.categories[0],
+      id: `category-${index}`,
+      name: `Categoría ${index + 1}`,
+      sortOrder: index,
+    }));
+    render(<CartaMenu page={{ ...page, navigationMode: 'continuous', categories: manyCategories }} theme={theme} />);
+
+    const strip = document.querySelector('[data-carta-category-strip]');
+    expect(strip?.className).toContain('grid');
+    expect(strip?.className).toContain('sm:flex');
+    expect(strip?.getAttribute('style')).toContain('grid-template-columns: repeat(3, minmax(96px, max-content))');
+    expect(strip?.getAttribute('style')).toContain('grid-template-rows: repeat(2, minmax(0, auto))');
+    expect(screen.getByRole('button', { name: 'Categoría 1' }).className).toContain('whitespace-nowrap');
+    expect(screen.getByRole('button', { name: 'Categoría 1' }).className).toContain('min-w-[96px]');
+    expect(screen.getByRole('button', { name: 'Categoría 1' }).className).not.toContain('text-ellipsis');
+    expect(screen.getAllByRole('button', { name: /Categoría [1-6]/ })).toHaveLength(6);
   });
 
   it('adds a translucent surface only when the category strip becomes sticky', () => {
@@ -217,9 +256,9 @@ describe('CartaMenu', () => {
     expect(screen.getByRole('navigation', { name: /Categorías de la carta/i })).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Entradas' })).toHaveLength(1);
     const strip = document.querySelector('[data-carta-category-strip]');
-    expect(strip?.className).toContain('min-w-full');
-    expect(strip?.className).toContain('justify-center');
-    expect(strip?.className).toContain('w-max');
+    expect(strip?.className).toContain('sm:min-w-full');
+    expect(strip?.className).toContain('sm:justify-center');
+    expect(strip?.className).toContain('sm:w-max');
   });
 
   it('does not print automatic system labels or decorative numbering', () => {

@@ -347,6 +347,7 @@ export function CartaMenu({ page, theme, preview = false }: CartaMenuProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryNavStuck, setCategoryNavStuck] = useState(false);
   const categoryRefs = useRef(new Map<string, HTMLElement>());
+  const categoryNavRef = useRef<HTMLElement>(null);
   const categoryNavSentinelRef = useRef<HTMLDivElement>(null);
   const cartaRootRef = useRef<HTMLDivElement>(null);
   const categories = page.categories;
@@ -407,7 +408,18 @@ export function CartaMenu({ page, theme, preview = false }: CartaMenuProps) {
     const navigateToCategory = () => {
       if (page.navigationMode !== 'continuous') return;
       const id = categories[index]?.id ?? 'uncategorized';
-      categoryRefs.current.get(id)?.scrollIntoView({ behavior: preview ? 'auto' : 'smooth', block: 'start' });
+      const target = categoryRefs.current.get(id);
+      if (!target) return;
+
+      const navigationHeight = categoryNavRef.current?.getBoundingClientRect().height ?? 0;
+      const currentScrollTop = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+      const targetTop = Math.max(0, Math.round(target.getBoundingClientRect().top + currentScrollTop - navigationHeight - 16));
+      const prefersReducedMotion = typeof window.matchMedia === 'function'
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      window.scrollTo({
+        top: targetTop,
+        behavior: preview || prefersReducedMotion ? 'auto' : 'smooth',
+      });
     };
 
     if (normalizedQuery) {
@@ -495,6 +507,7 @@ export function CartaMenu({ page, theme, preview = false }: CartaMenuProps) {
         <>
           <div ref={categoryNavSentinelRef} className="h-px" aria-hidden="true" data-carta-category-sentinel />
           <nav
+            ref={categoryNavRef}
             aria-label="Categorías de la carta"
             data-carta-category-nav-stuck={categoryNavStuck ? 'true' : 'false'}
             className={`pointer-events-none sticky top-0 z-30 border-b transition-[background-color,border-color,box-shadow,backdrop-filter] duration-300 ${categoryNavStuck ? 'backdrop-blur-xl' : 'border-transparent'}`}
@@ -505,8 +518,19 @@ export function CartaMenu({ page, theme, preview = false }: CartaMenuProps) {
               WebkitBackdropFilter: 'blur(18px) saturate(140%)',
             } : undefined}
           >
-            <div className={`no-scrollbar pointer-events-auto mx-auto w-full ${STOREFRONT_CONTAINER_CLASS} overflow-x-auto px-4 py-3 sm:px-6`}>
-              <div data-carta-category-strip className="flex w-max min-w-full justify-center gap-2">
+            <div className={`no-scrollbar pointer-events-auto mx-auto w-full ${STOREFRONT_CONTAINER_CLASS} overflow-x-auto px-4 py-3 sm:overflow-x-visible sm:px-6`}>
+              <div
+                data-carta-category-strip
+                className="grid w-max min-w-full gap-2 sm:flex sm:w-max sm:min-w-full sm:justify-center"
+                style={categories.length > 2 ? {
+                  gridTemplateColumns: `repeat(${Math.ceil(categories.length / 2)}, minmax(96px, max-content))`,
+                  gridTemplateRows: 'repeat(2, minmax(0, auto))',
+                  justifyContent: 'center',
+                } : {
+                  gridTemplateColumns: `repeat(${Math.max(categories.length, 1)}, minmax(96px, max-content))`,
+                  justifyContent: 'center',
+                }}
+              >
                 {categories.map((category, index) => {
                   const active = index === safeActiveIndex;
                   return (
@@ -514,7 +538,8 @@ export function CartaMenu({ page, theme, preview = false }: CartaMenuProps) {
                       key={category.id ?? 'uncategorized'}
                       type="button"
                       onClick={() => selectCategory(index)}
-                      className="shrink-0 rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition-[background-color,border-color,color,box-shadow,transform] duration-200 active:scale-[0.98] motion-reduce:transition-none"
+                      className="min-w-[96px] whitespace-nowrap rounded-full border px-2 py-2 text-xs font-semibold leading-4 shadow-sm transition-[background-color,border-color,color,box-shadow,transform] duration-200 active:scale-[0.98] motion-reduce:transition-none sm:shrink-0 sm:px-4 sm:text-sm"
+                      title={category.name}
                       style={active
                         ? { backgroundColor: theme.primary, borderColor: theme.primary, color: '#fff', boxShadow: `0 8px 24px ${withAlpha(theme.primary, 0.24)}` }
                         : theme.mode === 'dark'

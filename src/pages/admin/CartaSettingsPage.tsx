@@ -292,6 +292,7 @@ function buildPreviewPage(
         imageUrl: product.mainImageUrl,
         price: product.cartaPrice ?? product.regularPrice,
         sortOrder: productIndex,
+        variants: [],
       })),
   })).filter((category) => category.products.length > 0);
 
@@ -311,6 +312,7 @@ function buildPreviewPage(
         imageUrl: product.mainImageUrl,
         price: product.cartaPrice ?? product.regularPrice,
         sortOrder: index,
+        variants: [],
       })),
     });
   }

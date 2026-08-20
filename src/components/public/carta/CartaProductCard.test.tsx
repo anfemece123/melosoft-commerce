@@ -18,6 +18,7 @@ const product: PublicCartaProduct = {
   imageUrl: 'https://example.com/dish.jpg',
   price: 28000,
   sortOrder: 0,
+  variants: [],
 };
 
 afterEach(cleanup);
@@ -94,5 +95,161 @@ describe('CartaProductCard descriptions', () => {
     expect(imageFrame?.className).toContain('rounded-none');
     expect(imageFrame?.className).toContain('!overflow-visible');
     expect(imageFrame?.getAttribute('style')).toBeNull();
+  });
+
+  it('shows every variant and its price without changing the card composition', () => {
+    const { container } = render(
+      <CartaProductCard
+        product={{
+          ...product,
+          variants: [
+            {
+              id: 'small',
+              sku: 'BURG-S',
+              price: 18000,
+              compareAtPrice: null,
+              stockQuantity: 2,
+              stockPolicy: 'deny',
+              isDefault: true,
+              isAvailable: true,
+              imageUrl: null,
+              optionValues: [],
+              label: 'Pequeña',
+            },
+            {
+              id: 'large',
+              sku: 'BURG-L',
+              price: 24000,
+              compareAtPrice: null,
+              stockQuantity: 0,
+              stockPolicy: 'deny',
+              isDefault: false,
+              isAvailable: false,
+              imageUrl: null,
+              optionValues: [],
+              label: 'Grande',
+            },
+          ],
+        }}
+        currency="COP"
+        theme={theme}
+        variant="gallery"
+      />
+    );
+
+    expect(container.textContent).toContain('Pequeña');
+    expect(container.textContent).toContain('Grande');
+    expect(container.textContent).toContain('18.000');
+    expect(container.textContent).toContain('24.000');
+    expect(container.textContent).toContain('Agotado');
+  });
+
+  it('groups a price modifier instead of repeating every variant combination', () => {
+    const { container } = render(
+      <CartaProductCard
+        product={{
+          ...product,
+          variants: [
+            {
+              id: 'mora-water',
+              sku: null,
+              price: 6000,
+              compareAtPrice: null,
+              stockQuantity: 2,
+              stockPolicy: 'deny',
+              isDefault: true,
+              isAvailable: true,
+              imageUrl: null,
+              optionValues: [
+                { optionId: 'fruit', optionName: 'Fruta', valueId: 'mora', value: 'Mora' },
+                { optionId: 'preparation', optionName: 'Agua o leche', valueId: 'agua', value: 'Agua' },
+              ],
+              label: 'Fruta: Mora · Agua o leche: Agua',
+            },
+            {
+              id: 'mora-milk',
+              sku: null,
+              price: 8000,
+              compareAtPrice: null,
+              stockQuantity: 2,
+              stockPolicy: 'deny',
+              isDefault: false,
+              isAvailable: true,
+              imageUrl: null,
+              optionValues: [
+                { optionId: 'fruit', optionName: 'Fruta', valueId: 'mora', value: 'Mora' },
+                { optionId: 'preparation', optionName: 'Agua o leche', valueId: 'leche', value: 'Leche' },
+              ],
+              label: 'Fruta: Mora · Agua o leche: Leche',
+            },
+          ],
+        }}
+        currency="COP"
+        theme={theme}
+        variant="gallery"
+      />
+    );
+
+    expect(container.textContent).toContain('Fruta:');
+    expect(container.textContent).toContain('Mora');
+    expect(container.textContent).toContain('Agua o leche:');
+    expect(container.textContent).toContain('Agua');
+    expect(container.textContent).toContain('Leche');
+    expect(container.textContent).toContain('6.000');
+    expect(container.textContent).toContain('8.000');
+    expect((container.textContent?.match(/Fruta:/g) ?? []).length).toBe(1);
+    expect((container.textContent?.match(/Agua o leche:/g) ?? []).length).toBe(1);
+  });
+
+  it('renders a compact matrix when modifier prices vary by product', () => {
+    const { container } = render(
+      <CartaProductCard
+        product={{
+          ...product,
+          variants: [
+            {
+              id: 'club-normal', sku: null, price: 7000, compareAtPrice: null, stockQuantity: 1, stockPolicy: 'deny', isDefault: true, isAvailable: true, imageUrl: null,
+              optionValues: [
+                { optionId: 'beer', optionName: 'Bebida', valueId: 'club', value: 'Club Colombia' },
+                { optionId: 'prep', optionName: 'Preparación', valueId: 'normal', value: 'Normal' },
+              ], label: 'Club Colombia · Normal',
+            },
+            {
+              id: 'club-michelada', sku: null, price: 11000, compareAtPrice: null, stockQuantity: 1, stockPolicy: 'deny', isDefault: false, isAvailable: true, imageUrl: null,
+              optionValues: [
+                { optionId: 'beer', optionName: 'Bebida', valueId: 'club', value: 'Club Colombia' },
+                { optionId: 'prep', optionName: 'Preparación', valueId: 'michelada', value: 'Michelada' },
+              ], label: 'Club Colombia · Michelada',
+            },
+            {
+              id: 'corona-normal', sku: null, price: 9000, compareAtPrice: null, stockQuantity: 1, stockPolicy: 'deny', isDefault: false, isAvailable: true, imageUrl: null,
+              optionValues: [
+                { optionId: 'beer', optionName: 'Bebida', valueId: 'corona', value: 'Corona' },
+                { optionId: 'prep', optionName: 'Preparación', valueId: 'normal', value: 'Normal' },
+              ], label: 'Corona · Normal',
+            },
+            {
+              id: 'corona-michelada', sku: null, price: 13000, compareAtPrice: null, stockQuantity: 1, stockPolicy: 'deny', isDefault: false, isAvailable: true, imageUrl: null,
+              optionValues: [
+                { optionId: 'beer', optionName: 'Bebida', valueId: 'corona', value: 'Corona' },
+                { optionId: 'prep', optionName: 'Preparación', valueId: 'michelada', value: 'Michelada' },
+              ], label: 'Corona · Michelada',
+            },
+          ],
+        }}
+        currency="COP"
+        theme={theme}
+        variant="gallery"
+      />
+    );
+
+    expect(container.querySelector('[data-carta-variant-matrix]')).not.toBeNull();
+    expect(container.querySelector('[data-carta-variant-matrix]')?.className).not.toContain('overflow-x-auto');
+    expect(container.textContent).not.toContain('Bebida');
+    expect(container.textContent).toContain('Normal');
+    expect(container.textContent).toContain('Michelada');
+    expect(container.textContent).toContain('Club Colombia');
+    expect(container.textContent).toContain('Corona');
+    expect(container.textContent).toContain('13.000');
   });
 });

@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Layers3, Link2, Package, Plus, Trash2 } from 'lucide-react';
+import { Archive, BookOpen, Layers3, Link2, Package, Plus, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
+import { Modal } from '@/components/ui/Modal';
 import { IntegerInput } from '@/components/forms/IntegerInput';
 import { MoneyInput } from '@/components/forms/MoneyInput';
-import type { ProductOptionGroupDraft } from '@/features/products/productOptionsService';
+import { productOptionsService, type ProductOptionGroupDraft, type ProductOptionLibraryItem } from '@/features/products/productOptionsService';
 import { productsService } from '@/features/products/productsService';
 import { productVariantsService } from '@/features/products/productVariantsService';
 import type { Product } from '@/features/products/products.types';
 import type { ProductVariant } from '@/features/products/productVariants.types';
 import { formatCurrency } from '@/utils/formatCurrency';
+import { notify } from '@/lib/notifications';
 import {
   cloneTemplateGroups,
   restaurantMerchandisingService,
@@ -67,6 +69,13 @@ export function ProductOptionsEditor({
   const [catalogLoadError, setCatalogLoadError] = useState<string | null>(null);
   const [templates, setTemplates] = useState<ProductOptionTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [libraryItems, setLibraryItems] = useState<ProductOptionLibraryItem[]>([]);
+  const [libraryLoading, setLibraryLoading] = useState(false);
+  const [libraryError, setLibraryError] = useState<string | null>(null);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryTargetGroupIndex, setLibraryTargetGroupIndex] = useState<number | null>(null);
+  const [librarySearch, setLibrarySearch] = useState('');
+  const [libraryUpdatingId, setLibraryUpdatingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,6 +101,27 @@ export function ProductOptionsEditor({
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, [showTemplatePicker, storeId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    // The loading flag belongs to this route-scoped async synchronization.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLibraryLoading(true);
+    void productOptionsService.getLibraryItems(storeId)
+      .then((items) => {
+        if (!cancelled) {
+          setLibraryItems(items);
+          setLibraryError(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLibraryError('No pudimos cargar la biblioteca de adicionales.');
+      })
+      .finally(() => {
+        if (!cancelled) setLibraryLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [storeId]);
 
   const productsById = useMemo(
     () => new Map(catalogProducts.map((product) => [product.id, product])),
@@ -130,8 +160,67 @@ export function ProductOptionsEditor({
     onChange(groups.map((group, currentIndex) => (currentIndex === index ? updater(group) : group)));
   }
 
+  const filteredLibraryItems = useMemo(() => {
+    const normalizedSearch = librarySearch.trim().toLocaleLowerCase();
+    if (!normalizedSearch) return libraryItems;
+    return libraryItems.filter((item) => [item.label, item.description ?? ''].some((value) => value.toLocaleLowerCase().includes(normalizedSearch)));
+  }, [libraryItems, librarySearch]);
+
+  function openLibrary(groupIndex?: number) {
+    setLibraryTargetGroupIndex(groupIndex ?? (groups.length === 1 ? 0 : null));
+    setLibrarySearch('');
+    setLibraryOpen(true);
+  }
+
+  function applyLibraryItem(item: ProductOptionLibraryItem) {
+    if (libraryTargetGroupIndex === null) {
+      notify.info('Selecciona primero el grupo donde quieres agregar el adicional.');
+      return;
+    }
+    const targetGroup = groups[libraryTargetGroupIndex];
+    if (!targetGroup) return;
+    if (productId && item.linkedProductId === productId) {
+      notify.error('Este adicional no puede vincular el mismo plato que estás editando.');
+      return;
+    }
+    if (targetGroup.items.some((currentItem) => currentItem.label.trim().toLocaleLowerCase() === item.label.trim().toLocaleLowerCase())) {
+      notify.info(`“${item.label}” ya está agregado en este grupo.`);
+      return;
+    }
+    updateGroup(libraryTargetGroupIndex, (current) => ({
+      ...current,
+      items: [...current.items, {
+        label: item.label,
+        description: item.description,
+        priceDelta: item.priceDelta,
+        linkedProductId: item.linkedProductId,
+        linkedVariantId: item.linkedVariantId,
+        linkedQuantity: item.linkedQuantity,
+        priceMode: item.priceMode,
+        isDefault: false,
+        isActive: true,
+      }],
+    }));
+    setLibraryOpen(false);
+    notify.success(`“${item.label}” agregado al grupo.`);
+  }
+
+  async function deactivateLibraryItem(item: ProductOptionLibraryItem) {
+    setLibraryUpdatingId(item.id);
+    try {
+      await productOptionsService.deactivateLibraryItem(item.id);
+      setLibraryItems((current) => current.filter((libraryItem) => libraryItem.id !== item.id));
+      notify.success('Adicional retirado de la biblioteca.');
+    } catch (error) {
+      notify.fromError(error, 'No pudimos retirar el adicional de la biblioteca.');
+    } finally {
+      setLibraryUpdatingId(null);
+    }
+  }
+
   return (
-    <Card>
+    <>
+      <Card>
       <CardBody className="space-y-5">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -151,7 +240,7 @@ export function ProductOptionsEditor({
         </div>
 
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          <strong>Inventario inteligente:</strong> usa una opción simple para preferencias como “sin cebolla”. Si agregas una bebida, postre u otro artículo vendible, vincúlalo con el catálogo para compartir su precio y descontar el mismo inventario.
+          <strong>Inventario y reutilización:</strong> cada opción que guardes en un plato quedará disponible automáticamente en la biblioteca de la empresa. Si agregas una bebida, postre u otro artículo vendible, vincúlalo con el catálogo para compartir su precio y descontar el mismo inventario.
         </div>
 
         {showTemplatePicker && templates.length > 0 ? (
@@ -326,20 +415,32 @@ export function ProductOptionsEditor({
               </div>
 
               <div className="mt-5 space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <h4 className="text-sm font-semibold text-gray-900">Opciones del grupo</h4>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    leftIcon={<Plus className="h-4 w-4" />}
-                    onClick={() => updateGroup(groupIndex, (current) => ({
-                      ...current,
-                      items: [...current.items, createEmptyItem()],
-                    }))}
-                  >
-                    Agregar opción
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      leftIcon={<BookOpen className="h-4 w-4" />}
+                      onClick={() => openLibrary(groupIndex)}
+                      disabled={libraryLoading}
+                    >
+                      Usar de biblioteca
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      leftIcon={<Plus className="h-4 w-4" />}
+                      onClick={() => updateGroup(groupIndex, (current) => ({
+                        ...current,
+                        items: [...current.items, createEmptyItem()],
+                      }))}
+                    >
+                      Agregar opción
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="space-y-3">
@@ -608,6 +709,91 @@ export function ProductOptionsEditor({
           ))}
         </div>
       </CardBody>
-    </Card>
+      </Card>
+
+    <Modal
+      open={libraryOpen}
+      title="Biblioteca de adicionales"
+      description="Reutiliza adicionales que ya guardaste en otros platos de esta empresa. Al agregarlos, podrás ajustar sus valores para este plato."
+      maxWidth="2xl"
+      onClose={() => setLibraryOpen(false)}
+      footer={<div className="flex justify-end"><Button variant="outline" onClick={() => setLibraryOpen(false)}>Cerrar</Button></div>}
+    >
+      <div className="space-y-5">
+        {groups.length === 0 ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Agrega primero un grupo de opciones para poder reutilizar un adicional.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {libraryTargetGroupIndex === null ? (
+              <div>
+                <label htmlFor="library-target-group" className="mb-1 block text-sm font-medium text-gray-700">Agregar al grupo</label>
+                <select
+                  id="library-target-group"
+                  value={libraryTargetGroupIndex ?? ''}
+                  onChange={(event) => setLibraryTargetGroupIndex(event.target.value === '' ? null : Number(event.target.value))}
+                  className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">Selecciona un grupo</option>
+                  {groups.map((group, index) => <option key={`library-group-${index}`} value={index}>{group.name.trim() || `Grupo ${index + 1}`}</option>)}
+                </select>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-sm text-indigo-800">
+                Se agregará al grupo <strong>{groups[libraryTargetGroupIndex]?.name.trim() || `Grupo ${libraryTargetGroupIndex + 1}`}</strong>.
+              </div>
+            )}
+
+            <Input
+              label="Buscar adicional"
+              value={librarySearch}
+              onChange={(event) => setLibrarySearch(event.target.value)}
+              placeholder="Ej. queso, salsa, bebida..."
+              labelAdornment={<Search className="h-3.5 w-3.5 text-gray-400" />}
+            />
+
+            {libraryError ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{libraryError}</div>
+            ) : libraryLoading ? (
+              <p className="py-8 text-center text-sm text-gray-500">Cargando biblioteca…</p>
+            ) : filteredLibraryItems.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-5 py-8 text-center text-sm text-gray-500">
+                {libraryItems.length === 0 ? 'Todavía no hay adicionales guardados. Cuando guardes este plato, sus opciones quedarán disponibles aquí.' : 'No encontramos adicionales con esa búsqueda.'}
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100 rounded-xl border border-gray-200">
+                {filteredLibraryItems.map((item) => (
+                  <div key={item.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium text-gray-900">{item.label}</p>
+                        {item.linkedProductId ? <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">Producto vinculado</span> : null}
+                        {item.priceDelta > 0 ? <span className="text-xs font-semibold text-emerald-700">+{formatCurrency(item.priceDelta, 'es-CO', currency)}</span> : null}
+                      </div>
+                      {item.description ? <p className="mt-1 text-xs text-gray-500">{item.description}</p> : null}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button type="button" size="sm" onClick={() => applyLibraryItem(item)}>Agregar al grupo</Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        aria-label={`Retirar ${item.label} de la biblioteca`}
+                        disabled={libraryUpdatingId === item.id}
+                        onClick={() => void deactivateLibraryItem(item)}
+                      >
+                        <Archive className="h-4 w-4 text-gray-400" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      </Modal>
+    </>
   );
 }

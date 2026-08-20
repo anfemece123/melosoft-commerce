@@ -3,6 +3,14 @@ import { formatCurrency } from '@/utils/formatCurrency';
 
 export type ProductOptionSelections = Record<string, string[]>;
 
+/**
+ * A group with a maximum of one item behaves as a radio-style selector even
+ * if older data stored its selection type as `multiple`.
+ */
+export function isSingleProductOptionGroup(group: PublicProductOptionGroup): boolean {
+  return group.selectionType === 'single' || group.maxSelect === 1;
+}
+
 export function applyLocationAvailabilityToProductOptions(
   groups: PublicProductOptionGroup[],
   unavailableProductIds: ReadonlySet<string>,
@@ -33,7 +41,7 @@ export function buildInitialProductOptionSelections(groups: PublicProductOptionG
   return groups.reduce<ProductOptionSelections>((acc, group) => {
     const defaults = group.items.filter((item) => item.isDefault && item.isAvailable).map((item) => item.id);
     if (defaults.length > 0) {
-      acc[group.id] = group.selectionType === 'single' ? defaults.slice(0, 1) : defaults;
+      acc[group.id] = isSingleProductOptionGroup(group) ? defaults.slice(0, 1) : defaults;
     } else {
       acc[group.id] = [];
     }
@@ -50,7 +58,7 @@ export function toggleProductOptionSelection(
   const item = group.items.find((candidate) => candidate.id === itemId);
   if (!item) return selections;
 
-  if (group.selectionType === 'single') {
+  if (isSingleProductOptionGroup(group)) {
     if (current[0] === itemId) return { ...selections, [group.id]: [] };
     if (!item.isAvailable) return selections;
     return { ...selections, [group.id]: [itemId] };

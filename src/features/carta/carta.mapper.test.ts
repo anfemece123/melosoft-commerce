@@ -38,6 +38,7 @@ function row(overrides: Partial<PublicCartaPageRow>): PublicCartaPageRow {
     short_description: null,
     main_image_url: null,
     effective_price: 20000,
+    variants: [],
     product_sort_order: 0,
     category_id: 'category',
     category_name: 'Categoría',
@@ -79,6 +80,48 @@ describe('carta mapper', () => {
 
     expect(page?.templateKey).toBe('signature');
     expect(page?.navigationMode).toBe('continuous');
+  });
+
+  it('maps every active variant with a readable label and availability', () => {
+    const page = mapPublicCartaPageRowsToPublicCartaPage([
+      row({
+        variants: [
+          {
+            id: 'small',
+            sku: 'BURG-S',
+            price: 18000,
+            compareAtPrice: null,
+            stockQuantity: 0,
+            stockPolicy: 'deny',
+            isDefault: true,
+            isAvailable: false,
+            imageUrl: null,
+            optionValues: [{ optionId: 'size', optionName: 'Tamaño', valueId: 's', value: 'Pequeña' }],
+          },
+          {
+            id: 'large',
+            sku: 'BURG-L',
+            price: 24000,
+            compareAtPrice: null,
+            stockQuantity: 3,
+            stockPolicy: 'deny',
+            isDefault: false,
+            isAvailable: true,
+            imageUrl: null,
+            optionValues: [{ optionId: 'size', optionName: 'Tamaño', valueId: 'l', value: 'Grande' }],
+          },
+        ],
+      }),
+    ]);
+
+    expect(page?.categories[0].products[0].variants.map((variant) => ({
+      label: variant.label,
+      price: variant.price,
+      isAvailable: variant.isAvailable,
+    }))).toEqual([
+      { label: 'Tamaño: Pequeña', price: 18000, isAvailable: false },
+      { label: 'Tamaño: Grande', price: 24000, isAvailable: true },
+    ]);
   });
 
   it('converts the removed composition layout into a single-image cover', () => {

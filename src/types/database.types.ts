@@ -660,6 +660,54 @@ export interface Database {
         };
         Relationships: [];
       };
+      store_product_option_library: {
+        Row: {
+          id: string;
+          store_id: string;
+          owner_id: string;
+          label: string;
+          description: string | null;
+          price_delta: number;
+          linked_product_id: string | null;
+          linked_variant_id: string | null;
+          linked_quantity: number;
+          price_mode: string;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          owner_id: string;
+          label: string;
+          description?: string | null;
+          price_delta?: number;
+          linked_product_id?: string | null;
+          linked_variant_id?: string | null;
+          linked_quantity?: number;
+          price_mode?: string;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          owner_id?: string;
+          label?: string;
+          description?: string | null;
+          price_delta?: number;
+          linked_product_id?: string | null;
+          linked_variant_id?: string | null;
+          linked_quantity?: number;
+          price_mode?: string;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       store_product_facets: {
         Row: {
           id: string;
@@ -2519,6 +2567,7 @@ export interface Database {
           can_use_custom_domain: boolean;
           can_use_advanced_theme: boolean;
           can_use_partner_codes: boolean;
+          can_use_accounting: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -2534,6 +2583,7 @@ export interface Database {
           can_use_custom_domain?: boolean;
           can_use_advanced_theme?: boolean;
           can_use_partner_codes?: boolean;
+          can_use_accounting?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -2549,6 +2599,7 @@ export interface Database {
           can_use_custom_domain?: boolean;
           can_use_advanced_theme?: boolean;
           can_use_partner_codes?: boolean;
+          can_use_accounting?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -2759,6 +2810,102 @@ export interface Database {
           currency?: string;
           status?: string;
           notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      accounting_categories: {
+        Row: {
+          id: string;
+          store_id: string;
+          name: string;
+          entry_type: string;
+          is_system: boolean;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          name: string;
+          entry_type?: string;
+          is_system?: boolean;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          name?: string;
+          entry_type?: string;
+          is_system?: boolean;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      accounting_entries: {
+        Row: {
+          id: string;
+          store_id: string;
+          entry_type: string;
+          source: string;
+          order_id: string | null;
+          description: string;
+          category: string;
+          category_id: string | null;
+          amount: number;
+          currency: string;
+          occurred_on: string;
+          status: string;
+          notes: string | null;
+          created_by: string | null;
+          voided_at: string | null;
+          voided_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          entry_type: string;
+          source?: string;
+          order_id?: string | null;
+          description: string;
+          category?: string;
+          category_id?: string | null;
+          amount: number;
+          currency?: string;
+          occurred_on?: string;
+          status?: string;
+          notes?: string | null;
+          created_by?: string | null;
+          voided_at?: string | null;
+          voided_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          entry_type?: string;
+          source?: string;
+          order_id?: string | null;
+          description?: string;
+          category?: string;
+          category_id?: string | null;
+          amount?: number;
+          currency?: string;
+          occurred_on?: string;
+          status?: string;
+          notes?: string | null;
+          created_by?: string | null;
+          voided_at?: string | null;
+          voided_by?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -3392,6 +3539,7 @@ export interface Database {
           short_description: string | null;
           main_image_url: string | null;
           effective_price: number;
+          variants: Json;
           product_sort_order: number;
           category_id: string | null;
           category_name: string | null;
@@ -4053,6 +4201,9 @@ export type StoreCatalogProductPositionRow = Database['public']['Tables']['store
 export type StoreProductOptionTemplateRow = Database['public']['Tables']['store_product_option_templates']['Row'];
 export type StoreProductOptionTemplateRowInsert = Database['public']['Tables']['store_product_option_templates']['Insert'];
 export type StoreProductOptionTemplateRowUpdate = Database['public']['Tables']['store_product_option_templates']['Update'];
+export type StoreProductOptionLibraryRow = Database['public']['Tables']['store_product_option_library']['Row'];
+export type StoreProductOptionLibraryRowInsert = Database['public']['Tables']['store_product_option_library']['Insert'];
+export type StoreProductOptionLibraryRowUpdate = Database['public']['Tables']['store_product_option_library']['Update'];
 
 export type StoreProductCollectionRow = Database['public']['Tables']['store_product_collections']['Row'];
 export type StoreProductCollectionRowInsert = Database['public']['Tables']['store_product_collections']['Insert'];
@@ -4180,6 +4331,12 @@ export type StorePartnerCodeRowInsert = Database['public']['Tables']['store_part
 export type StorePartnerCodeRowUpdate = Database['public']['Tables']['store_partner_codes']['Update'];
 export type PartnerCodeRedemptionRow = Database['public']['Tables']['partner_code_redemptions']['Row'];
 export type PartnerCommissionRow = Database['public']['Tables']['partner_commissions']['Row'];
+export type AccountingCategoryRow = Database['public']['Tables']['accounting_categories']['Row'];
+export type AccountingCategoryRowInsert = Database['public']['Tables']['accounting_categories']['Insert'];
+export type AccountingCategoryRowUpdate = Database['public']['Tables']['accounting_categories']['Update'];
+export type AccountingEntryRow = Database['public']['Tables']['accounting_entries']['Row'];
+export type AccountingEntryRowInsert = Database['public']['Tables']['accounting_entries']['Insert'];
+export type AccountingEntryRowUpdate = Database['public']['Tables']['accounting_entries']['Update'];
 
 export type StoreDomainRow = Database['public']['Tables']['store_domains']['Row'];
 export type StoreDomainRowInsert = Database['public']['Tables']['store_domains']['Insert'];

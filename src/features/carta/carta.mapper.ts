@@ -11,6 +11,8 @@ import type {
   PublicCartaCategory,
   PublicCartaPage,
   PublicCartaProduct,
+  PublicCartaVariant,
+  PublicCartaVariantOptionValue,
   CartaCategoryImagePosition,
   CartaCategoryImageSize,
   CartaProductImagePosition,
@@ -78,6 +80,62 @@ function normalizeProductImagePositions(value: unknown): Record<string, CartaPro
 }
 
 const UNCATEGORIZED_LABEL = 'Otros';
+
+function parseCartaVariants(value: unknown): PublicCartaVariant[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((rawVariant): PublicCartaVariant[] => {
+    if (!rawVariant || typeof rawVariant !== 'object' || Array.isArray(rawVariant)) return [];
+
+    const variant = rawVariant as Record<string, unknown>;
+    const id = typeof variant.id === 'string' ? variant.id : '';
+    if (!id) return [];
+
+    const optionValues = Array.isArray(variant.optionValues)
+      ? variant.optionValues.flatMap((rawOptionValue): PublicCartaVariantOptionValue[] => {
+          if (!rawOptionValue || typeof rawOptionValue !== 'object' || Array.isArray(rawOptionValue)) return [];
+          const optionValue = rawOptionValue as Record<string, unknown>;
+          if (
+            typeof optionValue.optionId !== 'string' ||
+            typeof optionValue.optionName !== 'string' ||
+            typeof optionValue.valueId !== 'string' ||
+            typeof optionValue.value !== 'string'
+          ) {
+            return [];
+          }
+          return [{
+            optionId: optionValue.optionId,
+            optionName: optionValue.optionName,
+            valueId: optionValue.valueId,
+            value: optionValue.value,
+          }];
+        })
+      : [];
+
+    const sku = typeof variant.sku === 'string' && variant.sku.trim() ? variant.sku : null;
+    const stockPolicy = variant.stockPolicy === 'allow_backorder' ? 'allow_backorder' : 'deny';
+    const stockQuantity = Number(variant.stockQuantity ?? 0);
+    const isAvailable = variant.isAvailable === true || stockPolicy === 'allow_backorder' || stockQuantity > 0;
+    const label = optionValues
+      .map((optionValue) => optionValue.optionName ? `${optionValue.optionName}: ${optionValue.value}` : optionValue.value)
+      .filter(Boolean)
+      .join(' · ') || sku || 'Presentación';
+
+    return [{
+      id,
+      sku,
+      price: Number(variant.price ?? 0),
+      compareAtPrice: variant.compareAtPrice == null ? null : Number(variant.compareAtPrice),
+      stockQuantity: Number.isFinite(stockQuantity) ? stockQuantity : 0,
+      stockPolicy,
+      isDefault: variant.isDefault === true,
+      isAvailable,
+      imageUrl: typeof variant.imageUrl === 'string' ? variant.imageUrl : null,
+      optionValues,
+      label,
+    }];
+  });
+}
 
 export function attachPublicCartaImages(
   page: PublicCartaPage,
@@ -204,6 +262,7 @@ export function mapPublicCartaPageRowsToPublicCartaPage(rows: PublicCartaPageRow
       imageUrl: row.main_image_url,
       price: Number(row.effective_price),
       sortOrder: row.product_sort_order,
+      variants: parseCartaVariants(row.variants),
     };
 
     const categoryKey = row.category_id ?? '__uncategorized__';

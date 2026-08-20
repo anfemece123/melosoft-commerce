@@ -21,6 +21,7 @@ import {
   ArrowLeftRight,
   Star,
   Handshake,
+  Calculator,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
@@ -113,6 +114,7 @@ function AdminLayoutContent() {
     { label: 'Pagos', to: `/admin/stores/${storeId}/payments`, icon: <CreditCard className="w-5 h-5" /> },
     { label: 'Reseñas', to: `/admin/stores/${storeId}/reviews`, icon: <Star className="w-5 h-5" /> },
     ...(currentLimits?.canUsePartnerCodes ? [{ label: 'Partners', to: `/admin/stores/${storeId}/partners`, icon: <Handshake className="w-5 h-5" /> }] : []),
+    ...(currentLimits?.canUseAccounting ? [{ label: 'Contabilidad', to: `/admin/stores/${storeId}/accounting`, icon: <Calculator className="w-5 h-5" /> }] : []),
     { label: 'WhatsApp', to: `/admin/stores/${storeId}/whatsapp`, icon: <MessageCircle className="w-5 h-5" /> },
   ] : [];
 

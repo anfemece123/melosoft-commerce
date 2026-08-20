@@ -39,6 +39,27 @@ export interface CartaSettings {
 export type CartaSettingsInsert = Omit<CartaSettings, 'id' | 'createdAt' | 'updatedAt'>;
 export type CartaSettingsUpdate = Partial<Omit<CartaSettingsInsert, 'storeId'>>;
 
+export interface PublicCartaVariantOptionValue {
+  optionId: string;
+  optionName: string;
+  valueId: string;
+  value: string;
+}
+
+export interface PublicCartaVariant {
+  id: string;
+  sku: string | null;
+  price: number;
+  compareAtPrice: number | null;
+  stockQuantity: number;
+  stockPolicy: 'deny' | 'allow_backorder';
+  isDefault: boolean;
+  isAvailable: boolean;
+  imageUrl: string | null;
+  optionValues: PublicCartaVariantOptionValue[];
+  label: string;
+}
+
 export interface PublicCartaProduct {
   id: string;
   name: string;
@@ -46,6 +67,7 @@ export interface PublicCartaProduct {
   imageUrl: string | null;
   price: number;
   sortOrder: number;
+  variants: PublicCartaVariant[];
 }
 
 export interface PublicCartaCategory {

@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import {
   Package, Tag, ShoppingCart, CreditCard, Settings,
   ArrowRight, Users, BarChart2, MapPin, Globe,
-  Building2, Copy, Check, ExternalLink, ShoppingBag, Handshake,
+  Building2, Copy, Check, ExternalLink, ShoppingBag, Handshake, Calculator,
 } from 'lucide-react';
 import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -57,6 +57,7 @@ export function StoreDetailPage() {
   const [copied, setCopied] = useState(false);
   const [productStats, setProductStats] = useState<ProductCountStats | null>(null);
   const [updatingPartnerModule, setUpdatingPartnerModule] = useState(false);
+  const [updatingAccountingModule, setUpdatingAccountingModule] = useState(false);
 
   const profile = useAppSelector(selectAuthProfile);
   const myMemberships = useAppSelector(selectMyMemberships);
@@ -115,6 +116,22 @@ export function StoreDetailPage() {
     }
   }
 
+  async function toggleAccountingModule() {
+    if (!storeId || !currentLimits || !isAdmin) return;
+    setUpdatingAccountingModule(true);
+    try {
+      const updated = await storesService.updateStoreLimits(storeId, {
+        canUseAccounting: !currentLimits.canUseAccounting,
+      });
+      dispatch(setCurrentLimits(updated));
+      notify.success(updated.canUseAccounting ? 'Módulo Contabilidad habilitado.' : 'Módulo Contabilidad deshabilitado.');
+    } catch (error) {
+      notify.fromError(error, 'No pudimos actualizar el módulo Contabilidad.');
+    } finally {
+      setUpdatingAccountingModule(false);
+    }
+  }
+
   const sections: ActionSection[] = [
     {
       title: 'Configuración',
@@ -146,6 +163,13 @@ export function StoreDetailPage() {
       description: 'Descuentos, atribución y comisiones por influencer.',
       to: `/admin/stores/${storeId}/partners`,
       icon: <Handshake className="w-5 h-5 text-pink-600" />,
+      requiresManage: true,
+    },
+    {
+      title: 'Contabilidad',
+      description: 'Ingresos, gastos y balance sencillo de la empresa.',
+      to: `/admin/stores/${storeId}/accounting`,
+      icon: <Calculator className="w-5 h-5 text-emerald-600" />,
       requiresManage: true,
     },
     {
@@ -404,6 +428,7 @@ export function StoreDetailPage() {
                   { label: 'Pagos Wompi', value: currentLimits.canUsePayments ? 'Habilitado' : 'No' },
                   { label: 'Tema avanzado', value: currentLimits.canUseAdvancedTheme ? 'Sí' : 'No' },
                   { label: 'Partners y códigos', value: currentLimits.canUsePartnerCodes ? 'Habilitado' : 'No' },
+                  { label: 'Contabilidad', value: currentLimits.canUseAccounting ? 'Habilitado' : 'No' },
                 ].map(({ label, value }) => (
                   <div key={label}>
                     <p className="text-gray-400 text-xs uppercase tracking-wide">{label}</p>
@@ -424,6 +449,22 @@ export function StoreDetailPage() {
                     onClick={() => void togglePartnerModule()}
                   >
                     {currentLimits.canUsePartnerCodes ? 'Deshabilitar módulo' : 'Habilitar módulo'}
+                  </Button>
+                </div>
+              )}
+              {isAdmin && (
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">Módulo Contabilidad</p>
+                    <p className="mt-1 text-xs text-gray-500">Registra automáticamente las ventas y permite agregar ingresos o gastos manuales.</p>
+                  </div>
+                  <Button
+                    variant={currentLimits.canUseAccounting ? 'outline' : 'primary'}
+                    size="sm"
+                    isLoading={updatingAccountingModule}
+                    onClick={() => void toggleAccountingModule()}
+                  >
+                    {currentLimits.canUseAccounting ? 'Deshabilitar módulo' : 'Habilitar módulo'}
                   </Button>
                 </div>
               )}
