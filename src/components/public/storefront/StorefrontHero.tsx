@@ -19,6 +19,7 @@ interface StorefrontHeroProps {
   theme: StorefrontTheme;
   storeName: string;
   storeLogoUrl: string | null;
+  transparentHeaderOnMobile?: boolean;
   getCtaHref: (slide: PublicStoreHeroSlide) => string;
   fallbackCtaLabel: string;
   slides: PublicStoreHeroSlide[];
@@ -74,6 +75,7 @@ export function StorefrontHero({
   theme,
   storeName,
   storeLogoUrl,
+  transparentHeaderOnMobile = false,
   getCtaHref,
   fallbackCtaLabel,
   slides,
@@ -191,7 +193,9 @@ export function StorefrontHero({
       </div>
 
       <div className="relative z-10 mx-auto -mt-px w-full max-w-none overflow-hidden border border-transparent px-0 py-0">
-        <div className={`relative overflow-hidden px-6 pt-[130px] md:px-10 md:pt-[144px] lg:px-14 ${hasCarousel ? 'pb-20 md:pb-24' : 'pb-10 md:pb-12'}`}>
+        <div
+          className={`relative overflow-hidden px-6 ${transparentHeaderOnMobile ? 'pt-[max(156px,calc(env(safe-area-inset-top)+136px))]' : 'pt-[130px]'} md:px-10 md:pt-[144px] lg:px-14 ${hasCarousel ? 'pb-20 md:pb-24' : 'pb-10 md:pb-12'}`}
+        >
           <DecorativeBlob className="left-[-38px] top-16 h-24 w-24 rounded-[36px]" />
           <DecorativeBlob className="bottom-[-18px] left-12 h-28 w-28 rounded-full" />
           <DecorativeBlob className="left-24 top-[-8px] h-20 w-20 rounded-full opacity-40" />
@@ -206,6 +210,7 @@ export function StorefrontHero({
               const ctaLabel = slide.showCta ? slide.ctaLabel?.trim() || fallbackCtaLabel : null;
               const ctaHref = getCtaHref(slide);
               const badgeImageUrl = slide.showBadgeImage ? slide.badgeImageUrl ?? storeLogoUrl : null;
+              const hasVisual = slide.showMainImage || Boolean(badgeImageUrl);
               const Heading = index === 0 ? 'h1' : 'h2';
 
               return (
@@ -217,7 +222,8 @@ export function StorefrontHero({
                   aria-hidden={!isCurrent}
                   inert={!isCurrent}
                   className={[
-                    'col-start-1 row-start-1 grid items-center gap-8 transition-[opacity,transform] duration-700 ease-out motion-reduce:transition-none lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] lg:gap-10',
+                    'col-start-1 row-start-1 grid items-center gap-8 transition-[opacity,transform] duration-700 ease-out motion-reduce:transition-none lg:gap-10',
+                    hasVisual ? 'lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]' : 'lg:grid-cols-1',
                     isCurrent
                       ? 'relative z-10 translate-y-0 scale-100 opacity-100 delay-100'
                       : 'pointer-events-none z-0 translate-y-2 scale-[0.985] opacity-0 delay-0',
@@ -260,82 +266,94 @@ export function StorefrontHero({
                     </div>
                   </div>
 
-                  <div className="order-1 flex justify-center lg:order-2 lg:justify-end">
-                    <div className="relative">
-                      <div
-                        aria-hidden="true"
-                        className="absolute left-1/2 top-1/2 h-[232px] w-[232px] -translate-x-1/2 -translate-y-1/2 rounded-full sm:h-[296px] sm:w-[296px] md:h-[390px] md:w-[390px] lg:h-[470px] lg:w-[470px]"
-                        style={{ backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#d8e0e8' }}
-                      />
+                  {hasVisual ? (
+                    <div className="order-1 flex justify-center lg:order-2 lg:justify-end">
+                      <div className="relative">
+                        {slide.showMainImage ? (
+                          <>
+                            <div
+                              aria-hidden="true"
+                              className="absolute left-1/2 top-1/2 h-[232px] w-[232px] -translate-x-1/2 -translate-y-1/2 rounded-full sm:h-[296px] sm:w-[296px] md:h-[390px] md:w-[390px] lg:h-[470px] lg:w-[470px]"
+                              style={{ backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#d8e0e8' }}
+                            />
 
-                      <div
-                        className="relative flex h-[208px] w-[208px] items-end justify-center overflow-hidden rounded-full sm:h-[268px] sm:w-[268px] md:h-[420px] md:w-[420px] lg:h-[500px] lg:w-[500px]"
-                        style={{
-                          background: theme.mode === 'dark'
-                            ? 'radial-gradient(circle at 30% 18%, rgba(255,255,255,0.16) 0, rgba(255,255,255,0.16) 16%, transparent 16.5%), radial-gradient(circle at 50% 60%, rgba(0,0,0,0.22) 0, rgba(0,0,0,0.45) 100%), rgba(255,255,255,0.06)'
-                            : 'radial-gradient(circle at 30% 18%, rgba(255,255,255,0.45) 0, rgba(255,255,255,0.45) 16%, transparent 16.5%), #d8e0e8',
-                        }}
-                      >
-                        <div
-                          className="absolute bottom-0 left-0 right-0 h-[86px]"
-                          style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.12) 100%)' }}
-                        />
+                            <div
+                              data-testid="hero-main-image-frame"
+                              className="relative flex h-[208px] w-[208px] items-end justify-center overflow-hidden rounded-full sm:h-[268px] sm:w-[268px] md:h-[420px] md:w-[420px] lg:h-[500px] lg:w-[500px]"
+                              style={{
+                                background: theme.mode === 'dark'
+                                  ? 'radial-gradient(circle at 30% 18%, rgba(255,255,255,0.16) 0, rgba(255,255,255,0.16) 16%, transparent 16.5%), radial-gradient(circle at 50% 60%, rgba(0,0,0,0.22) 0, rgba(0,0,0,0.45) 100%), rgba(255,255,255,0.06)'
+                                  : 'radial-gradient(circle at 30% 18%, rgba(255,255,255,0.45) 0, rgba(255,255,255,0.45) 16%, transparent 16.5%), #d8e0e8',
+                              }}
+                            >
+                              <div
+                                className="absolute bottom-0 left-0 right-0 h-[86px]"
+                                style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.12) 100%)' }}
+                              />
 
-                        {slide.showMainImage && slide.mainImageUrl ? (
-                          <img
-                            src={slide.mainImageUrl}
-                            alt={title || storeName}
-                            loading={index === 0 ? 'eager' : 'lazy'}
-                            fetchPriority={index === 0 ? 'high' : 'auto'}
-                            decoding="async"
-                            className="h-full w-full object-contain"
-                          />
-                        ) : slide.showMainImage ? (
-                          <div
-                            className="mb-16 flex h-[64%] w-[64%] items-center justify-center rounded-full border-2 border-dashed text-center"
-                            style={{ borderColor: 'rgba(255,255,255,0.8)', backgroundColor: 'rgba(255,255,255,0.18)' }}
-                          >
-                            <div className="px-6">
-                              <p className="text-sm font-semibold uppercase tracking-[0.32em]" style={{ color: theme.primary }}>
-                                Imagen principal
-                              </p>
+                              {slide.mainImageUrl ? (
+                                <img
+                                  src={slide.mainImageUrl}
+                                  alt={title || storeName}
+                                  loading={index === 0 ? 'eager' : 'lazy'}
+                                  fetchPriority={index === 0 ? 'high' : 'auto'}
+                                  decoding="async"
+                                  className="h-full w-full object-contain"
+                                />
+                              ) : (
+                                <div
+                                  className="mb-16 flex h-[64%] w-[64%] items-center justify-center rounded-full border-2 border-dashed text-center"
+                                  style={{ borderColor: 'rgba(255,255,255,0.8)', backgroundColor: 'rgba(255,255,255,0.18)' }}
+                                >
+                                  <div className="px-6">
+                                    <p className="text-sm font-semibold uppercase tracking-[0.32em]" style={{ color: theme.primary }}>
+                                      Imagen principal
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
                             </div>
+                          </>
+                        ) : null}
+
+                        {slide.showBadgeImage && badgeImageUrl ? (
+                          <div
+                            className={[
+                              'flex h-[94px] w-[94px] items-center justify-center rounded-full border-[3px] bg-white p-[4px] sm:h-[110px] sm:w-[110px] md:h-[132px] md:w-[132px]',
+                              slide.showMainImage
+                                ? 'absolute right-[-6px] top-5 sm:right-0 sm:top-8 md:top-10'
+                                : 'relative',
+                            ].join(' ')}
+                            style={{
+                              borderColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : '#d6dce2',
+                              boxShadow: theme.mode === 'dark' ? '0 14px 28px rgba(0,0,0,0.34)' : '0 10px 20px rgba(0,0,0,0.12)',
+                              backgroundColor: theme.mode === 'dark' ? 'rgba(15,23,42,0.92)' : '#ffffff',
+                            }}
+                          >
+                            {slide.badgeImageUrl ? (
+                              <img
+                                src={slide.badgeImageUrl}
+                                alt={`${storeName} badge`}
+                                loading={index === 0 ? 'eager' : 'lazy'}
+                                decoding="async"
+                                className="h-full w-full rounded-full object-cover"
+                              />
+                            ) : (
+                              <PublicStoreLogo
+                                logoUrl={storeLogoUrl}
+                                storeName={storeName}
+                                sizeClassName="h-full w-full"
+                                fallbackColor={theme.primary}
+                                outerClassName={theme.mode === 'dark' ? 'border border-white/10 bg-slate-950' : 'border border-gray-200 bg-white'}
+                                imageClassName="rounded-full object-cover"
+                                iconClassName="h-11 w-11"
+                              />
+                            )}
                           </div>
                         ) : null}
                       </div>
-
-                      {slide.showBadgeImage && badgeImageUrl ? (
-                        <div
-                          className="absolute right-[-6px] top-5 flex h-[94px] w-[94px] items-center justify-center rounded-full border-[3px] bg-white p-[4px] sm:right-0 sm:top-8 sm:h-[110px] sm:w-[110px] md:top-10 md:h-[132px] md:w-[132px]"
-                          style={{
-                            borderColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : '#d6dce2',
-                            boxShadow: theme.mode === 'dark' ? '0 14px 28px rgba(0,0,0,0.34)' : '0 10px 20px rgba(0,0,0,0.12)',
-                            backgroundColor: theme.mode === 'dark' ? 'rgba(15,23,42,0.92)' : '#ffffff',
-                          }}
-                        >
-                          {slide.badgeImageUrl ? (
-                            <img
-                              src={slide.badgeImageUrl}
-                              alt={`${storeName} badge`}
-                              loading={index === 0 ? 'eager' : 'lazy'}
-                              decoding="async"
-                              className="h-full w-full rounded-full object-cover"
-                            />
-                          ) : (
-                            <PublicStoreLogo
-                              logoUrl={storeLogoUrl}
-                              storeName={storeName}
-                              sizeClassName="h-full w-full"
-                              fallbackColor={theme.primary}
-                              outerClassName={theme.mode === 'dark' ? 'border border-white/10 bg-slate-950' : 'border border-gray-200 bg-white'}
-                              imageClassName="rounded-full object-cover"
-                              iconClassName="h-11 w-11"
-                            />
-                          )}
-                        </div>
-                      ) : null}
                     </div>
-                  </div>
+                  ) : null}
                 </article>
               );
             })}

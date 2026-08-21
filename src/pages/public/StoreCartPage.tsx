@@ -2,7 +2,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AlertTriangle, ChevronRight, ShoppingBag } from 'lucide-react';
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
 import { StorefrontBackButton } from '@/components/public/storefront/StorefrontBackButton';
-import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
+import { usePublicStorefrontTheme } from '@/lib/storefront/usePublicStorefrontTheme';
+import { usePublicStoreExperience } from '@/components/layout/PublicStoreExperienceContext';
 import { useCart } from '@/lib/cart/cartContext';
 import { useSelectedLocation } from '@/lib/locations/locationContext';
 import { useEffect, useState, type MouseEvent } from 'react';
@@ -30,8 +31,11 @@ export function StoreCartPage() {
   const storeSlug = useResolvedStoreSlug(routeStoreSlug);
   const navigate = useNavigate();
   const { branding } = usePublicStoreBranding();
+  const { activeExperience } = usePublicStoreExperience();
   const { items, totalItems, totalPrice, updateQuantity, removeItem, addItem } = useCart();
   const { selectedLocation, orderStatus, scheduleLoading } = useSelectedLocation();
+  const theme = usePublicStorefrontTheme(branding);
+  const experienceQuery = activeExperience ? `?cat=${encodeURIComponent(activeExperience.categorySlug)}` : '';
   const [locationAvailability, setLocationAvailability] = useState<{
     storeId: string;
     locationId: string;
@@ -61,16 +65,6 @@ export function StoreCartPage() {
     && locationAvailability.locationId === selectedLocation.locationId
     ? locationAvailability.unavailableIds
     : EMPTY_UNAVAILABLE_PRODUCT_IDS;
-
-  const theme = buildStorefrontTheme({
-    mode: currentBranding.themeMode,
-    primaryColor: currentBranding.primaryColor,
-    secondaryColor: currentBranding.secondaryColor,
-    accentColor: currentBranding.accentColor,
-    backgroundColor: currentBranding.backgroundColor,
-    textColor: currentBranding.textColor,
-    buttonRadius: currentBranding.buttonRadius,
-  });
 
   const commerceConfig: PublicCommerceConfig = {
     catalogType: currentBranding.catalogType,
@@ -138,7 +132,7 @@ export function StoreCartPage() {
         className="mb-6"
         color={theme.text}
         label="Seguir comprando"
-        fallbackPath={buildStorefrontPath(storeSlug, '/catalog')}
+        fallbackPath={buildStorefrontPath(storeSlug, `/catalog${experienceQuery}`)}
       />
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -168,7 +162,7 @@ export function StoreCartPage() {
                     {totalItems} producto{totalItems !== 1 ? 's' : ''} en el carrito
                   </p>
                 </div>
-                <Link to={buildStorefrontPath(storeSlug, '/catalog')} className="text-sm font-medium" style={{ color: theme.primary }}>
+                <Link to={buildStorefrontPath(storeSlug, `/catalog${experienceQuery}`)} className="text-sm font-medium" style={{ color: theme.primary }}>
                   Agregar más
                 </Link>
               </div>
@@ -178,7 +172,7 @@ export function StoreCartPage() {
                 currency={currentBranding.currency}
                 onUpdateQuantity={updateQuantity}
                 onRemove={removeItem}
-                onEdit={(item) => void navigate(buildStorefrontPath(storeSlug, `/p/${item.productSlug}`), {
+                onEdit={(item) => void navigate(buildStorefrontPath(storeSlug, `/p/${item.productSlug}${experienceQuery}`), {
                   state: { editCartLineId: item.lineId, returnTo: 'cart' },
                 })}
               />
@@ -269,7 +263,7 @@ export function StoreCartPage() {
 
               <button
                 type="button"
-                onClick={() => void navigate(buildStorefrontPath(storeSlug, '/checkout'))}
+                onClick={() => void navigate(buildStorefrontPath(storeSlug, `/checkout${experienceQuery}`))}
                 disabled={items.length === 0 || unavailableItems.length > 0 || !(showCod || showOnline) || scheduleLoading || orderStatus?.isAcceptingOrders !== true}
                 className="flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                 style={{ backgroundColor: theme.primary }}

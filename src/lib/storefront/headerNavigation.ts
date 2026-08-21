@@ -1,5 +1,6 @@
 import type {
   HeaderNavigationItemType,
+  HeaderNavigationIconKey,
   PublicHeaderSettings,
   PublicStoreCategory,
   PublicStoreCollection,
@@ -13,6 +14,8 @@ export interface ResolvedHeaderNavigationItem {
   label: string;
   href: string;
   targetId: string | null;
+  icon?: HeaderNavigationIconKey | null;
+  iconUrl?: string | null;
   rootCategorySlug: string | null;
 }
 
@@ -30,6 +33,8 @@ function catalogItem(
   storeSlug: string,
   label: string,
   id = 'catalog',
+  icon?: HeaderNavigationIconKey | null,
+  iconUrl?: string | null,
 ): ResolvedHeaderNavigationItem {
   return {
     id,
@@ -37,6 +42,8 @@ function catalogItem(
     label,
     href: buildStorefrontPath(storeSlug, '/catalog'),
     targetId: null,
+    ...(icon ? { icon } : {}),
+    ...(iconUrl ? { iconUrl } : {}),
     rootCategorySlug: null,
   };
 }
@@ -85,7 +92,7 @@ export function buildHeaderNavigationItems({
 
   const resolved = settings.navigationItems.flatMap<ResolvedHeaderNavigationItem>((item) => {
     if (item.type === 'catalog') {
-      return [catalogItem(storeSlug, item.label, item.id)];
+      return [catalogItem(storeSlug, item.label, item.id, item.icon, item.iconUrl)];
     }
 
     if (item.type === 'featured' || item.type === 'sale') {
@@ -96,6 +103,8 @@ export function buildHeaderNavigationItems({
         label: item.label,
         href: buildStorefrontPath(storeSlug, `/catalog?${parameter}`),
         targetId: null,
+        ...(item.icon ? { icon: item.icon } : {}),
+        ...(item.iconUrl ? { iconUrl: item.iconUrl } : {}),
         rootCategorySlug: null,
       }];
     }
@@ -114,6 +123,8 @@ export function buildHeaderNavigationItems({
         label: item.label,
         href: buildStorefrontPath(storeSlug, `/catalog?${query}`),
         targetId: item.targetId,
+        ...(item.icon ? { icon: item.icon } : {}),
+        ...(item.iconUrl ? { iconUrl: item.iconUrl } : {}),
         rootCategorySlug: match.parent ? null : match.category.slug,
       }];
     }
@@ -130,6 +141,8 @@ export function buildHeaderNavigationItems({
           `/catalog?collection=${encodeURIComponent(collection.slug)}`,
         ),
         targetId: item.targetId,
+        ...(item.icon ? { icon: item.icon } : {}),
+        ...(item.iconUrl ? { iconUrl: item.iconUrl } : {}),
         rootCategorySlug: null,
       }];
     }
@@ -148,6 +161,8 @@ export function buildHeaderNavigationItems({
         `/catalog?f_${encodeURIComponent(facet.slug)}=${encodeURIComponent(value.slug)}`,
       ),
       targetId: item.targetId,
+      ...(item.icon ? { icon: item.icon } : {}),
+      ...(item.iconUrl ? { iconUrl: item.iconUrl } : {}),
       rootCategorySlug: null,
     }];
   });

@@ -61,10 +61,10 @@ function GlobalCatalogMenu({
 }: Omit<MegaMenuPanelProps, 'activeCategory' | 'megaMenuFacets'>) {
   return (
     <nav
-      className={`mx-auto ${STOREFRONT_CONTAINER_CLASS} px-5 py-5 lg:px-8 lg:py-6`}
+      className={`mx-auto ${STOREFRONT_CONTAINER_CLASS} px-5 py-7 lg:px-10 lg:py-8`}
       aria-label={`Categorías de ${catalogLabel}`}
     >
-      <div className="grid gap-x-9 gap-y-7 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid gap-x-12 gap-y-9 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {categoryTree.map((category) => {
           const children = (category.children ?? []).filter((child) => child.showInMenu);
           return (
@@ -72,27 +72,27 @@ function GlobalCatalogMenu({
               <Link
                 to={categoryHref(storeSlug, category.slug)}
                 onClick={onClose}
-                className="group flex items-center gap-3 rounded-xl py-1 outline-none transition-opacity hover:opacity-70 focus-visible:ring-2"
+                className="group flex items-center gap-4 rounded-2xl px-2 py-2 outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/5"
                 style={{ color: theme.text }}
               >
-                <MenuImage src={category.imageUrl} alt="" sizeClassName="h-12 w-12" />
-                <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[15px] font-semibold">
+                <MenuImage src={category.imageUrl} alt="" sizeClassName="h-16 w-16" />
+                <span className="flex min-w-0 flex-1 items-center gap-2 text-[18px] font-semibold leading-tight">
                   <span className="truncate">{category.name}</span>
-                  <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-40 transition-transform group-hover:translate-x-0.5" />
+                  <ChevronRight className="h-5 w-5 shrink-0 opacity-40 transition-transform group-hover:translate-x-0.5" />
                 </span>
               </Link>
 
               {children.length > 0 ? (
-                <div className={category.imageUrl ? 'ml-[60px] mt-2 space-y-0.5' : 'mt-2 space-y-0.5'}>
+                <div className={category.imageUrl ? 'ml-[80px] mt-3 space-y-1' : 'mt-3 space-y-1'}>
                   {children.slice(0, 6).map((child) => (
                     <Link
                       key={child.id}
                       to={subcategoryHref(storeSlug, category.slug, child.slug)}
                       onClick={onClose}
-                      className="flex items-center gap-2 rounded-lg py-1.5 text-[13px] outline-none transition-opacity hover:opacity-60 focus-visible:ring-2"
+                      className="flex items-center gap-3 rounded-xl py-2 text-[15px] outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/5"
                       style={{ color: theme.mutedText }}
                     >
-                      <MenuImage src={child.imageUrl} alt="" sizeClassName="h-6 w-6 rounded-md" />
+                      <MenuImage src={child.imageUrl} alt="" sizeClassName="h-8 w-8 rounded-lg" />
                       <span className="truncate">{child.name}</span>
                     </Link>
                   ))}
@@ -100,10 +100,10 @@ function GlobalCatalogMenu({
                     <Link
                       to={categoryHref(storeSlug, category.slug)}
                       onClick={onClose}
-                      className="inline-flex items-center gap-1 pt-1 text-xs font-semibold hover:opacity-60"
+                      className="inline-flex items-center gap-1.5 pt-2 text-sm font-semibold hover:opacity-60"
                       style={{ color: theme.primary }}
                     >
-                      Ver más <ArrowRight className="h-3 w-3" />
+                      Ver más <ArrowRight className="h-4 w-4" />
                     </Link>
                   ) : null}
                 </div>
@@ -117,13 +117,13 @@ function GlobalCatalogMenu({
             key={collection.id}
             to={buildStorefrontPath(storeSlug, `/catalog?collection=${encodeURIComponent(collection.slug)}`)}
             onClick={onClose}
-            className="group flex min-w-0 items-center gap-3 self-start rounded-xl py-1 outline-none transition-opacity hover:opacity-70 focus-visible:ring-2"
+            className="group flex min-w-0 items-center gap-4 self-start rounded-2xl px-2 py-2 outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/5"
             style={{ color: theme.text }}
           >
-            <MenuImage src={collection.imageUrl} alt="" sizeClassName="h-12 w-12" />
-            <span className="flex min-w-0 flex-1 items-center gap-1.5 text-[15px] font-semibold">
+            <MenuImage src={collection.imageUrl} alt="" sizeClassName="h-16 w-16" />
+            <span className="flex min-w-0 flex-1 items-center gap-2 text-[18px] font-semibold leading-tight">
               <span className="truncate">{collection.name}</span>
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-40 transition-transform group-hover:translate-x-0.5" />
+              <ChevronRight className="h-5 w-5 shrink-0 opacity-40 transition-transform group-hover:translate-x-0.5" />
             </span>
           </Link>
         ))}
@@ -144,35 +144,35 @@ function CategoryMenu({
 
   return (
     <nav
-      className={`mx-auto ${STOREFRONT_CONTAINER_CLASS} px-5 py-5 lg:px-8 lg:py-6`}
+      className={`mx-auto ${STOREFRONT_CONTAINER_CLASS} px-5 py-7 lg:px-10 lg:py-8`}
       aria-label={`Opciones de ${activeCategory.name}`}
     >
-      <div className="grid gap-x-10 gap-y-7 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="grid gap-x-12 gap-y-9 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <section className="min-w-0">
           <Link
             to={categoryHref(storeSlug, activeCategory.slug)}
             onClick={onClose}
-            className="group flex items-center gap-3 rounded-xl py-1 outline-none transition-opacity hover:opacity-70 focus-visible:ring-2"
+            className="group flex items-center gap-4 rounded-2xl px-2 py-2 outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/5"
             style={{ color: theme.text }}
           >
-            <MenuImage src={activeCategory.imageUrl} alt="" sizeClassName="h-14 w-14" />
-            <span className="flex min-w-0 flex-1 items-center gap-1.5 text-base font-semibold">
+            <MenuImage src={activeCategory.imageUrl} alt="" sizeClassName="h-[72px] w-[72px]" />
+            <span className="flex min-w-0 flex-1 items-center gap-2 text-[20px] font-semibold leading-tight">
               <span className="truncate">{activeCategory.name}</span>
-              <ChevronRight className="h-4 w-4 shrink-0 opacity-40 transition-transform group-hover:translate-x-0.5" />
+              <ChevronRight className="h-5 w-5 shrink-0 opacity-40 transition-transform group-hover:translate-x-0.5" />
             </span>
           </Link>
 
           {subcategories.length > 0 ? (
-            <div className={activeCategory.imageUrl ? 'ml-[68px] mt-2 space-y-0.5' : 'mt-2 space-y-0.5'}>
+            <div className={activeCategory.imageUrl ? 'ml-[88px] mt-3 space-y-1' : 'mt-3 space-y-1'}>
               {subcategories.slice(0, 8).map((subcategory) => (
                 <Link
                   key={subcategory.id}
                   to={subcategoryHref(storeSlug, activeCategory.slug, subcategory.slug)}
                   onClick={onClose}
-                  className="group flex items-center gap-2 rounded-lg py-1.5 text-sm outline-none transition-opacity hover:opacity-60 focus-visible:ring-2"
+                  className="group flex items-center gap-3 rounded-xl py-2 text-base outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/5"
                   style={{ color: theme.mutedText }}
                 >
-                  <MenuImage src={subcategory.imageUrl} alt="" sizeClassName="h-7 w-7 rounded-md" />
+                  <MenuImage src={subcategory.imageUrl} alt="" sizeClassName="h-8 w-8 rounded-lg" />
                   <span className="min-w-0 flex-1 truncate">{subcategory.name}</span>
                 </Link>
               ))}
@@ -180,10 +180,10 @@ function CategoryMenu({
                 <Link
                   to={categoryHref(storeSlug, activeCategory.slug)}
                   onClick={onClose}
-                  className="inline-flex items-center gap-1 pt-1 text-xs font-semibold hover:opacity-60"
+                  className="inline-flex items-center gap-1.5 pt-2 text-sm font-semibold hover:opacity-60"
                   style={{ color: theme.primary }}
                 >
-                  Ver más <ArrowRight className="h-3 w-3" />
+                  Ver más <ArrowRight className="h-4 w-4" />
                 </Link>
               ) : null}
             </div>
@@ -192,7 +192,7 @@ function CategoryMenu({
 
         {visibleFacets.map((facet) => (
           <section key={facet.id} className="min-w-0">
-            <p className="mb-2.5 text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: theme.mutedText }}>
+            <p className="mb-3 text-sm font-semibold uppercase tracking-[0.12em]" style={{ color: theme.mutedText }}>
               {facet.name}
             </p>
             <div className="space-y-0.5">
@@ -201,7 +201,7 @@ function CategoryMenu({
                   key={value.id}
                   to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(activeCategory.slug)}&f_${encodeURIComponent(facet.slug)}=${encodeURIComponent(value.slug)}`)}
                   onClick={onClose}
-                  className="block rounded-md py-1.5 text-sm outline-none transition-opacity hover:opacity-60 focus-visible:ring-2"
+                  className="block rounded-xl px-2 py-2 text-base outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 dark:hover:bg-white/5"
                   style={{ color: theme.text }}
                 >
                   {value.value}
@@ -211,10 +211,10 @@ function CategoryMenu({
                 <Link
                   to={categoryHref(storeSlug, activeCategory.slug)}
                   onClick={onClose}
-                  className="inline-flex items-center gap-1 pt-2 text-xs font-semibold hover:opacity-60"
+                  className="inline-flex items-center gap-1.5 pt-2 text-sm font-semibold hover:opacity-60"
                   style={{ color: theme.primary }}
                 >
-                  Ver más <ArrowRight className="h-3 w-3" />
+                  Ver más <ArrowRight className="h-4 w-4" />
                 </Link>
               ) : null}
             </div>
@@ -241,7 +241,7 @@ export function MegaMenuPanel(props: MegaMenuPanelProps) {
   return (
     <div
       id="storefront-mega-menu"
-      className="absolute inset-x-0 top-full z-50 max-h-[min(70vh,580px)] w-full overflow-y-auto overscroll-contain"
+      className="absolute inset-x-0 top-full z-50 max-h-[min(78vh,700px)] w-full overflow-y-auto overscroll-contain"
       data-layout="overlay"
       style={{
         backgroundColor: props.theme.mode === 'dark'

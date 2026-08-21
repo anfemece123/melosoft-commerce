@@ -42,7 +42,9 @@ import { ProductImageZoom } from '@/components/public/storefront/ProductImageZoo
 import { ProductReviewsSection } from '@/components/public/storefront/ProductReviewsSection';
 import { ProductVideoPlayer, ProductVideoThumbnail } from '@/components/public/storefront/ProductVideoPlayer';
 import { StorefrontRatingStars } from '@/components/public/storefront/StorefrontRatingStars';
-import { buildStorefrontTheme, withAlpha, STOREFRONT_CONTAINER_CLASS } from '@/components/public/storefront/storefrontTheme';
+import { withAlpha, STOREFRONT_CONTAINER_CLASS } from '@/components/public/storefront/storefrontTheme';
+import { usePublicStorefrontTheme } from '@/lib/storefront/usePublicStorefrontTheme';
+import { usePublicStoreExperience } from '@/components/layout/PublicStoreExperienceContext';
 import {
   hasActiveDiscount,
   getActivePrice,
@@ -240,6 +242,8 @@ function ProductLandingContent({
   recommendedUnavailableIds,
 }: ProductLandingContentProps) {
   const { branding: storeBranding } = usePublicStoreBranding();
+  const { activeExperience } = usePublicStoreExperience();
+  const shellTheme = usePublicStorefrontTheme(storeBranding);
   const { setRouteReady } = usePublicRouteReady();
   const { addItem, replaceItem, items: cartItems } = useCart();
   const location = useLocation();
@@ -295,6 +299,8 @@ function ProductLandingContent({
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [activeMedia, setActiveMedia] = useState<'image' | 'video'>('image');
   const [openDetailKeys, setOpenDetailKeys] = useState<string[] | null>(null);
+  const theme = usePublicStorefrontTheme(product);
+  const experienceQuery = activeExperience ? `?cat=${encodeURIComponent(activeExperience.categorySlug)}` : '';
 
   useEffect(() => {
     let cancelled = false;
@@ -468,15 +474,6 @@ function ProductLandingContent({
       .slice(0, 4);
   }, [product, recommendedProductsSource]);
 
-  const shellTheme = buildStorefrontTheme({
-    mode: storeBranding?.themeMode,
-    primaryColor: storeBranding?.primaryColor,
-    secondaryColor: storeBranding?.secondaryColor,
-    accentColor: storeBranding?.accentColor,
-    backgroundColor: storeBranding?.backgroundColor,
-    textColor: storeBranding?.textColor,
-    buttonRadius: storeBranding?.buttonRadius,
-  });
   const metadataBaseUrl = location.pathname.startsWith(`/s/${storeSlug}`)
     ? domainsService.getPlatformStoreUrl(storeSlug)
     : window.location.origin;
@@ -553,7 +550,7 @@ function ProductLandingContent({
     );
   }
 
-  const bgColor = product.backgroundColor ?? '#ffffff';
+  const bgColor = theme.background;
   const currentProduct = product;
   const effectiveOptionGroups = applyLocationAvailabilityToProductOptions(
     currentProduct.optionGroups,
@@ -568,15 +565,6 @@ function ProductLandingContent({
       ? !isVariantAvailable(selectedVariant)
       : isProductFullyOutOfStock(currentProduct)
     : isOutOfStock(currentProduct));
-  const theme = buildStorefrontTheme({
-    mode: currentProduct.themeMode,
-    primaryColor: currentProduct.primaryColor,
-    secondaryColor: currentProduct.secondaryColor,
-    accentColor: currentProduct.accentColor,
-    backgroundColor: currentProduct.backgroundColor,
-    textColor: currentProduct.textColor,
-    buttonRadius: currentProduct.buttonRadius,
-  });
   const textColor = theme.text;
   const isMenu = currentProduct.productType === 'menu_item';
   const whatsappNumber = normalizePhoneForWhatsApp(currentProduct.storeWhatsappNumber);
@@ -739,7 +727,7 @@ function ProductLandingContent({
     setSpecialInstructions('');
     if (isEditingCartItem) {
       notify.success('Pedido actualizado');
-      void navigate(buildStorefrontPath(storeSlug, editReturnPath), { replace: true });
+      void navigate(buildStorefrontPath(storeSlug, `${editReturnPath}${experienceQuery}`), { replace: true });
     } else {
       notify.cartSuccess(`"${currentProduct.productName}" agregado al pedido`);
     }

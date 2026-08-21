@@ -1,25 +1,14 @@
-import {
-  BadgePercent,
-  ChevronDown,
-  ChevronRight,
-  FolderTree,
-  Home,
-  Layers3,
-  List,
-  SlidersHorizontal,
-  Sparkles,
-  X,
-} from 'lucide-react';
+import { ChevronDown, ChevronRight, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type {
-  HeaderNavigationItemType,
   PublicHeaderSettings,
   PublicStoreCategory,
   PublicStoreCollection,
 } from '@/types/common.types';
 import type { StorefrontTheme } from './storefrontTheme';
 import { PublicStoreLogo } from './PublicStoreLogo';
+import { HeaderNavigationIcon } from './HeaderNavigationIcon';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 import type { ResolvedHeaderNavigationItem } from '@/lib/storefront/headerNavigation';
 import {
@@ -39,6 +28,9 @@ interface MobileNavDrawerProps {
   collections?: PublicStoreCollection[];
   navigationItems: ResolvedHeaderNavigationItem[];
   showAutomaticCollections: boolean;
+  activeNavigationItemId?: string | null;
+  activeCategorySlug?: string | null;
+  homeIsActive?: boolean;
 }
 
 export function MobileNavDrawer({
@@ -53,6 +45,9 @@ export function MobileNavDrawer({
   collections = [],
   navigationItems,
   showAutomaticCollections,
+  activeNavigationItemId = null,
+  activeCategorySlug = null,
+  homeIsActive = false,
 }: MobileNavDrawerProps) {
   const [expandedItemId, setExpandedItemId] = useState<string | null>(() => (
     settings.menuMode === 'catalog_link'
@@ -186,10 +181,11 @@ export function MobileNavDrawer({
             <Link
               to={buildStorefrontPath(storeSlug)}
               onClick={onClose}
-              className={`flex items-center gap-3 px-5 py-3.5 font-medium transition-opacity hover:opacity-70 ${menuTextClass}`}
-              style={{ color: theme.primary }}
+              className={`flex items-center gap-3 px-5 py-3.5 font-medium transition-opacity hover:opacity-70 ${menuTextClass} ${homeIsActive ? 'font-semibold' : ''}`}
+              style={{ color: homeIsActive ? theme.primary : theme.text, backgroundColor: homeIsActive ? controlBg : 'transparent' }}
+              aria-current={homeIsActive ? 'page' : undefined}
             >
-              <Home className="h-4 w-4 shrink-0" />
+              <HeaderNavigationIcon type="home" icon={settings.homeIcon} iconUrl={settings.homeIconUrl} className="h-5 w-5 shrink-0" />
               Inicio
             </Link>
           )}
@@ -203,20 +199,23 @@ export function MobileNavDrawer({
               ? automaticCategoryTree.length > 0
               : (rootCategory?.children ?? []).length > 0;
             const isExpanded = expandedItemId === item.id;
+            const itemIsActive = activeNavigationItemId === item.id;
             return (
               <div key={item.id} className="border-b border-transparent">
                 <div className="flex items-center">
                   <Link
                     to={item.href}
                     onClick={onClose}
-                    className={`flex min-w-0 flex-1 items-center gap-3 py-3 pl-5 font-medium transition-opacity hover:opacity-70 ${menuTextClass} ${hasNestedContent ? 'pr-2' : 'pr-5'}`}
+                    className={`flex min-w-0 flex-1 items-center gap-3 py-3 pl-5 font-medium transition-opacity hover:opacity-70 ${menuTextClass} ${hasNestedContent ? 'pr-2' : 'pr-5'} ${itemIsActive ? 'font-semibold' : ''}`}
                     style={{
-                      color: !settings.showHomeLink && index === 0
+                      color: itemIsActive || (!settings.showHomeLink && index === 0)
                         ? theme.primary
                         : theme.mode === 'dark' ? theme.text : '#374151',
+                      backgroundColor: itemIsActive ? controlBg : 'transparent',
                     }}
+                    aria-current={itemIsActive ? 'page' : undefined}
                   >
-                    <NavigationItemIcon type={item.type} />
+                    <HeaderNavigationIcon type={item.type} icon={item.icon} iconUrl={item.iconUrl} className="h-5 w-5 shrink-0" />
                     <span className="truncate">{item.label}</span>
                   </Link>
                   {hasNestedContent ? (
@@ -245,8 +244,9 @@ export function MobileNavDrawer({
                         <Link
                           to={buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(category.slug)}`)}
                           onClick={onClose}
-                          className={`flex items-center gap-2.5 px-4 py-2.5 font-semibold transition-opacity hover:opacity-70 ${submenuTextClass}`}
-                          style={{ color: theme.text }}
+                          className={`flex items-center gap-2.5 px-4 py-2.5 font-semibold transition-opacity hover:opacity-70 ${submenuTextClass} ${activeCategorySlug === category.slug ? 'font-bold' : ''}`}
+                          style={{ color: activeCategorySlug === category.slug ? theme.primary : theme.text, backgroundColor: activeCategorySlug === category.slug ? controlBg : 'transparent' }}
+                          aria-current={activeCategorySlug === category.slug ? 'page' : undefined}
                         >
                           {category.imageUrl ? (
                             <img src={category.imageUrl} alt="" className="h-8 w-8 shrink-0 rounded-lg object-cover" />
@@ -307,7 +307,7 @@ export function MobileNavDrawer({
                   {collection.imageUrl ? (
                     <img src={collection.imageUrl} alt="" className="h-8 w-8 shrink-0 rounded-lg object-cover" />
                   ) : (
-                    <Sparkles className="h-4 w-4 shrink-0" style={{ color: theme.primary }} />
+                    <HeaderNavigationIcon type="collection" className="h-5 w-5 shrink-0" />
                   )}
                   <span className="truncate">{collection.name}</span>
                 </Link>
@@ -318,14 +318,4 @@ export function MobileNavDrawer({
       </div>
     </>
   );
-}
-
-function NavigationItemIcon({ type }: { type: HeaderNavigationItemType }) {
-  const className = 'h-4 w-4 shrink-0';
-  if (type === 'category') return <FolderTree className={className} />;
-  if (type === 'collection') return <Layers3 className={className} />;
-  if (type === 'facet_value') return <SlidersHorizontal className={className} />;
-  if (type === 'featured') return <Sparkles className={className} />;
-  if (type === 'sale') return <BadgePercent className={className} />;
-  return <List className={className} />;
 }

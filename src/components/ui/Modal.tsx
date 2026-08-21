@@ -68,6 +68,10 @@ export function Modal({
 
     const focusPanel = window.requestAnimationFrame(() => panel?.focus());
     const handleKeyDown = (event: KeyboardEvent) => {
+      // A crop/editor dialog can be portaled outside this panel while it is
+      // open. Let that higher-priority dialog own Escape and focus handling.
+      if (event.target instanceof Element && event.target.closest('[data-dialog-layer="nested"]')) return;
+
       if (event.key === 'Escape' && closeOnEscape && dismissible) {
         event.preventDefault();
         closeHandlerRef.current();

@@ -2568,6 +2568,7 @@ export interface Database {
           can_use_advanced_theme: boolean;
           can_use_partner_codes: boolean;
           can_use_accounting: boolean;
+          can_use_category_experiences: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -2584,6 +2585,7 @@ export interface Database {
           can_use_advanced_theme?: boolean;
           can_use_partner_codes?: boolean;
           can_use_accounting?: boolean;
+          can_use_category_experiences?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -2600,6 +2602,115 @@ export interface Database {
           can_use_advanced_theme?: boolean;
           can_use_partner_codes?: boolean;
           can_use_accounting?: boolean;
+          can_use_category_experiences?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      store_category_experiences: {
+        Row: {
+          id: string;
+          store_id: string;
+          category_id: string;
+          owner_id: string;
+          display_name: string;
+          description: string | null;
+          logo_url: string | null;
+          theme_mode: string;
+          primary_color: string;
+          secondary_color: string;
+          accent_color: string;
+          background_color: string;
+          text_color: string;
+          button_radius: string;
+          is_active: boolean;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          category_id: string;
+          owner_id: string;
+          display_name: string;
+          description?: string | null;
+          logo_url?: string | null;
+          theme_mode?: string;
+          primary_color?: string;
+          secondary_color?: string;
+          accent_color?: string;
+          background_color?: string;
+          text_color?: string;
+          button_radius?: string;
+          is_active?: boolean;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          category_id?: string;
+          owner_id?: string;
+          display_name?: string;
+          description?: string | null;
+          logo_url?: string | null;
+          theme_mode?: string;
+          primary_color?: string;
+          secondary_color?: string;
+          accent_color?: string;
+          background_color?: string;
+          text_color?: string;
+          button_radius?: string;
+          is_active?: boolean;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      subscription_plans: {
+        Row: {
+          id: string;
+          plan_key: string;
+          name: string;
+          description: string;
+          max_products: number;
+          max_staff: number;
+          max_active_offers: number;
+          max_monthly_orders: number | null;
+          is_active: boolean;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          plan_key: string;
+          name: string;
+          description?: string;
+          max_products: number;
+          max_staff: number;
+          max_active_offers: number;
+          max_monthly_orders?: number | null;
+          is_active?: boolean;
+          sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          plan_key?: string;
+          name?: string;
+          description?: string;
+          max_products?: number;
+          max_staff?: number;
+          max_active_offers?: number;
+          max_monthly_orders?: number | null;
+          is_active?: boolean;
+          sort_order?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -3654,6 +3765,30 @@ export interface Database {
         };
         Relationships: [];
       };
+      public_store_category_experiences: {
+        Row: {
+          id: string;
+          store_id: string;
+          store_slug: string;
+          category_id: string;
+          category_name: string;
+          category_slug: string;
+          display_name: string;
+          description: string | null;
+          logo_url: string | null;
+          theme_mode: string;
+          primary_color: string;
+          secondary_color: string;
+          accent_color: string;
+          background_color: string;
+          text_color: string;
+          button_radius: string;
+          sort_order: number;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       public_store_facets: {
         Row: {
           id: string;
@@ -4290,6 +4425,7 @@ export type PublicStoreHomeSectionItemRow = Database['public']['Views']['public_
 export type PublicOfferPageRow = Database['public']['Views']['public_offer_pages']['Row'];
 export type PublicStoreCampaignOfferRow = Database['public']['Views']['public_store_campaign_offers']['Row'];
 export type PublicStoreCategoryRow = Database['public']['Views']['public_store_categories']['Row'];
+export type PublicStoreCategoryExperienceRow = Database['public']['Views']['public_store_category_experiences']['Row'];
 export type PublicStoreCollectionRow = Database['public']['Views']['public_store_collections']['Row'];
 export type PublicStoreFacetRow = Database['public']['Views']['public_store_facets']['Row'];
 export type PublicStoreFacetValueRow = Database['public']['Views']['public_store_facet_values']['Row'];
@@ -4322,6 +4458,12 @@ export type StoreMemberRowUpdate = Database['public']['Tables']['store_members']
 export type StoreLimitRow = Database['public']['Tables']['store_limits']['Row'];
 export type StoreLimitRowInsert = Database['public']['Tables']['store_limits']['Insert'];
 export type StoreLimitRowUpdate = Database['public']['Tables']['store_limits']['Update'];
+export type StoreCategoryExperienceRow = Database['public']['Tables']['store_category_experiences']['Row'];
+export type StoreCategoryExperienceRowInsert = Database['public']['Tables']['store_category_experiences']['Insert'];
+export type StoreCategoryExperienceRowUpdate = Database['public']['Tables']['store_category_experiences']['Update'];
+export type SubscriptionPlanRow = Database['public']['Tables']['subscription_plans']['Row'];
+export type SubscriptionPlanRowInsert = Database['public']['Tables']['subscription_plans']['Insert'];
+export type SubscriptionPlanRowUpdate = Database['public']['Tables']['subscription_plans']['Update'];
 
 export type StorePartnerRow = Database['public']['Tables']['store_partners']['Row'];
 export type StorePartnerRowInsert = Database['public']['Tables']['store_partners']['Insert'];

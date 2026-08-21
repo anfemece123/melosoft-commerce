@@ -22,6 +22,8 @@ import {
   Star,
   Handshake,
   Calculator,
+  Layers,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
@@ -94,6 +96,7 @@ function AdminLayoutContent() {
   const platformAdminNav: NavItem[] = [
     { label: 'Dashboard', to: '/admin', icon: <LayoutDashboard className="w-5 h-5" />, end: true },
     { label: 'Tiendas', to: '/admin/stores', icon: <Store className="w-5 h-5" /> },
+    { label: 'Planes', to: '/admin/plans', icon: <Layers className="w-5 h-5" /> },
     { label: 'Conexiones WhatsApp', to: '/admin/whatsapp-connections', icon: <MessageCircle className="w-5 h-5" /> },
   ];
 
@@ -115,6 +118,7 @@ function AdminLayoutContent() {
     { label: 'Reseñas', to: `/admin/stores/${storeId}/reviews`, icon: <Star className="w-5 h-5" /> },
     ...(currentLimits?.canUsePartnerCodes ? [{ label: 'Partners', to: `/admin/stores/${storeId}/partners`, icon: <Handshake className="w-5 h-5" /> }] : []),
     ...(currentLimits?.canUseAccounting ? [{ label: 'Contabilidad', to: `/admin/stores/${storeId}/accounting`, icon: <Calculator className="w-5 h-5" /> }] : []),
+    ...(currentLimits?.canUseCategoryExperiences ? [{ label: 'Experiencias', to: `/admin/stores/${storeId}/experiences`, icon: <Sparkles className="w-5 h-5" /> }] : []),
     { label: 'WhatsApp', to: `/admin/stores/${storeId}/whatsapp`, icon: <MessageCircle className="w-5 h-5" /> },
   ] : [];
 

@@ -52,6 +52,9 @@ import { sanitizePhoneInput } from '@/lib/phone/phoneValidation';
 import { clearCachedPublicStoreBranding } from '@/lib/storefront/publicStoreBrandingCache';
 import { heroCtaTargetNeedsEntity, isSafeHeroCustomUrl } from '@/lib/storefront/heroCta';
 import { getCatalogLabel } from '@/lib/commerce/commerceConfig.utils';
+import { HeaderNavigationIcon } from '@/components/public/storefront/HeaderNavigationIcon';
+import { HEADER_NAVIGATION_ICON_OPTIONS } from '@/lib/storefront/headerIconOptions';
+import { ImageUploadField } from '@/components/admin/ImageUploadField';
 
 
 const CATALOG_TYPE_LABELS: Record<string, string> = {
@@ -2218,8 +2221,25 @@ function HeaderSettingsSection({
   saving,
   saved,
 }: HeaderSettingsSectionProps) {
+  const [homeIconUploading, setHomeIconUploading] = useState(false);
+  const [homeIconUploadError, setHomeIconUploadError] = useState<string | null>(null);
+
   function set<K extends keyof PublicHeaderSettings>(key: K, value: PublicHeaderSettings[K]) {
     onChange({ ...settings, [key]: value });
+  }
+
+  async function handleHomeIconSelect(file: File | null) {
+    if (!file) return;
+    setHomeIconUploadError(null);
+    setHomeIconUploading(true);
+    try {
+      const homeIconUrl = await storesService.uploadStoreHeaderIcon(storeId, 'home', file);
+      onChange({ ...settings, homeIcon: null, homeIconUrl });
+    } catch (error) {
+      setHomeIconUploadError(error instanceof Error ? error.message : 'No se pudo subir el icono.');
+    } finally {
+      setHomeIconUploading(false);
+    }
   }
 
   const noIdentity = !settings.showLogo && !settings.showStoreName;
@@ -2294,9 +2314,9 @@ function HeaderSettingsSection({
     sizeLabel: string;
     previewClass: string;
   }> = [
-    { value: 'sm', label: 'Pequeño', sizeLabel: '13 px', previewClass: 'text-[13px]' },
-    { value: 'md', label: 'Mediano', sizeLabel: '15 px', previewClass: 'text-[15px]' },
-    { value: 'lg', label: 'Grande', sizeLabel: '18 px', previewClass: 'text-[18px]' },
+    { value: 'sm', label: 'Pequeño', sizeLabel: '14 px', previewClass: 'text-[14px]' },
+    { value: 'md', label: 'Mediano', sizeLabel: '16 px', previewClass: 'text-[16px]' },
+    { value: 'lg', label: 'Grande', sizeLabel: '19 px', previewClass: 'text-[19px]' },
   ];
 
   const MENU_MODE_OPTIONS: Array<{ value: HeaderMenuMode; label: string; description: string }> = [
@@ -2406,6 +2426,46 @@ function HeaderSettingsSection({
                 checked={settings.showHomeLink}
                 onChange={(v) => set('showHomeLink', v)}
               />
+              <div className="border-t border-gray-100 py-3">
+                <label htmlFor="header-home-icon" className="mb-1.5 block text-sm font-medium text-gray-700">
+                  Icono de “Inicio”
+                </label>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                    <HeaderNavigationIcon type="home" icon={settings.homeIcon} className="h-5 w-5" />
+                  </div>
+                  <select
+                    id="header-home-icon"
+                    value={settings.homeIcon ?? ''}
+                    onChange={(event) => onChange({
+                      ...settings,
+                      homeIcon: (event.target.value || null) as PublicHeaderSettings['homeIcon'],
+                      homeIconUrl: null,
+                    })}
+                    className="h-10 min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                  >
+                    {HEADER_NAVIGATION_ICON_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <p className="mt-1.5 text-xs text-gray-500">También se mostrará en el menú móvil.</p>
+                <div className="mt-3 border-t border-gray-100 pt-3">
+                  <ImageUploadField
+                    id="header-home-icon-upload"
+                    label="Icono personalizado de “Inicio”"
+                    assetKind="header_icon"
+                    previewUrl={settings.homeIconUrl ?? null}
+                    onFileSelect={(file) => { void handleHomeIconSelect(file); }}
+                    onClear={() => onChange({ ...settings, homeIconUrl: null })}
+                    uploading={homeIconUploading}
+                    error={homeIconUploadError ?? undefined}
+                    clearLabel="Quitar icono"
+                    hint="Sube tu propio icono cuadrado. Si lo subes, tendrá prioridad sobre el icono predeterminado."
+                    aspectClassName="h-12 w-12 rounded-xl"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 

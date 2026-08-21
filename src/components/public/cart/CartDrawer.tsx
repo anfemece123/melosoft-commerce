@@ -40,6 +40,7 @@ interface CartDrawerProps {
   cashOnDeliveryEnabled?: boolean | null;
   onlineCheckoutEnabled?: boolean | null;
   whatsappOrderUpdatesRequired?: boolean;
+  experienceCategorySlug?: string | null;
 }
 
 export function CartDrawer({
@@ -62,8 +63,10 @@ export function CartDrawer({
   cashOnDeliveryEnabled,
   onlineCheckoutEnabled,
   whatsappOrderUpdatesRequired = false,
+  experienceCategorySlug = null,
 }: CartDrawerProps) {
   const navigate = useNavigate();
+  const experienceQuery = experienceCategorySlug ? `?cat=${encodeURIComponent(experienceCategorySlug)}` : '';
   const {
     items,
     totalItems,
@@ -168,7 +171,7 @@ export function CartDrawer({
               onRemove={removeItem}
               onEdit={(item) => {
                 onClose();
-                void navigate(buildStorefrontPath(storeSlug, `/p/${item.productSlug}`), {
+                void navigate(buildStorefrontPath(storeSlug, `/p/${item.productSlug}${experienceQuery}`), {
                   state: { editCartLineId: item.lineId, returnTo: 'cart' },
                 });
               }}
@@ -197,11 +200,11 @@ export function CartDrawer({
                 canContinue={!scheduleLoading && orderStatus?.isAcceptingOrders === true}
                 onViewCart={() => {
                   onClose();
-                  void navigate(buildStorefrontPath(storeSlug, '/cart'));
+                  void navigate(buildStorefrontPath(storeSlug, `/cart${experienceQuery}`));
                 }}
                 onContinue={() => {
                   onClose();
-                  void navigate(buildStorefrontPath(storeSlug, '/checkout'));
+                  void navigate(buildStorefrontPath(storeSlug, `/checkout${experienceQuery}`));
                 }}
               />
             )}

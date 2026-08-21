@@ -165,6 +165,11 @@ export const storesService = {
     return storesService.uploadStoreBrandingAsset(storeKey, file, 'favicon');
   },
 
+  async uploadStoreHeaderIcon(storeKey: string, iconKey: string, file: File): Promise<string> {
+    const safeIconKey = iconKey.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-') || 'custom';
+    return storesService.uploadStoreBrandingAsset(storeKey, file, 'header-icon', `header-icon-${safeIconKey}`);
+  },
+
   async uploadStoreHeroImage(storeKey: string, file: File): Promise<string> {
     return storesService.uploadStoreBrandingAsset(storeKey, file, 'hero-image');
   },
@@ -188,11 +193,13 @@ export const storesService = {
   async uploadStoreBrandingAsset(
     storeKey: string,
     file: File,
-    assetKind: 'logo' | 'favicon' | 'hero-image' | 'hero-background' | 'hero-badge' | 'carta-cover' | 'carta-cover-background'
+    assetKind: 'logo' | 'favicon' | 'header-icon' | 'hero-image' | 'hero-background' | 'hero-badge' | 'carta-cover' | 'carta-cover-background',
+    fileKey?: string,
   ): Promise<string> {
     const presetByAssetKind: Record<typeof assetKind, ImageAssetKind> = {
       logo: 'store_logo',
       favicon: 'store_favicon',
+      'header-icon': 'header_icon',
       'hero-image': 'store_hero',
       'hero-background': 'store_hero_background',
       'hero-badge': 'store_hero_badge',
@@ -203,7 +210,8 @@ export const storesService = {
     const ownerId = await getOwnerId();
     const ext = (file.name.split('.').pop() ?? 'png').toLowerCase();
     const safeStoreKey = storeKey.trim().toLowerCase().replace(/[^a-z0-9-_/]/g, '-') || 'draft';
-    const storagePath = `${ownerId}/stores/${safeStoreKey}/branding/${assetKind}.${ext}`;
+    const safeFileKey = fileKey?.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '-') || assetKind;
+    const storagePath = `${ownerId}/stores/${safeStoreKey}/branding/${safeFileKey}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
       .from('store-assets')
@@ -219,6 +227,23 @@ export const storesService = {
 
   async archiveStore(id: string): Promise<Store> {
     return storesService.updateStore(id, { status: 'archived' });
+  },
+
+  async deleteStoreCompletely(id: string, confirmation: string): Promise<{ deletedUserCount: number; deletedStorageFileCount: number }> {
+    const { data, error } = await supabase.functions.invoke<{
+      deleted?: boolean;
+      deletedUserCount?: number;
+      deletedStorageFileCount?: number;
+      error?: string;
+    }>('delete-store-completely', {
+      body: { storeId: id, confirmation },
+    });
+    if (error) throw new Error(await extractFunctionErrorMessage(error));
+    if (!data?.deleted) throw new Error(data?.error ?? 'No se pudo eliminar completamente la empresa.');
+    return {
+      deletedUserCount: data.deletedUserCount ?? 0,
+      deletedStorageFileCount: data.deletedStorageFileCount ?? 0,
+    };
   },
 
   // Theme

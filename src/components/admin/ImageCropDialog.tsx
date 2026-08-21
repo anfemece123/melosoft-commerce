@@ -57,16 +57,22 @@ function ImageCropDialogContent({
   useEffect(() => {
     const handleResize = () => setViewportWidth(window.innerWidth);
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onCancel();
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        onCancel();
+      }
     };
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     window.addEventListener('resize', handleResize);
-    window.addEventListener('keydown', handleKeyDown);
+    // Capture before a parent Modal's document listener so Escape closes only
+    // the crop editor, never the form that opened it.
+    window.addEventListener('keydown', handleKeyDown, true);
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('resize', handleResize);
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [onCancel]);
 
@@ -160,7 +166,10 @@ function ImageCropDialogContent({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto p-4">
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto p-4"
+      data-dialog-layer="nested"
+    >
       <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={onCancel} />
       <div
         className="relative my-auto w-full max-w-4xl rounded-3xl bg-white shadow-2xl"

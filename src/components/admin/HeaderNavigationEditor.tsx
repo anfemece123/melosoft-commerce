@@ -3,26 +3,23 @@ import { Link } from 'react-router-dom';
 import {
   ArrowDown,
   ArrowUp,
-  BadgePercent,
-  FolderTree,
   GripVertical,
-  Layers3,
-  List,
   Plus,
-  SlidersHorizontal,
-  Sparkles,
   Tags,
   Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { PanelLoadingState } from '@/components/ui/LoadingScreen';
+import { ImageUploadField } from '@/components/admin/ImageUploadField';
 import { categoriesService } from '@/features/categories/categoriesService';
 import { collectionsService } from '@/features/collections/collectionsService';
 import { facetsService } from '@/features/facets/facetsService';
+import { storesService } from '@/features/stores/storesService';
 import type { StoreFacet } from '@/features/facets/facets.types';
 import type {
   HeaderNavigationItem,
+  HeaderNavigationIconKey,
   HeaderNavigationItemType,
   PublicHeaderSettings,
   PublicStoreCategory,
@@ -30,6 +27,8 @@ import type {
 } from '@/types/common.types';
 import { MAX_CUSTOM_HEADER_ITEMS } from '@/lib/storefront/headerSettings';
 import { scrollToFirstError } from '@/hooks/useScrollToFirstFormikError';
+import { HeaderNavigationIcon } from '@/components/public/storefront/HeaderNavigationIcon';
+import { HEADER_NAVIGATION_ICON_OPTIONS } from '@/lib/storefront/headerIconOptions';
 
 interface HeaderNavigationEditorProps {
   storeId: string;
@@ -69,16 +68,6 @@ function navigationItemId(): string {
   return `nav-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function TargetIcon({ type }: { type: HeaderNavigationItemType }) {
-  const className = 'h-4 w-4';
-  if (type === 'category') return <FolderTree className={className} />;
-  if (type === 'collection') return <Layers3 className={className} />;
-  if (type === 'facet_value') return <SlidersHorizontal className={className} />;
-  if (type === 'featured') return <Sparkles className={className} />;
-  if (type === 'sale') return <BadgePercent className={className} />;
-  return <List className={className} />;
-}
-
 export function HeaderNavigationEditor({
   storeId,
   settings,
@@ -91,6 +80,8 @@ export function HeaderNavigationEditor({
   const [selectionError, setSelectionError] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [iconUploadingById, setIconUploadingById] = useState<Record<string, boolean>>({});
+  const [iconUploadErrors, setIconUploadErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -209,6 +200,7 @@ export function HeaderNavigationEditor({
         type: target.type,
         label: target.label,
         targetId: target.targetId,
+        icon: null,
       },
     ]);
     setSelectedTargetKey('');
@@ -226,6 +218,47 @@ export function HeaderNavigationEditor({
     updateItems(settings.navigationItems.map((item) =>
       item.id === id ? { ...item, label: label.slice(0, 40) } : item
     ));
+  }
+
+  function updateIcon(id: string, icon: HeaderNavigationIconKey | null) {
+    updateItems(settings.navigationItems.map((item) =>
+      item.id === id ? { ...item, icon, iconUrl: null } : item
+    ));
+  }
+
+  function updateIconUrl(id: string, iconUrl: string | null) {
+    updateItems(settings.navigationItems.map((item) =>
+      item.id === id ? { ...item, iconUrl } : item
+    ));
+  }
+
+  function setIconUploading(id: string, value: boolean) {
+    setIconUploadingById((current) => ({ ...current, [id]: value }));
+  }
+
+  function setIconUploadError(id: string, value: string | null) {
+    setIconUploadErrors((current) => {
+      const next = { ...current };
+      if (value) next[id] = value;
+      else delete next[id];
+      return next;
+    });
+  }
+
+  async function handleIconFileSelect(id: string, file: File | null) {
+    if (!file) return;
+    setIconUploadError(id, null);
+    setIconUploading(id, true);
+    try {
+      const iconUrl = await storesService.uploadStoreHeaderIcon(storeId, id, file);
+      updateItems(settings.navigationItems.map((item) =>
+        item.id === id ? { ...item, icon: null, iconUrl } : item
+      ));
+    } catch (error) {
+      setIconUploadError(id, error instanceof Error ? error.message : 'No se pudo subir el icono.');
+    } finally {
+      setIconUploading(id, false);
+    }
   }
 
   function removeItem(id: string) {
@@ -341,8 +374,38 @@ export function HeaderNavigationEditor({
                       onChange={(event) => updateLabel(item.id, event.target.value)}
                       error={!item.label.trim() ? 'Escribe un texto para este enlace' : undefined}
                     />
+                    <div className="mt-3">
+                      <label htmlFor={`header-navigation-icon-${item.id}`} className="mb-1.5 block text-xs font-medium text-gray-600">
+                        Icono del enlace
+                      </label>
+                      <select
+                        id={`header-navigation-icon-${item.id}`}
+                        aria-label={`Icono de ${item.label}`}
+                        value={item.icon ?? ''}
+                        onChange={(event) => updateIcon(item.id, (event.target.value || null) as HeaderNavigationIconKey | null)}
+                        className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                      >
+                        <option value="">Automático según el tipo</option>
+                        {HEADER_NAVIGATION_ICON_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <ImageUploadField
+                      id={`header-navigation-icon-upload-${item.id}`}
+                      label={`Icono personalizado de ${item.label}`}
+                      assetKind="header_icon"
+                      previewUrl={item.iconUrl ?? null}
+                      onFileSelect={(file) => { void handleIconFileSelect(item.id, file); }}
+                      onClear={() => updateIconUrl(item.id, null)}
+                      uploading={Boolean(iconUploadingById[item.id])}
+                      error={iconUploadErrors[item.id]}
+                      clearLabel="Quitar icono"
+                      hint="Sube tu propio icono cuadrado. Si lo subes, tendrá prioridad sobre el icono predeterminado."
+                      aspectClassName="h-12 w-12 rounded-xl"
+                    />
                     <p className="mt-1.5 flex items-center gap-1.5 text-xs text-gray-500">
-                      <TargetIcon type={item.type} />
+                      <HeaderNavigationIcon type={item.type} icon={item.icon} iconUrl={item.iconUrl} className="h-4 w-4" />
                       {describeItem(item)}
                     </p>
                   </div>

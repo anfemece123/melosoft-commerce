@@ -59,14 +59,18 @@ function VideoCropDialogContent({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !processing) onCancel();
+      if (event.key === 'Escape' && !processing) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        onCancel();
+      }
     };
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true);
     return () => {
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [onCancel, processing]);
 
@@ -84,7 +88,10 @@ function VideoCropDialogContent({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto p-4">
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center overflow-y-auto p-4"
+      data-dialog-layer="nested"
+    >
       <div
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={() => {

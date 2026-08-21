@@ -37,6 +37,25 @@ const catalogMeta: CatalogMeta = {
 };
 
 describe('StorefrontHeader custom navigation', () => {
+  it('marks the transparent hero header so the mobile overlay can remain readable', () => {
+    render(
+      <MemoryRouter initialEntries={['/s/demo']}>
+        <StorefrontHeader
+          theme={buildStorefrontTheme({})}
+          storeName="Demo"
+          storeSlug="demo"
+          logoUrl={null}
+          catalogType="physical_products"
+          hasHero
+          headerSettings={{ ...DEFAULT_HEADER_SETTINGS, transparentOnHero: true }}
+        />
+      </MemoryRouter>,
+    );
+
+    const header = document.querySelector('[data-storefront-header="true"]');
+    expect(header?.getAttribute('data-transparent')).toBe('true');
+  });
+
   it('allows a long store name to wrap on mobile without displacing the closed status', () => {
     const longStoreName = 'Restaurante Tradición y Sabores de Nuestra Tierra';
 
@@ -101,6 +120,52 @@ describe('StorefrontHeader custom navigation', () => {
 
     expect(screen.getByRole('link', { name: 'Para mujer' }).getAttribute('href'))
       .toBe('/s/demo/catalog?f_genero=mujer');
+  });
+
+  it('marks the active category experience instead of keeping Inicio highlighted', () => {
+    const padelCategory = {
+      id: 'padel',
+      storeId: 'store-1',
+      storeSlug: 'demo',
+      name: 'Pádel',
+      slug: 'padel',
+      description: null,
+      parentId: null,
+      imageUrl: null,
+      color: null,
+      sortOrder: 0,
+      showInMenu: true,
+      children: [],
+    };
+
+    render(
+      <MemoryRouter initialEntries={['/s/demo/catalog?cat=padel']}>
+        <StorefrontHeader
+          theme={buildStorefrontTheme({})}
+          storeName="Modo"
+          storeSlug="demo"
+          logoUrl={null}
+          catalogType="physical_products"
+          headerSettings={{
+            ...DEFAULT_HEADER_SETTINGS,
+            menuMode: 'custom',
+            navigationItems: [{
+              id: 'padel-mode',
+              type: 'category',
+              label: 'Modo Pádel',
+              targetId: 'padel',
+            }],
+          }}
+          categories={[padelCategory]}
+          catalogMeta={{ ...catalogMeta, categories: [padelCategory], categoryTree: [padelCategory] }}
+        />
+      </MemoryRouter>,
+    );
+
+    const modeLink = screen.getByRole('link', { name: 'Modo Pádel' });
+    expect(modeLink.getAttribute('aria-current')).toBe('page');
+    expect(modeLink.className).toContain('font-semibold');
+    expect(screen.getByRole('link', { name: 'Inicio' }).getAttribute('aria-current')).toBeNull();
   });
 
   it('opens the complete category navigation from the main catalog link', () => {

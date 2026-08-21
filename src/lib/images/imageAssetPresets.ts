@@ -1,6 +1,7 @@
 export type ImageAssetKind =
   | 'store_logo'
   | 'store_favicon'
+  | 'header_icon'
   | 'store_hero'
   | 'store_hero_badge'
   | 'store_hero_background'
@@ -57,6 +58,20 @@ export const IMAGE_ASSET_PRESETS: Record<ImageAssetKind, ImageAssetPreset> = {
     minimumCropHeight: 48,
     recommendedWidth: 512,
     recommendedHeight: 512,
+    maxBytes: 5 * 1024 * 1024,
+    maxOutputBytes: 160 * 1024,
+    shape: 'rounded',
+  },
+  header_icon: {
+    kind: 'header_icon',
+    label: 'Icono de navegación',
+    aspectRatio: 1,
+    minWidth: 96,
+    minHeight: 96,
+    minimumCropWidth: 48,
+    minimumCropHeight: 48,
+    recommendedWidth: 128,
+    recommendedHeight: 128,
     maxBytes: 5 * 1024 * 1024,
     maxOutputBytes: 160 * 1024,
     shape: 'rounded',

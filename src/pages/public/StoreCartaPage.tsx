@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { UtensilsCrossed } from 'lucide-react';
 import { cartaService } from '@/features/carta/cartaService';
 import type { PublicCartaPage } from '@/features/carta/carta.types';
-import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
+import { usePublicStorefrontTheme } from '@/lib/storefront/usePublicStorefrontTheme';
 import { CartaMenu } from '@/components/public/carta/CartaMenu';
 import { StorefrontPageLoader } from '@/components/public/storefront/StorefrontPageLoader';
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
@@ -32,15 +32,7 @@ function useNoIndex(active: boolean) {
 
 export function StoreCartaPage() {
   const { storeSlug, branding } = usePublicStoreBranding();
-  const theme = buildStorefrontTheme({
-    mode: branding?.themeMode ?? null,
-    primaryColor: branding?.primaryColor ?? null,
-    secondaryColor: branding?.secondaryColor ?? null,
-    accentColor: branding?.accentColor ?? null,
-    backgroundColor: branding?.backgroundColor ?? null,
-    textColor: branding?.textColor ?? null,
-    buttonRadius: branding?.buttonRadius ?? null,
-  });
+  const theme = usePublicStorefrontTheme(branding);
   const [result, setResult] = useState<{ storeSlug: string; page: PublicCartaPage | null } | null>(null);
 
   useEffect(() => {

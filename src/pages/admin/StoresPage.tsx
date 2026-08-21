@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Store, ExternalLink, Settings, MapPin, Tag } from 'lucide-react';
+import { Plus, Store, ExternalLink, Settings, MapPin, Tag, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -8,16 +8,20 @@ import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { StoreActivationControl } from '@/components/admin/StoreActivationControl';
+import { DeleteStoreDialog } from '@/components/admin/DeleteStoreDialog';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import {
   setStores,
   setStoresStatus,
   setStoresError,
   updateStore,
+  removeStore,
 } from '@/features/stores/storesSlice';
 import { storesService } from '@/features/stores/storesService';
 import { domainsService } from '@/features/domains/domainsService';
 import type { StoreStatus, BadgeVariant } from '@/types/common.types';
+import type { Store as StoreEntity } from '@/features/stores/stores.types';
+import { notify } from '@/lib/notifications';
 
 const STATUS_MAP: Record<StoreStatus, { label: string; variant: BadgeVariant }> = {
   active:    { label: 'Activa',    variant: 'success'  },
@@ -42,6 +46,8 @@ export function StoresPage() {
   const dispatch = useAppDispatch();
   const stores = useAppSelector((state) => state.stores.items);
   const status = useAppSelector((state) => state.stores.status);
+  const [storeToDelete, setStoreToDelete] = useState<StoreEntity | null>(null);
+  const [deletingStore, setDeletingStore] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -55,6 +61,21 @@ export function StoresPage() {
     }
     void load();
   }, [dispatch]);
+
+  async function handleDeleteStore() {
+    if (!storeToDelete || deletingStore) return;
+    setDeletingStore(true);
+    try {
+      const result = await storesService.deleteStoreCompletely(storeToDelete.id, storeToDelete.slug);
+      dispatch(removeStore(storeToDelete.id));
+      setStoreToDelete(null);
+      notify.success(`Empresa eliminada. ${result.deletedStorageFileCount} archivos y ${result.deletedUserCount} accesos fueron eliminados.`);
+    } catch (error) {
+      notify.fromError(error, 'No se pudo eliminar completamente la empresa.');
+    } finally {
+      setDeletingStore(false);
+    }
+  }
 
   if (status === 'loading') return <LoadingScreen label="Cargando empresas…" />;
 
@@ -138,6 +159,15 @@ export function StoresPage() {
                         </Button>
                       </a>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-600 hover:bg-red-50"
+                      aria-label={`Eliminar definitivamente ${store.name}`}
+                      onClick={() => setStoreToDelete(store)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
 
                   <StoreActivationControl
@@ -150,6 +180,16 @@ export function StoresPage() {
           })}
         </div>
       )}
+
+      <DeleteStoreDialog
+        key={storeToDelete?.id ?? 'delete-store-closed'}
+        store={storeToDelete}
+        isLoading={deletingStore}
+        onClose={() => {
+          if (!deletingStore) setStoreToDelete(null);
+        }}
+        onConfirm={() => void handleDeleteStore()}
+      />
     </div>
   );
 }

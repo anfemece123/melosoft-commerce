@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronDown, Menu, Search, ShoppingCart, X } from 'lucide-react';
 import { PublicStoreLogo } from './PublicStoreLogo';
 import { MobileNavDrawer } from './MobileNavDrawer';
 import { MegaMenuPanel } from './MegaMenuPanel';
 import { StoreStatusBadge } from './StoreStatusBadge';
+import { HeaderNavigationIcon } from './HeaderNavigationIcon';
 import { STOREFRONT_CONTAINER_CLASS, type StorefrontTheme } from './storefrontTheme';
 import type { LocationOrderStatus } from '@/features/locations/locations.types';
 import type { CatalogMeta, CatalogType, PublicHeaderSettings, PublicStoreCategory } from '@/types/common.types';
@@ -22,6 +23,7 @@ import {
 import { getContextualFacets } from '@/lib/storefront/catalogVisibility';
 import { buildFacetConcepts } from '@/lib/storefront/variantFilters';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
+import { usePublicStoreExperience } from '@/components/layout/PublicStoreExperienceContext';
 
 function withOpacity(color: string, alpha: number) {
   if (!color.startsWith('#')) return color;
@@ -91,7 +93,9 @@ export function StorefrontHeader({
 }: StorefrontHeaderProps & { categories?: PublicStoreCategory[] }) {
   const settings = resolveHeaderSettings(headerSettings ?? DEFAULT_HEADER_SETTINGS);
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
+  const { activeExperience } = usePublicStoreExperience();
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [megaMenuItemId, setMegaMenuItemId] = useState<string | null>(null);
@@ -105,10 +109,17 @@ export function StorefrontHeader({
   const transparent = hasHero && settings.transparentOnHero;
   const shouldBeTransparent = transparent && !isScrolled;
   const blurred = transparent && isScrolled;
+  const transparentMobileScrimClass = shouldBeTransparent
+    ? theme.mode === 'dark'
+      ? "before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:bottom-0 before:z-0 before:content-[''] before:bg-gradient-to-b before:from-black/70 before:via-black/35 before:to-transparent md:before:hidden"
+      : "before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:bottom-0 before:z-0 before:content-[''] before:bg-gradient-to-b before:from-white/85 before:via-white/45 before:to-transparent md:before:hidden"
+    : '';
 
   const controlBg = withOpacity(theme.background, theme.mode === 'dark' ? 0.72 : 0.92);
   const controlBorder = withOpacity(theme.text, theme.mode === 'dark' ? 0.12 : 0.08);
-  const navTextColor = theme.mode === 'dark' ? 'rgba(226,232,240,0.78)' : '#6b7280';
+  const navTextColor = shouldBeTransparent
+    ? theme.text
+    : theme.mode === 'dark' ? 'rgba(226,232,240,0.78)' : '#6b7280';
   const logoSizeClass = LOGO_SIZE_MAP[settings.logoSize];
   const menuTextClass = MENU_TEXT_SIZE_MAP[settings.menuTextSize];
   const searchPlaceholder = getSearchPlaceholder(catalogType);
@@ -145,6 +156,21 @@ export function StorefrontHeader({
   const visibleNavigationItems = navigationItems.slice(0, MAX_VISIBLE_HEADER_ITEMS);
   const overflowNavigationItems = navigationItems.slice(MAX_VISIBLE_HEADER_ITEMS);
   const hasOverflow = overflowNavigationItems.length > 0;
+  const activeExperienceCategorySlug = activeExperience?.categorySlug ?? searchParams.get('cat');
+  const activeNavigationItemId = activeExperienceCategorySlug
+    ? navigationItems.find((item) => {
+        if (item.type !== 'category') return false;
+        if (item.rootCategorySlug === activeExperienceCategorySlug) return true;
+        try {
+          return new URL(item.href, 'https://storefront.local').searchParams.get('cat') === activeExperienceCategorySlug;
+        } catch {
+          return false;
+        }
+      })?.id ?? null
+    : null;
+  const homeIsActive = !activeExperienceCategorySlug
+    && (location.pathname === `/s/${storeSlug}` || location.pathname === '/' || location.pathname === '')
+    && !searchParams.get('mode');
 
   const activeMegaMenuItem = megaMenuItemId
     ? navigationItems.find((item) => item.id === megaMenuItemId) ?? null
@@ -294,9 +320,9 @@ export function StorefrontHeader({
   }, [moreMenuOpen]);
 
   const positionClass = transparent
-    ? 'fixed inset-x-0 top-0 z-50 transition-colors duration-300'
+    ? 'fixed inset-x-0 top-0 z-50 isolate transition-colors duration-300'
     : settings.isSticky
-    ? 'sticky top-0 z-50 transition-colors duration-300'
+    ? 'sticky top-0 z-50 isolate transition-colors duration-300'
     : 'relative z-40';
 
   const headerStyle: React.CSSProperties = {
@@ -398,9 +424,11 @@ export function StorefrontHeader({
                   key={item.id}
                   to={item.href}
                   onClick={closeMenus}
-                  className="px-4 py-2.5 text-sm font-medium transition-colors hover:opacity-80"
-                  style={{ color: theme.mode === 'dark' ? theme.text : '#374151' }}
+                  className={`${menuTextClass} inline-flex items-center gap-2.5 px-4 py-2.5 font-medium transition-colors hover:opacity-80 ${activeNavigationItemId === item.id ? 'font-semibold' : ''}`}
+                  style={{ color: activeNavigationItemId === item.id ? theme.primary : theme.mode === 'dark' ? theme.text : '#374151' }}
+                  aria-current={activeNavigationItemId === item.id ? 'page' : undefined}
                 >
+                  <HeaderNavigationIcon type={item.type} icon={item.icon} iconUrl={item.iconUrl} className="h-5 w-5 shrink-0" />
                   {item.label}
                 </Link>
               ))}
@@ -418,11 +446,13 @@ export function StorefrontHeader({
         {settings.showHomeLink && (
           <Link
             to={buildStorefrontPath(storeSlug)}
-            className={`${menuTextClass} font-medium whitespace-nowrap transition-opacity hover:opacity-80`}
-            style={{ color: theme.primary }}
+            className={`${menuTextClass} inline-flex items-center gap-2 whitespace-nowrap py-2 font-medium transition-opacity hover:opacity-80 ${homeIsActive ? 'font-semibold' : ''}`}
+            style={{ color: homeIsActive ? theme.primary : navTextColor }}
             onMouseEnter={closeMegaMenuImmediately}
             onClick={closeMenus}
+            aria-current={homeIsActive ? 'page' : undefined}
           >
+              <HeaderNavigationIcon type="home" icon={settings.homeIcon} iconUrl={settings.homeIconUrl} />
             Inicio
           </Link>
         )}
@@ -434,9 +464,9 @@ export function StorefrontHeader({
             <Link
               key={item.id}
               to={item.href}
-              className={`${menuTextClass} group relative inline-flex items-center gap-1.5 whitespace-nowrap py-2 font-semibold outline-none transition-colors`}
+              className={`${menuTextClass} group relative inline-flex items-center gap-2 whitespace-nowrap py-2 font-medium outline-none transition-colors ${activeNavigationItemId === item.id ? 'font-semibold' : ''}`}
               style={{
-                color: isOpen
+                color: isOpen || activeNavigationItemId === item.id
                   ? theme.primary
                   : !settings.showHomeLink && item === visibleNavigationItems[0]
                     ? theme.primary
@@ -447,14 +477,16 @@ export function StorefrontHeader({
               onClick={closeMenus}
               aria-expanded={hasMegaMenu ? isOpen : undefined}
               aria-controls={hasMegaMenu ? 'storefront-mega-menu' : undefined}
+              aria-current={activeNavigationItemId === item.id ? 'page' : undefined}
             >
+              <HeaderNavigationIcon type={item.type} icon={item.icon} iconUrl={item.iconUrl} />
               {item.label}
               {hasMegaMenu ? (
                 <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
               ) : null}
               <span
                 className="pointer-events-none absolute inset-x-0 -bottom-0.5 h-0.5 origin-center scale-x-0 rounded-full transition-transform group-hover:scale-x-100 group-focus-visible:scale-x-100"
-                style={{ backgroundColor: theme.primary, transform: isOpen ? 'scaleX(1)' : undefined }}
+                style={{ backgroundColor: theme.primary, transform: isOpen || activeNavigationItemId === item.id ? 'scaleX(1)' : undefined }}
                 aria-hidden="true"
               />
             </Link>
@@ -469,8 +501,13 @@ export function StorefrontHeader({
   if (settings.style === 'classic') {
     return (
       <>
-        <header className={positionClass} style={headerStyle}>
-          <div onMouseEnter={keepMegaMenuOpen} onMouseLeave={scheduleMegaMenuClose}>
+        <header
+          className={`${positionClass} ${transparentMobileScrimClass}`}
+          style={headerStyle}
+          data-storefront-header="true"
+          data-transparent={shouldBeTransparent ? 'true' : 'false'}
+        >
+          <div className="relative z-10" onMouseEnter={keepMegaMenuOpen} onMouseLeave={scheduleMegaMenuClose}>
             <div className={`relative mx-auto ${STOREFRONT_CONTAINER_CLASS} px-4 py-4 md:px-6`}>
               <div className="flex items-center justify-between gap-4 xl:grid xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:items-center">
 
@@ -502,7 +539,7 @@ export function StorefrontHeader({
                           <span
                             data-storefront-brand-name
                             className="line-clamp-2 max-w-full break-words text-[18px] font-semibold leading-[1.15] tracking-[-0.03em] sm:text-[22px] md:text-[26px] xl:block xl:truncate xl:leading-none"
-                            style={{ color: theme.mode === 'dark' ? theme.text : '#1f2937' }}
+                            style={{ color: theme.text }}
                           >
                             {storeName}
                           </span>
@@ -594,6 +631,9 @@ export function StorefrontHeader({
           collections={menuCollections}
           navigationItems={navigationItems}
           showAutomaticCollections={settings.menuMode !== 'custom'}
+          activeNavigationItemId={activeNavigationItemId}
+          activeCategorySlug={activeExperienceCategorySlug}
+          homeIsActive={homeIsActive}
         />
       </>
     );
@@ -603,13 +643,15 @@ export function StorefrontHeader({
   return (
     <>
       <header
-        className={positionClass}
+        className={`${positionClass} ${transparentMobileScrimClass}`}
         style={headerStyle}
+        data-storefront-header="true"
+        data-transparent={shouldBeTransparent ? 'true' : 'false'}
         onMouseEnter={keepMegaMenuOpen}
         onMouseLeave={scheduleMegaMenuClose}
       >
         <div
-          className={`mx-auto ${STOREFRONT_CONTAINER_CLASS} px-4 md:px-6`}
+          className={`relative z-10 mx-auto ${STOREFRONT_CONTAINER_CLASS} px-4 md:px-6`}
         >
           {/* Row 1 */}
           <div className="flex items-center gap-3 py-3">
@@ -638,7 +680,7 @@ export function StorefrontHeader({
                   <div className="hidden min-w-0 flex-col items-start gap-1 md:flex">
                     <span
                       className="truncate text-base font-semibold leading-tight tracking-tight max-w-[160px]"
-                      style={{ color: theme.mode === 'dark' ? theme.text : '#1f2937' }}
+                      style={{ color: theme.text }}
                     >
                       {storeName}
                     </span>
@@ -726,6 +768,9 @@ export function StorefrontHeader({
         collections={menuCollections}
         navigationItems={navigationItems}
         showAutomaticCollections={settings.menuMode !== 'custom'}
+        activeNavigationItemId={activeNavigationItemId}
+        activeCategorySlug={activeExperienceCategorySlug}
+        homeIsActive={homeIsActive}
       />
     </>
   );

@@ -214,7 +214,10 @@ export const facetsService = {
 
   async updateFacetValue(id: string, data: { value?: string; slug?: string; sortOrder?: number; isActive?: boolean }): Promise<StoreFacetValue> {
     const patch: Record<string, unknown> = {};
-    if (data.value !== undefined) patch.value = data.value;
+    if (data.value !== undefined) {
+      patch.value = data.value;
+      patch.slug = data.slug ?? slugify(data.value);
+    }
     if (data.slug !== undefined) patch.slug = data.slug;
     if (data.sortOrder !== undefined) patch.sort_order = data.sortOrder;
     if (data.isActive !== undefined) patch.is_active = data.isActive;

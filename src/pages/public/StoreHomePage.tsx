@@ -26,8 +26,10 @@ import { StorefrontRatingStars } from '@/components/public/storefront/Storefront
 import { StorefrontHomeSkeleton } from '@/components/public/storefront/StorefrontSkeletons';
 import { StorefrontCampaignOffersSection } from '@/components/public/storefront/StorefrontCampaignOffersSection';
 import { HomeSectionRenderer } from '@/components/public/storefront/homeSections/HomeSectionRenderer';
-import { buildStorefrontTheme, STOREFRONT_CONTAINER_CLASS } from '@/components/public/storefront/storefrontTheme';
+import { STOREFRONT_CONTAINER_CLASS } from '@/components/public/storefront/storefrontTheme';
+import { usePublicStorefrontTheme } from '@/lib/storefront/usePublicStorefrontTheme';
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
+import { usePublicStoreExperience } from '@/components/layout/PublicStoreExperienceContext';
 import { usePublicRouteReady } from '@/components/layout/PublicRouteReadyContext';
 import { useCart, isOutOfStock } from '@/lib/cart/cartContext';
 import { useSelectedLocation } from '@/lib/locations/locationContext';
@@ -78,6 +80,7 @@ export function StoreHomePage() {
 function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
   const location = useLocation();
   const { branding: storeBranding } = usePublicStoreBranding();
+  const { activeExperience } = usePublicStoreExperience();
   const { setRouteReady } = usePublicRouteReady();
   const { addItem } = useCart();
   const { locations, selectedLocation } = useSelectedLocation();
@@ -98,6 +101,7 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
   const [error, setError] = useState<string | null>(null);
   const [retryToken, setRetryToken] = useState(0);
   const [unavailableProductIds, setUnavailableProductIds] = useState<Set<string>>(new Set());
+  const theme = usePublicStorefrontTheme(store);
 
   useEffect(() => {
     if (storeBranding) {
@@ -219,16 +223,7 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
     );
   }
 
-  const bgColor = store.backgroundColor ?? '#ffffff';
-  const theme = buildStorefrontTheme({
-    mode: store.themeMode,
-    primaryColor: store.primaryColor,
-    secondaryColor: store.secondaryColor,
-    accentColor: store.accentColor,
-    backgroundColor: store.backgroundColor,
-    textColor: store.textColor,
-    buttonRadius: store.buttonRadius,
-  });
+  const bgColor = theme.background;
   const commerceConfig: PublicCommerceConfig = {
     catalogType: store.catalogType,
     commerceMode: store.commerceMode,
@@ -336,8 +331,9 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
       {hasHero ? (
         <StorefrontHero
           theme={theme}
-          storeName={store.storeName}
-          storeLogoUrl={store.logoUrl}
+          storeName={activeExperience?.displayName?.trim() || store.storeName}
+          storeLogoUrl={activeExperience?.logoUrl ?? store.logoUrl}
+          transparentHeaderOnMobile={store.headerSettings?.transparentOnHero === true}
           getCtaHref={(slide) => resolveHeroCtaHref(slide, {
             storeSlug,
             categories,

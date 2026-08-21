@@ -438,6 +438,7 @@ export function mapStoreLimitRowToStoreLimit(row: StoreLimitRow): StoreLimit {
     canUseAdvancedTheme: row.can_use_advanced_theme,
     canUsePartnerCodes: row.can_use_partner_codes,
     canUseAccounting: row.can_use_accounting,
+    canUseCategoryExperiences: row.can_use_category_experiences,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -455,6 +456,7 @@ export function mapStoreLimitUpdateToRow(data: StoreLimitUpdate): StoreLimitRowU
   if (data.canUseAdvancedTheme !== undefined) row.can_use_advanced_theme = data.canUseAdvancedTheme;
   if (data.canUsePartnerCodes !== undefined) row.can_use_partner_codes = data.canUsePartnerCodes;
   if (data.canUseAccounting !== undefined) row.can_use_accounting = data.canUseAccounting;
+  if (data.canUseCategoryExperiences !== undefined) row.can_use_category_experiences = data.canUseCategoryExperiences;
   return row;
 }
 

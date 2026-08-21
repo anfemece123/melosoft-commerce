@@ -22,7 +22,8 @@ import type { PublicProductPage, PublicStoreCategory, PublicStoreCollection, Pub
 import { formatCurrency } from '@/utils/formatCurrency';
 import { StorefrontProductCard } from '@/components/public/storefront/StorefrontProductCard';
 import { StorefrontCatalogGridSkeleton, StorefrontProductGridSkeleton } from '@/components/public/storefront/StorefrontSkeletons';
-import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
+import { usePublicStorefrontTheme } from '@/lib/storefront/usePublicStorefrontTheme';
+import { usePublicStoreExperience } from '@/components/layout/PublicStoreExperienceContext';
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
 import { usePublicRouteReady } from '@/components/layout/PublicRouteReadyContext';
 import { useCart } from '@/lib/cart/cartContext';
@@ -97,6 +98,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { branding: storeBranding } = usePublicStoreBranding();
+  const { activeExperience } = usePublicStoreExperience();
   const { setRouteReady } = usePublicRouteReady();
   const { addItem } = useCart();
   const { selectedLocation } = useSelectedLocation();
@@ -119,6 +121,8 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const [categoryMetadataStoreSlug, setCategoryMetadataStoreSlug] = useState<string | null>(null);
+  const [completedCatalogQueryKey, setCompletedCatalogQueryKey] = useState<string | null>(null);
   const [unavailableProductIds, setUnavailableProductIds] = useState<Set<string>>(new Set());
   const [totalProductCount, setTotalProductCount] = useState(0);
   const [serverPriceRange, setServerPriceRange] = useState({ min: 0, max: 0 });
@@ -126,6 +130,36 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
     () => categories.find((category) => category.slug === filters.categorySlug)?.id ?? null,
     [categories, filters.categorySlug]
   );
+  const categoryMetadataReady = !filters.categorySlug && !filters.subcategorySlug
+    ? true
+    : categoryMetadataStoreSlug === storeSlug;
+  const catalogQueryKey = useMemo(
+    () => JSON.stringify({
+      storeSlug,
+      categorySlug: filters.categorySlug,
+      categoryParentId: selectedCategoryIdForQuery,
+      subcategorySlug: filters.subcategorySlug,
+      collectionSlug: filters.collectionSlug,
+      query: filters.query,
+      onlyFeatured: filters.onlyFeatured,
+      onlyOnSale: filters.onlyOnSale,
+      sort,
+    }),
+    [
+      storeSlug,
+      filters.categorySlug,
+      selectedCategoryIdForQuery,
+      filters.subcategorySlug,
+      filters.collectionSlug,
+      filters.query,
+      filters.onlyFeatured,
+      filters.onlyOnSale,
+      sort,
+    ],
+  );
+  const catalogLoading = contentLoading
+    || !categoryMetadataReady
+    || completedCatalogQueryKey !== catalogQueryKey;
 
   // Sync local search box when URL query changes externally
   useEffect(() => {
@@ -136,7 +170,8 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
   const hasMoreProducts = products.length < totalProductCount;
 
   const loadNextProductsPage = useCallback(async (reset = false) => {
-    if (!reset && (contentLoading || loadingMore || !hasMoreProducts)) return;
+    if (!categoryMetadataReady) return;
+    if (!reset && (catalogLoading || loadingMore || !hasMoreProducts)) return;
 
     const requestVersion = reset ? requestVersionRef.current + 1 : requestVersionRef.current;
     if (reset) {
@@ -186,16 +221,23 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
         }
         return merged;
       });
+      if (reset) setCompletedCatalogQueryKey(catalogQueryKey);
     } catch (err) {
+      if (requestVersionRef.current !== requestVersion) return;
       const message = err instanceof Error ? err.message : 'Error cargando productos';
-      if (reset) setError(message);
+      if (reset) {
+        setError(message);
+        setCompletedCatalogQueryKey(catalogQueryKey);
+      }
       else setLoadMoreError(message);
     } finally {
-      if (reset) setContentLoading(false);
-      else setLoadingMore(false);
+      if (requestVersionRef.current === requestVersion) {
+        if (reset) setContentLoading(false);
+        else setLoadingMore(false);
+      }
     }
   }, [
-    contentLoading,
+    catalogLoading,
     filters.categorySlug,
     filters.collectionSlug,
     filters.onlyFeatured,
@@ -204,12 +246,15 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
     filters.subcategorySlug,
     hasMoreProducts,
     loadingMore,
+    categoryMetadataReady,
+    catalogQueryKey,
     selectedCategoryIdForQuery,
     sort,
     storeSlug,
   ]);
 
   useEffect(() => {
+    if (!categoryMetadataReady) return;
     void loadNextProductsPage(true);
   // Reset paging when store or server-side catalog query inputs change.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -223,6 +268,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
     filters.onlyOnSale,
     sort,
     selectedCategoryIdForQuery,
+    categoryMetadataReady,
   ]);
 
   useEffect(() => {
@@ -264,13 +310,19 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
       setCategories(cats);
       setCollections(cols);
       setFacets(fcts);
-    }).catch(() => { /* non-critical */ });
+    }).catch(() => {
+      // An unavailable taxonomy must not leave the catalog in an infinite
+      // loading state. The category query can still resolve to a legitimate
+      // empty result and will show the empty state only after it completes.
+    }).finally(() => {
+      if (!cancelled) setCategoryMetadataStoreSlug(storeSlug);
+    });
     return () => { cancelled = true; };
   }, [storeSlug]);
 
   useEffect(() => {
-    setRouteReady(!contentLoading);
-  }, [contentLoading, setRouteReady]);
+    setRouteReady(!catalogLoading);
+  }, [catalogLoading, setRouteReady]);
 
   useEffect(() => {
     if (!storeBranding?.storeId || !selectedLocation) {
@@ -284,15 +336,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
   }, [selectedLocation, storeBranding?.storeId]);
 
   const store = storeBranding;
-  const theme = buildStorefrontTheme({
-    mode: store?.themeMode,
-    primaryColor: store?.primaryColor,
-    secondaryColor: store?.secondaryColor,
-    accentColor: store?.accentColor,
-    backgroundColor: store?.backgroundColor,
-    textColor: store?.textColor,
-    buttonRadius: store?.buttonRadius,
-  });
+  const theme = usePublicStorefrontTheme(store);
 
   const commerceConfig: PublicCommerceConfig = {
     catalogType: store?.catalogType ?? null,
@@ -526,13 +570,13 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
   const shouldAutoPrefetchForFilters = (hasAnyFilter || hasActiveSearch) && filteredAndSorted.length < MIN_FILTER_RESULTS_BEFORE_PREFETCH;
 
   useEffect(() => {
-    if (!shouldAutoPrefetchForFilters || contentLoading || loadingMore || !hasMoreProducts) return;
+    if (!shouldAutoPrefetchForFilters || catalogLoading || loadingMore || !hasMoreProducts) return;
     void loadNextProductsPage();
-  }, [shouldAutoPrefetchForFilters, contentLoading, loadingMore, hasMoreProducts, loadNextProductsPage]);
+  }, [shouldAutoPrefetchForFilters, catalogLoading, loadingMore, hasMoreProducts, loadNextProductsPage]);
 
   useEffect(() => {
     const sentinel = loadMoreSentinelRef.current;
-    if (!sentinel || contentLoading || loadingMore || !hasMoreProducts) return;
+    if (!sentinel || catalogLoading || loadingMore || !hasMoreProducts) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -545,7 +589,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
 
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [contentLoading, loadingMore, hasMoreProducts, loadNextProductsPage]);
+  }, [catalogLoading, loadingMore, hasMoreProducts, loadNextProductsPage]);
 
   const emptyState = filters.collectionSlug
     ? {
@@ -573,7 +617,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
       };
 
   // ── Render ───────────────────────────────────────────────────
-  if (contentLoading && !store) {
+  if (catalogLoading && !store) {
     return <StorefrontCatalogGridSkeleton branding={storeBranding} />;
   }
 
@@ -601,7 +645,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
     );
   }
 
-  const bgColor = store?.backgroundColor ?? '#ffffff';
+  const bgColor = theme.background;
 
   return (
     <div
@@ -635,13 +679,14 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
                 ? <UtensilsCrossed className="w-5 h-5 shrink-0" style={{ color: theme.primary }} />
                 : <Package className="w-5 h-5 shrink-0" style={{ color: theme.primary }} />}
               <h1 className="text-xl font-bold" style={{ color: theme.text }}>
-                {selectedSubcategoryNode?.name ?? selectedCategoryNode?.name ?? catalogLabel}
+                {activeExperience?.displayName ?? selectedSubcategoryNode?.name ?? selectedCategoryNode?.name ?? catalogLabel}
               </h1>
             </div>
             {store?.storeName && (
               <p className="mt-0.5 text-sm" style={{ color: theme.mutedText }}>
                 {store.storeName}
-                {!contentLoading && (
+                {activeExperience?.description ? ` · ${activeExperience.description}` : null}
+                {!catalogLoading && (
                   <span className="ml-1">
                     · {hasAnyFilter || hasActiveSearch
                       ? `${filteredAndSorted.length}${hasMoreProducts ? '+' : ''} resultado${filteredAndSorted.length !== 1 ? 's' : ''}`
@@ -881,8 +926,9 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
 
           {/* Product grid */}
           <div className="min-w-0 flex-1">
-            {contentLoading && products.length === 0 ? (
-              // Nothing to show yet at all (true first load) — full skeleton.
+            {catalogLoading && filteredAndSorted.length === 0 ? (
+              // Nothing to show yet for the current query — keep the empty
+              // state hidden until the request has actually completed.
               <StorefrontProductGridSkeleton
                 theme={theme}
                 isMenu={isMenu}
@@ -890,7 +936,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
                 size="large"
                 count={8}
               />
-            ) : !contentLoading && filteredAndSorted.length === 0 ? (
+            ) : !catalogLoading && filteredAndSorted.length === 0 ? (
               <div
                 className="rounded-xl border border-dashed py-16 text-center"
                 style={{ borderColor: theme.border }}
@@ -923,8 +969,8 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
                     to a skeleton — only the very first load (above) shows
                     the full skeleton. */}
                 <div
-                  aria-busy={contentLoading}
-                  className={`grid grid-cols-2 gap-4 sm:grid-cols-3 lg:gap-6 xl:grid-cols-4 transition-opacity duration-200 motion-reduce:transition-none ${contentLoading ? 'opacity-50' : 'opacity-100'}`}
+                  aria-busy={catalogLoading}
+                  className={`grid grid-cols-2 gap-4 sm:grid-cols-3 lg:gap-6 xl:grid-cols-4 transition-opacity duration-200 motion-reduce:transition-none ${catalogLoading ? 'opacity-50' : 'opacity-100'}`}
                 >
                   {filteredAndSorted.map((item) => {
                     const product = item.product;

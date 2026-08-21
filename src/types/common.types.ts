@@ -118,6 +118,19 @@ export type HeaderNavigationItemType =
   | 'facet_value'
   | 'featured'
   | 'sale';
+export type HeaderNavigationIconKey =
+  | 'home'
+  | 'shopping-bag'
+  | 'folder-tree'
+  | 'layers'
+  | 'sliders'
+  | 'sparkles'
+  | 'badge-percent'
+  | 'star'
+  | 'heart'
+  | 'tag'
+  | 'dumbbell'
+  | 'grid';
 
 export interface HeaderNavigationItem {
   id: string;
@@ -129,6 +142,8 @@ export interface HeaderNavigationItem {
    * entities cannot leave broken links in the public header.
    */
   targetId: string | null;
+  icon?: HeaderNavigationIconKey | null;
+  iconUrl?: string | null;
 }
 
 export interface PublicHeaderSettings {
@@ -138,6 +153,8 @@ export interface PublicHeaderSettings {
   showLogo: boolean;
   showStoreName: boolean;
   showHomeLink: boolean;
+  homeIcon?: HeaderNavigationIconKey | null;
+  homeIconUrl?: string | null;
   logoSize: LogoSize;
   menuTextSize: MenuTextSize;
   menuMode: HeaderMenuMode;
@@ -151,6 +168,7 @@ export const DEFAULT_HEADER_SETTINGS: PublicHeaderSettings = {
   showLogo: true,
   showStoreName: true,
   showHomeLink: true,
+  homeIcon: 'home',
   logoSize: 'md',
   menuTextSize: 'md',
   menuMode: 'catalog_link',
@@ -614,6 +632,28 @@ export interface PublicStoreCategory {
   sortOrder: number;
   showInMenu: boolean;
   children?: PublicStoreCategory[];
+}
+
+/** Optional visual identity attached to one catalog category. The public
+ * storefront only receives these rows when the company has the module enabled. */
+export interface PublicCategoryExperience {
+  id: string;
+  storeId: string;
+  storeSlug: string;
+  categoryId: string;
+  categoryName: string;
+  categorySlug: string;
+  displayName: string;
+  description: string | null;
+  logoUrl: string | null;
+  themeMode: ThemeMode;
+  primaryColor: string;
+  secondaryColor: string;
+  accentColor: string;
+  backgroundColor: string;
+  textColor: string;
+  buttonRadius: string;
+  sortOrder: number;
 }
 
 /** Minimal product projection used to build storefront navigation. It keeps

@@ -6,11 +6,11 @@
 // silently drifted out of sync with the other. Every admin-facing
 // function must import from here instead of declaring its own list.
 //
-// melosoftapp.com (apex/www) is a DIFFERENT, pre-existing app — this
-// admin panel lives only at commerce.melosoftapp.com. PLATFORM_HOSTNAMES
-// (Supabase secret, comma-separated exact hostnames) is the source of
-// truth in production for any additional admin host; the literals below
-// only cover local dev and the one hostname every environment needs.
+// melosoftapp.com (apex/www) is a DIFFERENT, pre-existing app.
+// The admin panel is currently served from commerce.melosoftapp.com and
+// admin.melosoftapp.com. PLATFORM_HOSTNAMES (Supabase secret, comma-separated
+// exact hostnames) is the source of truth in production for any additional
+// admin host; the literals below cover both supported production hosts.
 //
 // This allow-list is for ADMIN-FACING functions only — never add a
 // storefront host or a wildcard pattern here. A storefront must never
@@ -21,6 +21,7 @@ const STATIC_ALLOWED_ORIGINS = new Set([
   'http://localhost:5173',
   'http://localhost:5174',
   DEFAULT_APP_ORIGIN,
+  'https://admin.melosoftapp.com',
 ]);
 
 // Pure — no Deno reference — so it can be unit-tested under Node/Vitest

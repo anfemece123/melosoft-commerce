@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Outlet, matchPath, useLocation, useNavigationType } from 'react-router-dom';
 import { CartDrawer } from '@/components/public/cart/CartDrawer';
 import { StorefrontFooter } from '@/components/public/storefront/StorefrontFooter';
@@ -32,6 +32,8 @@ import {
 } from '@/lib/storefront/storefrontDomainContext';
 import { domainsService } from '@/features/domains/domainsService';
 import { buildWhatsAppContactUrl } from '@/lib/whatsapp/whatsappUrl';
+import { categoryExperiencesService } from '@/features/categoryExperiences/categoryExperiencesService';
+import { PublicStoreExperienceProvider } from './PublicStoreExperienceContext';
 
 export function PublicLayout() {
   const location = useLocation();
@@ -152,6 +154,7 @@ function PublicStoreShell({
   const [cartOpen, setCartOpen] = useState(false);
   const [routeReady, setRouteReady] = useState(false);
   const [catalogMeta, setCatalogMeta] = useState<CatalogMeta | null>(null);
+  const [experiences, setExperiences] = useState<Awaited<ReturnType<typeof categoryExperiencesService.getPublicExperiences>>>([]);
   const routeKey = `${location.pathname}${location.search}${location.hash}`;
   const pendingScrollModeRef = useRef<'restore' | 'top'>('top');
 
@@ -193,14 +196,24 @@ function PublicStoreShell({
     localDeliveryNotes: branding?.localDeliveryNotes ?? null,
     shippingNotes: branding?.shippingNotes ?? null,
   };
+  const requestedExperienceSlug = new URLSearchParams(location.search).get('mode')
+    ?? new URLSearchParams(location.search).get('cat');
+  const activeExperience = useMemo(
+    () => requestedExperienceSlug
+      ? experiences.find((experience) => experience.categorySlug === requestedExperienceSlug || experience.id === requestedExperienceSlug) ?? null
+      : null,
+    [experiences, requestedExperienceSlug],
+  );
+  const publicStoreName = activeExperience?.displayName?.trim() || branding?.storeName || '';
+  const publicStoreLogoUrl = activeExperience?.logoUrl ?? branding?.logoUrl ?? null;
   const theme = buildStorefrontTheme({
-    mode: branding?.themeMode,
-    primaryColor: branding?.primaryColor,
-    secondaryColor: branding?.secondaryColor,
-    accentColor: branding?.accentColor,
-    backgroundColor: branding?.backgroundColor,
-    textColor: branding?.textColor,
-    buttonRadius: branding?.buttonRadius,
+    mode: activeExperience?.themeMode ?? branding?.themeMode,
+    primaryColor: activeExperience?.primaryColor ?? branding?.primaryColor,
+    secondaryColor: activeExperience?.secondaryColor ?? branding?.secondaryColor,
+    accentColor: activeExperience?.accentColor ?? branding?.accentColor,
+    backgroundColor: activeExperience?.backgroundColor ?? branding?.backgroundColor,
+    textColor: activeExperience?.textColor ?? branding?.textColor,
+    buttonRadius: activeExperience?.buttonRadius ?? branding?.buttonRadius,
   });
   const hasHeroRoute = Boolean(matchPath('/s/:storeSlug', location.pathname)) ||
     (isStorefrontHostnameMode(domainMode) && location.pathname === '/');
@@ -226,6 +239,13 @@ function PublicStoreShell({
       facetsService.getPublicFacets(storeSlug),
     ]);
     const productsPromise = productsService.getPublicCatalogNavigationProducts(storeSlug);
+    void categoryExperiencesService.getPublicExperiences(storeSlug)
+      .then((loadedExperiences) => {
+        if (!cancelled) setExperiences(loadedExperiences);
+      })
+      .catch(() => {
+        if (!cancelled) setExperiences([]);
+      });
 
     // Categories and collections make the header useful immediately. A
     // compact product index then refines empty destinations and contextual
@@ -363,15 +383,16 @@ function PublicStoreShell({
   }, [location.state, routeKey, routeReady]);
 
   return (
-    <PublicRouteReadyProvider value={{ setRouteReady }}>
-      <div className="min-h-screen" style={{ backgroundColor: theme.background }}>
+    <PublicStoreExperienceProvider value={{ experiences, activeExperience }}>
+      <PublicRouteReadyProvider value={{ setRouteReady }}>
+        <div className="min-h-screen" style={{ backgroundColor: theme.background }}>
         {branding ? (
           <StorefrontHeader
             key={routeKey}
             theme={theme}
-            storeName={branding.storeName}
+            storeName={publicStoreName}
             storeSlug={storeSlug}
-            logoUrl={branding.logoUrl}
+            logoUrl={publicStoreLogoUrl}
             catalogType={branding.catalogType}
             hasHero={hasHero}
             showCart={showCart}
@@ -429,9 +450,11 @@ function PublicStoreShell({
             cashOnDeliveryEnabled={branding.cashOnDeliveryEnabled}
             onlineCheckoutEnabled={branding.onlineCheckoutEnabled}
             whatsappOrderUpdatesRequired={branding.whatsappOrderUpdatesRequired}
+            experienceCategorySlug={activeExperience?.categorySlug}
           />
         ) : null}
-      </div>
-    </PublicRouteReadyProvider>
+        </div>
+      </PublicRouteReadyProvider>
+    </PublicStoreExperienceProvider>
   );
 }

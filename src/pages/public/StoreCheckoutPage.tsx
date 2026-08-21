@@ -1,7 +1,8 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ShoppingBag, Tag } from 'lucide-react';
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
-import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
+import { usePublicStorefrontTheme } from '@/lib/storefront/usePublicStorefrontTheme';
+import { usePublicStoreExperience } from '@/components/layout/PublicStoreExperienceContext';
 import { useCartCheckout } from '@/components/public/cart/useCartCheckout';
 import { useSelectedLocation } from '@/lib/locations/locationContext';
 import { useLocationChangeWithCheck } from '@/lib/locations/useLocationChangeWithCheck';
@@ -27,9 +28,12 @@ export function StoreCheckoutPage() {
   const storeSlug = useResolvedStoreSlug(routeStoreSlug);
   const navigate = useNavigate();
   const { branding } = usePublicStoreBranding();
+  const { activeExperience } = usePublicStoreExperience();
   const { locations, orderStatus, scheduleLoading } = useSelectedLocation();
   const { requestLocationChange, confirmLocationChange, cancelLocationChange, pendingChange, checking } =
     useLocationChangeWithCheck();
+  const theme = usePublicStorefrontTheme(branding);
+  const experienceQuery = activeExperience ? `?cat=${encodeURIComponent(activeExperience.categorySlug)}` : '';
 
   // useCartCheckout/useEffect must run on every render, in the same order,
   // regardless of whether storeSlug/branding have resolved yet — the
@@ -58,16 +62,6 @@ export function StoreCheckoutPage() {
 
   if (!storeSlug || !branding) return null;
 
-  const theme = buildStorefrontTheme({
-    mode: branding.themeMode,
-    primaryColor: branding.primaryColor,
-    secondaryColor: branding.secondaryColor,
-    accentColor: branding.accentColor,
-    backgroundColor: branding.backgroundColor,
-    textColor: branding.textColor,
-    buttonRadius: branding.buttonRadius,
-  });
-
   const checkoutMethod = checkout.formik.values.fulfillmentMethod;
   const pickupLocations = getPickupLocations(locations);
   const showLocationSelector = checkoutMethod === 'pickup' && pickupLocations.length > 1;
@@ -93,7 +87,7 @@ export function StoreCheckoutPage() {
           Agrega productos antes de continuar con el pedido.
         </p>
         <Link
-          to={buildStorefrontPath(storeSlug, '/catalog')}
+          to={buildStorefrontPath(storeSlug, `/catalog${experienceQuery}`)}
           className="mt-6 inline-flex rounded-2xl px-5 py-3 text-sm font-semibold text-white"
           style={{ backgroundColor: theme.primary }}
         >
@@ -173,7 +167,7 @@ export function StoreCheckoutPage() {
             className="mb-6"
             color={theme.text}
             label="Volver al carrito"
-            fallbackPath={buildStorefrontPath(storeSlug, '/cart')}
+            fallbackPath={buildStorefrontPath(storeSlug, `/cart${experienceQuery}`)}
           />
 
           <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_380px]">
@@ -255,7 +249,7 @@ export function StoreCheckoutPage() {
                     currency={branding.currency}
                     onUpdateQuantity={checkout.updateQuantity}
                     onRemove={checkout.removeItem}
-                    onEdit={(item) => void navigate(buildStorefrontPath(storeSlug, `/p/${item.productSlug}`), {
+                    onEdit={(item) => void navigate(buildStorefrontPath(storeSlug, `/p/${item.productSlug}${experienceQuery}`), {
                       state: { editCartLineId: item.lineId, returnTo: 'checkout' },
                     })}
                   />

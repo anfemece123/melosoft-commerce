@@ -5,7 +5,7 @@ import { StorefrontBackButton } from '@/components/public/storefront/StorefrontB
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
 import { usePublicRouteReady } from '@/components/layout/PublicRouteReadyContext';
 import { StorefrontPoliciesSkeleton } from '@/components/public/storefront/StorefrontSkeletons';
-import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
+import { usePublicStorefrontTheme } from '@/lib/storefront/usePublicStorefrontTheme';
 import { storesService } from '@/features/stores/storesService';
 import type { PublicStorePage } from '@/types/common.types';
 import { useResolvedStoreSlug } from '@/lib/storefront/storefrontDomainContext';
@@ -18,6 +18,7 @@ export function StorePoliciesPage() {
   const { setRouteReady } = usePublicRouteReady();
   const [store, setStore] = useState<PublicStorePage | null>(branding);
   const [loading, setLoading] = useState(!branding);
+  const theme = usePublicStorefrontTheme(store);
 
   useEffect(() => {
     if (!storeSlug) {
@@ -62,16 +63,6 @@ export function StorePoliciesPage() {
   if (loading) {
     return <StorefrontPoliciesSkeleton branding={store} storeSlug={storeSlug ?? ''} />;
   }
-
-  const theme = buildStorefrontTheme({
-    mode: store?.themeMode,
-    primaryColor: store?.primaryColor,
-    secondaryColor: store?.secondaryColor,
-    accentColor: store?.accentColor,
-    backgroundColor: store?.backgroundColor,
-    textColor: store?.textColor,
-    buttonRadius: store?.buttonRadius,
-  });
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: theme.background, color: theme.text }}>

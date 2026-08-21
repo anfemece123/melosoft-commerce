@@ -3,13 +3,15 @@ import { Link, useParams } from 'react-router-dom';
 import {
   Package, Tag, ShoppingCart, CreditCard, Settings,
   ArrowRight, Users, BarChart2, MapPin, Globe,
-  Building2, Copy, Check, ExternalLink, ShoppingBag, Handshake, Calculator,
+  Building2, Copy, Check, ExternalLink, ShoppingBag, Handshake, Calculator, Sparkles,
 } from 'lucide-react';
 import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardBody } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { Select } from '@/components/ui/Select';
+import { Modal } from '@/components/ui/Modal';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { setCurrentLimits, setCurrentMembers } from '@/features/stores/storesSlice';
@@ -20,6 +22,8 @@ import { productsService } from '@/features/products/productsService';
 import { isPlatformAdmin, canManageStore, canManageStoreMembers } from '@/utils/permissions';
 import type { ProductCountStats } from '@/features/products/products.types';
 import { domainsService } from '@/features/domains/domainsService';
+import { plansService } from '@/features/plans/plansService';
+import type { SubscriptionPlan } from '@/features/plans/plans.types';
 import { notify } from '@/lib/notifications';
 
 const CATALOG_TYPE_LABELS: Record<string, string> = {
@@ -58,6 +62,11 @@ export function StoreDetailPage() {
   const [productStats, setProductStats] = useState<ProductCountStats | null>(null);
   const [updatingPartnerModule, setUpdatingPartnerModule] = useState(false);
   const [updatingAccountingModule, setUpdatingAccountingModule] = useState(false);
+  const [updatingCategoryExperiencesModule, setUpdatingCategoryExperiencesModule] = useState(false);
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [planModalOpen, setPlanModalOpen] = useState(false);
+  const [selectedPlanKey, setSelectedPlanKey] = useState('basic');
+  const [updatingPlan, setUpdatingPlan] = useState(false);
 
   const profile = useAppSelector(selectAuthProfile);
   const myMemberships = useAppSelector(selectMyMemberships);
@@ -87,6 +96,13 @@ export function StoreDetailPage() {
     }
     void load();
   }, [storeId, dispatch]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    void plansService.getPlans(false)
+      .then(setPlans)
+      .catch((error) => notify.fromError(error, 'No pudimos cargar los planes disponibles.'));
+  }, [isAdmin]);
 
   if (!store) return <LoadingScreen label="Cargando empresa…" />;
 
@@ -132,6 +148,44 @@ export function StoreDetailPage() {
     }
   }
 
+  async function toggleCategoryExperiencesModule() {
+    if (!storeId || !currentLimits || !isAdmin) return;
+    setUpdatingCategoryExperiencesModule(true);
+    try {
+      const updated = await storesService.updateStoreLimits(storeId, {
+        canUseCategoryExperiences: !currentLimits.canUseCategoryExperiences,
+      });
+      dispatch(setCurrentLimits(updated));
+      notify.success(updated.canUseCategoryExperiences ? 'Módulo Experiencias habilitado.' : 'Módulo Experiencias deshabilitado.');
+    } catch (error) {
+      notify.fromError(error, 'No pudimos actualizar el módulo Experiencias.');
+    } finally {
+      setUpdatingCategoryExperiencesModule(false);
+    }
+  }
+
+  function openPlanModal() {
+    setSelectedPlanKey(currentLimits?.planKey ?? 'basic');
+    setPlanModalOpen(true);
+  }
+
+  async function applySelectedPlan() {
+    if (!storeId) return;
+    const plan = plans.find((item) => item.planKey === selectedPlanKey);
+    if (!plan) return;
+    setUpdatingPlan(true);
+    try {
+      const updated = await plansService.applyPlanToStore(storeId, plan);
+      dispatch(setCurrentLimits(updated));
+      setPlanModalOpen(false);
+      notify.success(`Plan ${plan.name} asignado a ${store?.name ?? 'la empresa'}.`);
+    } catch (error) {
+      notify.fromError(error, 'No pudimos asignar el plan.');
+    } finally {
+      setUpdatingPlan(false);
+    }
+  }
+
   const sections: ActionSection[] = [
     {
       title: 'Configuración',
@@ -170,6 +224,13 @@ export function StoreDetailPage() {
       description: 'Ingresos, gastos y balance sencillo de la empresa.',
       to: `/admin/stores/${storeId}/accounting`,
       icon: <Calculator className="w-5 h-5 text-emerald-600" />,
+      requiresManage: true,
+    },
+    {
+      title: 'Experiencias por categoría',
+      description: 'Colores y contexto visual para cada línea del catálogo.',
+      to: `/admin/stores/${storeId}/experiences`,
+      icon: <Sparkles className="w-5 h-5 text-indigo-600" />,
       requiresManage: true,
     },
     {
@@ -417,7 +478,7 @@ export function StoreDetailPage() {
               <div className="flex items-center justify-between mb-4">
                 <Badge variant="info">{currentLimits.planKey.toUpperCase()}</Badge>
                 {isAdmin && (
-                  <span className="text-xs text-gray-400">Visible solo en modo admin</span>
+                  <span className="text-xs text-gray-400">Administrado por Super Admin</span>
                 )}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
@@ -429,6 +490,7 @@ export function StoreDetailPage() {
                   { label: 'Tema avanzado', value: currentLimits.canUseAdvancedTheme ? 'Sí' : 'No' },
                   { label: 'Partners y códigos', value: currentLimits.canUsePartnerCodes ? 'Habilitado' : 'No' },
                   { label: 'Contabilidad', value: currentLimits.canUseAccounting ? 'Habilitado' : 'No' },
+                  { label: 'Experiencias', value: currentLimits.canUseCategoryExperiences ? 'Habilitado' : 'No' },
                 ].map(({ label, value }) => (
                   <div key={label}>
                     <p className="text-gray-400 text-xs uppercase tracking-wide">{label}</p>
@@ -436,6 +498,38 @@ export function StoreDetailPage() {
                   </div>
                 ))}
               </div>
+              {isAdmin && (
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">Plan de la empresa</p>
+                    <p className="mt-1 text-xs text-gray-500">Asigna una capacidad predefinida. Los módulos especiales se conservan por empresa.</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={plans.length === 0}
+                    onClick={openPlanModal}
+                  >
+                    Cambiar plan
+                  </Button>
+                </div>
+              )}
+              {isAdmin && (
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">Módulo Experiencias por categoría</p>
+                    <p className="mt-1 text-xs text-gray-500">Permite adaptar colores y contexto visual según la categoría activa del catálogo, sin crear otra empresa.</p>
+                  </div>
+                  <Button
+                    variant={currentLimits.canUseCategoryExperiences ? 'outline' : 'primary'}
+                    size="sm"
+                    isLoading={updatingCategoryExperiencesModule}
+                    onClick={() => void toggleCategoryExperiencesModule()}
+                  >
+                    {currentLimits.canUseCategoryExperiences ? 'Deshabilitar módulo' : 'Habilitar módulo'}
+                  </Button>
+                </div>
+              )}
               {isAdmin && (
                 <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
                   <div>
@@ -472,6 +566,33 @@ export function StoreDetailPage() {
           </Card>
         </div>
       )}
+      <Modal
+        open={planModalOpen}
+        title="Cambiar plan de la empresa"
+        description="El plan actualizará los límites de productos, personal, ofertas y pedidos."
+        onClose={() => setPlanModalOpen(false)}
+        footer={(
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setPlanModalOpen(false)}>Cancelar</Button>
+            <Button isLoading={updatingPlan} onClick={() => void applySelectedPlan()}>Asignar plan</Button>
+          </div>
+        )}
+      >
+        <Select
+          label="Plan"
+          value={selectedPlanKey}
+          onChange={(event) => setSelectedPlanKey(event.target.value)}
+          options={plans.map((plan) => ({
+            value: plan.planKey,
+            label: `${plan.name} · ${plan.maxProducts} productos · ${plan.maxStaff} personal`,
+          }))}
+        />
+        {plans.find((plan) => plan.planKey === selectedPlanKey) && (
+          <p className="mt-3 text-sm leading-5 text-gray-500">
+            {plans.find((plan) => plan.planKey === selectedPlanKey)?.description}
+          </p>
+        )}
+      </Modal>
       </div>
     </AdminPanelShell>
   );

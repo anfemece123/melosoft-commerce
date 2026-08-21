@@ -177,6 +177,7 @@ export interface StoreLimit {
   canUseAdvancedTheme: boolean;
   canUsePartnerCodes: boolean;
   canUseAccounting: boolean;
+  canUseCategoryExperiences: boolean;
   createdAt: string;
   updatedAt: string;
 }

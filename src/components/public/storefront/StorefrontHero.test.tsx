@@ -56,6 +56,12 @@ afterEach(() => {
 });
 
 describe('StorefrontHero carousel', () => {
+  it('does not render the main image circle when it is disabled', () => {
+    renderHero();
+
+    expect(screen.queryByTestId('hero-main-image-frame')).toBeNull();
+  });
+
   it('changes slides through explicit controls without removing either pane', () => {
     renderHero();
 

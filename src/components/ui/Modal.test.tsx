@@ -31,4 +31,19 @@ describe('Modal', () => {
     fireEvent.click(screen.getByRole('dialog').previousElementSibling as HTMLElement);
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it('leaves Escape and focus handling to a nested portaled dialog', () => {
+    const onClose = vi.fn();
+
+    render(
+      <Modal open title="Editar experiencia" onClose={onClose}>
+        <div data-dialog-layer="nested">
+          <button type="button">Editor de imagen</button>
+        </div>
+      </Modal>,
+    );
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Editor de imagen' }), { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });

@@ -25,6 +25,7 @@ export function StoreHeroSlidePreview({
   const subtitle = slide.showSubtitle ? slide.subtitle.trim() : '';
   const ctaLabel = slide.showCta ? slide.ctaLabel.trim() : '';
   const badgeImageUrl = slide.showBadgeImage ? slide.badgeImageUrl ?? logoUrl : null;
+  const hasVisual = slide.showMainImage || Boolean(badgeImageUrl);
   const isMobile = device === 'mobile';
 
   const fallbackBackground =
@@ -87,7 +88,9 @@ export function StoreHeroSlidePreview({
               'grid gap-6',
               isMobile
                 ? 'px-5 pb-6 pt-5'
-                : 'grid-cols-[minmax(0,1fr)_300px] items-center px-6 pb-6 pt-6',
+                : hasVisual
+                  ? 'grid-cols-[minmax(0,1fr)_300px] items-center px-6 pb-6 pt-6'
+                  : 'grid-cols-1 items-center px-6 pb-6 pt-6',
             ].join(' ')}
           >
             <div className={isMobile ? 'order-2 text-center' : 'order-1'}>
@@ -130,58 +133,66 @@ export function StoreHeroSlidePreview({
               </div>
             </div>
 
-            <div className={isMobile ? 'order-1 flex justify-center' : 'order-2 flex justify-center'}>
-              <div className="relative">
-                <div
-                  className={isMobile ? 'h-[170px] w-[170px] rounded-full' : 'h-[220px] w-[220px] rounded-full'}
-                  style={{ backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#d8e0e8' }}
-                />
-                <div
-                  className={[
-                    'absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full',
-                    isMobile ? 'h-[138px] w-[138px]' : 'h-[186px] w-[186px]',
-                  ].join(' ')}
-                  style={{
-                    background: theme.mode === 'dark'
-                      ? 'radial-gradient(circle at 30% 18%, rgba(255,255,255,0.16) 0, rgba(255,255,255,0.16) 16%, transparent 16.5%), radial-gradient(circle at 50% 60%, rgba(0,0,0,0.22) 0, rgba(0,0,0,0.45) 100%), rgba(255,255,255,0.06)'
-                      : 'radial-gradient(circle at 30% 18%, rgba(255,255,255,0.45) 0, rgba(255,255,255,0.45) 16%, transparent 16.5%), #d8e0e8',
-                  }}
-                >
-                  {slide.showMainImage && slide.mainImageUrl ? (
-                    <img src={slide.mainImageUrl} alt={storeName} className="h-full w-full object-contain" />
-                  ) : slide.showMainImage ? (
-                    <div className="flex h-full w-full items-center justify-center text-center text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: theme.primary }}>
-                      Imagen
+            {hasVisual ? (
+              <div className={isMobile ? 'order-1 flex justify-center' : 'order-2 flex justify-center'}>
+                <div className="relative">
+                  {slide.showMainImage ? (
+                    <>
+                      <div
+                        className={isMobile ? 'h-[170px] w-[170px] rounded-full' : 'h-[220px] w-[220px] rounded-full'}
+                        style={{ backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#d8e0e8' }}
+                      />
+                      <div
+                        data-testid="hero-preview-main-image-frame"
+                        className={[
+                          'absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full',
+                          isMobile ? 'h-[138px] w-[138px]' : 'h-[186px] w-[186px]',
+                        ].join(' ')}
+                        style={{
+                          background: theme.mode === 'dark'
+                            ? 'radial-gradient(circle at 30% 18%, rgba(255,255,255,0.16) 0, rgba(255,255,255,0.16) 16%, transparent 16.5%), radial-gradient(circle at 50% 60%, rgba(0,0,0,0.22) 0, rgba(0,0,0,0.45) 100%), rgba(255,255,255,0.06)'
+                            : 'radial-gradient(circle at 30% 18%, rgba(255,255,255,0.45) 0, rgba(255,255,255,0.45) 16%, transparent 16.5%), #d8e0e8',
+                        }}
+                      >
+                        {slide.mainImageUrl ? (
+                          <img src={slide.mainImageUrl} alt={storeName} className="h-full w-full object-contain" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-center text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: theme.primary }}>
+                            Imagen
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : null}
+
+                  {slide.showBadgeImage && badgeImageUrl ? (
+                    <div
+                      className={[
+                        'flex items-center justify-center rounded-full border-[3px] bg-white p-[3px]',
+                        isMobile ? 'h-[54px] w-[54px]' : 'h-[68px] w-[68px]',
+                        slide.showMainImage ? 'absolute right-0 top-0' : 'relative',
+                      ].join(' ')}
+                      style={{
+                        borderColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : '#d6dce2',
+                        backgroundColor: theme.mode === 'dark' ? 'rgba(15,23,42,0.92)' : '#ffffff',
+                      }}
+                    >
+                      {slide.badgeImageUrl ? (
+                        <img src={slide.badgeImageUrl} alt={`${storeName} badge`} className="h-full w-full rounded-full object-cover" />
+                      ) : (
+                        <PublicStoreLogo
+                          logoUrl={logoUrl}
+                          storeName={storeName}
+                          sizeClassName="h-full w-full"
+                          fallbackColor={theme.primary}
+                          outerClassName={theme.mode === 'dark' ? 'border border-white/10 bg-slate-950' : 'border border-gray-200 bg-white'}
+                        />
+                      )}
                     </div>
                   ) : null}
                 </div>
-
-                {slide.showBadgeImage && badgeImageUrl ? (
-                  <div
-                    className={[
-                      'absolute right-0 top-0 flex items-center justify-center rounded-full border-[3px] bg-white p-[3px]',
-                      isMobile ? 'h-[54px] w-[54px]' : 'h-[68px] w-[68px]',
-                    ].join(' ')}
-                    style={{
-                      borderColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : '#d6dce2',
-                      backgroundColor: theme.mode === 'dark' ? 'rgba(15,23,42,0.92)' : '#ffffff',
-                    }}
-                  >
-                    {slide.badgeImageUrl ? (
-                      <img src={slide.badgeImageUrl} alt={`${storeName} badge`} className="h-full w-full rounded-full object-cover" />
-                    ) : (
-                      <PublicStoreLogo
-                        logoUrl={logoUrl}
-                        storeName={storeName}
-                        sizeClassName="h-full w-full"
-                        fallbackColor={theme.primary}
-                        outerClassName={theme.mode === 'dark' ? 'border border-white/10 bg-slate-950' : 'border border-gray-200 bg-white'}
-                      />
-                    )}
-                  </div>
-                ) : null}
               </div>
-            </div>
+            ) : null}
           </div>
         </div>
       </div>

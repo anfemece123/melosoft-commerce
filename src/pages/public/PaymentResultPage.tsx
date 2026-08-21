@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { CheckCircle, XCircle, Clock, AlertCircle, ShoppingBag, Loader2 } from 'lucide-react';
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
-import { buildStorefrontTheme, withAlpha } from '@/components/public/storefront/storefrontTheme';
+import { withAlpha } from '@/components/public/storefront/storefrontTheme';
+import { usePublicStorefrontTheme } from '@/lib/storefront/usePublicStorefrontTheme';
 import { paymentsService } from '@/features/payments/paymentsService';
 import { CartProvider, useCart } from '@/lib/cart/cartContext';
 import { useResolvedStoreSlug } from '@/lib/storefront/storefrontDomainContext';
@@ -139,15 +140,7 @@ function PaymentResultContent({ storeSlug }: { storeSlug: string }) {
   const isPending   = outcome === 'pending';
   const isLoading   = outcome === 'loading';
   const waitingOrder = isApproved && !orderNumber;
-  const theme = buildStorefrontTheme({
-    mode: branding?.themeMode,
-    primaryColor: branding?.primaryColor,
-    secondaryColor: branding?.secondaryColor,
-    accentColor: branding?.accentColor,
-    backgroundColor: branding?.backgroundColor,
-    textColor: branding?.textColor,
-    buttonRadius: branding?.buttonRadius,
-  });
+  const theme = usePublicStorefrontTheme(branding);
   const successColor = theme.primary;
   const pendingColor = withAlpha(theme.text, 0.72);
   const dangerColor = '#dc2626';

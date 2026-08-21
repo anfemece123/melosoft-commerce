@@ -1,5 +1,5 @@
 import type { CSSProperties, MouseEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Package, UtensilsCrossed } from 'lucide-react';
 import type { PublicProductPage } from '@/types/common.types';
 import type { CatalogItem } from '@/lib/storefront/catalogItems';
@@ -61,9 +61,15 @@ export function StorefrontProductCard({
 }: StorefrontProductCardProps) {
   const isLarge = size === 'large';
   const product = item.product;
+  const [searchParams] = useSearchParams();
+  const productQuery = new URLSearchParams();
+  if (item.optionValueId) productQuery.set('opt', item.optionValueId);
+  const activeCategorySlug = searchParams.get('cat');
+  if (activeCategorySlug) productQuery.set('cat', activeCategorySlug);
+  const queryString = productQuery.toString();
   const cardHref = buildStorefrontPath(
     storeSlug,
-    `/p/${product.productSlug}${item.optionValueId ? `?opt=${item.optionValueId}` : ''}`,
+    `/p/${product.productSlug}${queryString ? `?${queryString}` : ''}`,
   );
   // Only swap on desktop hover, only when there's a real, distinct second
   // image to show — a single-image product (the common case today) falls

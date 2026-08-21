@@ -13,6 +13,7 @@ import { AuthCallbackPage } from '@/pages/auth/AuthCallbackPage';
 import { SetPasswordPage } from '@/pages/auth/SetPasswordPage';
 import { DashboardPage } from '@/pages/admin/DashboardPage';
 import { StoresPage } from '@/pages/admin/StoresPage';
+import { PlansPage } from '@/pages/admin/PlansPage';
 import { StoreFormPage } from '@/pages/admin/StoreFormPage';
 import { StoreDetailPage } from '@/pages/admin/StoreDetailPage';
 import { StoreSettingsPage } from '@/pages/admin/StoreSettingsPage';
@@ -35,6 +36,7 @@ import { WhatsappSettingsPage } from '@/pages/admin/WhatsappSettingsPage';
 import { ReviewsPage } from '@/pages/admin/ReviewsPage';
 import { PartnersPage } from '@/pages/admin/PartnersPage';
 import { AccountingPage } from '@/pages/admin/AccountingPage';
+import { CategoryExperiencesPage } from '@/pages/admin/CategoryExperiencesPage';
 import { PlatformWhatsappConnectionsPage } from '@/pages/admin/PlatformWhatsappConnectionsPage';
 import { MyStoresPage } from '@/pages/admin/MyStoresPage';
 import { StoreHomePage } from '@/pages/public/StoreHomePage';
@@ -79,6 +81,7 @@ export function AppRouter() {
               <Route element={<PlatformAdminRoute />}>
                 <Route path="/admin/stores" element={<StoresPage />} />
                 <Route path="/admin/stores/new" element={<StoreFormPage />} />
+                <Route path="/admin/plans" element={<PlansPage />} />
                 <Route path="/admin/whatsapp-connections" element={<PlatformWhatsappConnectionsPage />} />
               </Route>
 
@@ -113,6 +116,7 @@ export function AppRouter() {
                 <Route path="/admin/stores/:storeId/reviews" element={<ReviewsPage />} />
                 <Route path="/admin/stores/:storeId/partners" element={<PartnersPage />} />
                 <Route path="/admin/stores/:storeId/accounting" element={<AccountingPage />} />
+                <Route path="/admin/stores/:storeId/experiences" element={<CategoryExperiencesPage />} />
                 <Route path="/admin/stores/:storeId/whatsapp" element={<WhatsappSettingsPage />} />
               </Route>
             </Route>
