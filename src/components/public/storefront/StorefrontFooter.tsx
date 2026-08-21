@@ -33,6 +33,32 @@ function withAlpha(color: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+function getReadableFooterAccent(color: string) {
+  const value = color.trim();
+  if (!value.startsWith('#')) return '#bfdbfe';
+
+  const hex = value.slice(1);
+  const normalized = hex.length === 3
+    ? hex.split('').map((char) => `${char}${char}`).join('')
+    : hex.slice(0, 6);
+  if (normalized.length !== 6) return '#bfdbfe';
+
+  const red = Number.parseInt(normalized.slice(0, 2), 16);
+  const green = Number.parseInt(normalized.slice(2, 4), 16);
+  const blue = Number.parseInt(normalized.slice(4, 6), 16);
+  if ([red, green, blue].some((channel) => Number.isNaN(channel))) return '#bfdbfe';
+
+  // Keep the brand hue when it already has enough lightness. Otherwise mix
+  // it with white so borders, icons and the logo fallback remain visible on
+  // the intentionally dark footer background.
+  const perceivedBrightness = (red * 299 + green * 587 + blue * 114) / 1000;
+  if (perceivedBrightness >= 160) return color;
+
+  const mixAmount = perceivedBrightness < 80 ? 0.72 : 0.5;
+  const lighten = (channel: number) => Math.round(channel + (255 - channel) * mixAmount);
+  return `rgb(${lighten(red)}, ${lighten(green)}, ${lighten(blue)})`;
+}
+
 function buildLocationSummary(location: PublicStoreLocation) {
   return [location.addressLine, location.city, location.department]
     .filter(Boolean)
@@ -54,10 +80,16 @@ export function StorefrontFooter({ theme, branding, locations }: StorefrontFoote
   );
   const footerBackground = theme.mode === 'dark' ? withAlpha(theme.background, 0.96) : '#171717';
   const footerText = '#f5f5f5';
-  const footerMuted = 'rgba(245, 245, 245, 0.62)';
-  const footerSoft = 'rgba(245, 245, 245, 0.32)';
-  const footerDivider = 'rgba(255, 255, 255, 0.12)';
-  const socialBorder = withAlpha(theme.primary, 0.85);
+  const footerMuted = 'rgba(245, 245, 245, 0.72)';
+  const footerSoft = 'rgba(245, 245, 245, 0.56)';
+  const footerDivider = 'rgba(255, 255, 255, 0.16)';
+  // The footer is intentionally dark even when the storefront uses a light
+  // theme. Do not use the store primary here: a dark/black primary would
+  // make footer controls and the open status disappear against the footer
+  // background.
+  const footerAccent = getReadableFooterAccent(theme.primary);
+  const footerOpenStatus = '#86efac';
+  const socialBorder = withAlpha(footerAccent, 0.85);
   const primaryLocations = locations.slice(0, 3);
   const scheduleSummary = summarizeWeeklySchedule(businessHours);
   const whatsappHref = buildWhatsAppContactUrl(
@@ -96,7 +128,7 @@ export function StorefrontFooter({ theme, branding, locations }: StorefrontFoote
                 logoUrl={branding.logoUrl}
                 storeName={branding.storeName}
                 sizeClassName="h-12 w-12"
-                fallbackColor={theme.primary}
+                fallbackColor={footerAccent}
                 outerStyle={{ boxShadow: `0 0 0 1px ${footerDivider} inset` }}
               />
               <h2 className="text-[1.9rem] font-semibold tracking-[-0.04em]" style={{ color: footerText }}>
@@ -118,7 +150,7 @@ export function StorefrontFooter({ theme, branding, locations }: StorefrontFoote
                     className="flex h-9 w-9 items-center justify-center rounded-full border transition-all hover:-translate-y-0.5"
                     style={{
                       borderColor: index === 0 ? socialBorder : footerDivider,
-                      color: index === 0 ? theme.primary : footerText,
+                      color: index === 0 ? footerAccent : footerText,
                     }}
                   >
                     <Icon className="h-4 w-4" />
@@ -133,7 +165,7 @@ export function StorefrontFooter({ theme, branding, locations }: StorefrontFoote
                     className="flex h-9 w-9 items-center justify-center rounded-full border transition-all hover:-translate-y-0.5"
                     style={{
                       borderColor: index === 0 ? socialBorder : footerDivider,
-                      color: index === 0 ? theme.primary : footerText,
+                      color: index === 0 ? footerAccent : footerText,
                     }}
                   >
                     <Icon className="h-4 w-4" />
@@ -164,8 +196,8 @@ export function StorefrontFooter({ theme, branding, locations }: StorefrontFoote
                   </p>
                   {selectedLocation?.locationId === location.locationId && (
                     <div className="mt-3 border-l pl-3" style={{ borderColor: footerDivider }}>
-                      <div className="flex items-center gap-2 text-xs font-medium" style={{ color: businessStatus?.isOpen ? theme.primary : footerText }}>
-                        <Clock3 className="h-3.5 w-3.5" />
+                      <div className="flex items-center gap-2 text-xs font-medium" style={{ color: businessStatus?.isOpen ? footerOpenStatus : footerText }}>
+                        <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
                         {scheduleLoading
                           ? 'Consultando horario…'
                           : businessStatus?.isOpen

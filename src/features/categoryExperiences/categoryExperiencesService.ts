@@ -91,7 +91,36 @@ export const categoryExperiencesService = {
 
     const { data: siblings } = await supabase.storage.from('store-assets').list(folder);
     const obsoletePaths = (siblings ?? [])
-      .filter((item) => item.name !== `logo.${extension}`)
+      .filter((item) => item.name.startsWith('logo.') && item.name !== `logo.${extension}`)
+      .map((item) => `${folder}/${item.name}`);
+    if (obsoletePaths.length > 0) {
+      await supabase.storage.from('store-assets').remove(obsoletePaths);
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('store-assets')
+      .getPublicUrl(storagePath);
+    return `${publicUrl}?v=${crypto.randomUUID()}`;
+  },
+
+  async uploadExperienceCover(storeId: string, experienceId: string, file: File): Promise<string> {
+    assertImageReadyForUpload(file, 'store_hero_background');
+    const ownerId = await getOwnerId();
+    const extension = extensionForFile(file);
+    const folder = `${ownerId}/stores/${storeId}/category-experiences/${experienceId}`;
+    const storagePath = `${folder}/cover.${extension}`;
+    const { error: uploadError } = await supabase.storage
+      .from('store-assets')
+      .upload(storagePath, file, {
+        upsert: true,
+        contentType: file.type,
+        cacheControl: '31536000',
+      });
+    if (uploadError) throw new Error(uploadError.message);
+
+    const { data: siblings } = await supabase.storage.from('store-assets').list(folder);
+    const obsoletePaths = (siblings ?? [])
+      .filter((item) => item.name.startsWith('cover.') && item.name !== `cover.${extension}`)
       .map((item) => `${folder}/${item.name}`);
     if (obsoletePaths.length > 0) {
       await supabase.storage.from('store-assets').remove(obsoletePaths);

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } fr
 import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { Package, UtensilsCrossed, Search, AlertCircle, SlidersHorizontal, X } from 'lucide-react';
 import { StorefrontBreadcrumbs } from '@/components/public/storefront/StorefrontBreadcrumbs';
+import { CategoryExperienceBanner } from '@/components/public/storefront/CategoryExperienceBanner';
 import { CatalogFilterSidebar } from '@/components/public/catalog/CatalogFilterSidebar';
 import { CatalogFilterDrawer } from '@/components/public/catalog/CatalogFilterDrawer';
 import { SORT_OPTIONS, filtersFromUrl, filtersToUrl } from '@/components/public/catalog/catalogFilter.types';
@@ -357,6 +358,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
   const showCartButton = canUseWebOrders(commerceConfig);
   const isMenu = store?.catalogType === 'menu';
   const currency = store?.currency ?? 'COP';
+  const hasExperienceCover = Boolean(activeExperience?.coverImageUrl);
 
   // ── Derived data ─────────────────────────────────────────────
   // Unified facet list: real store facets, with any product variant option
@@ -653,6 +655,10 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
       style={{ backgroundColor: bgColor, color: theme.text, minHeight: '100vh', ...theme.cssVars }}
     >
       <div className={`${CATALOG_CONTAINER_CLASS} mx-auto px-4 py-6 sm:px-6 md:py-8 lg:px-8`}>
+        {activeExperience?.coverImageUrl && (
+          <CategoryExperienceBanner theme={theme} experience={activeExperience} />
+        )}
+
         {/* Breadcrumbs */}
         <StorefrontBreadcrumbs
           theme={theme}
@@ -675,10 +681,10 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              {isMenu
+              {!hasExperienceCover && (isMenu
                 ? <UtensilsCrossed className="w-5 h-5 shrink-0" style={{ color: theme.primary }} />
-                : <Package className="w-5 h-5 shrink-0" style={{ color: theme.primary }} />}
-              <h1 className="text-xl font-bold" style={{ color: theme.text }}>
+                : <Package className="w-5 h-5 shrink-0" style={{ color: theme.primary }} />)}
+              <h1 className={hasExperienceCover ? 'sr-only' : 'text-xl font-bold'} style={{ color: theme.text }}>
                 {activeExperience?.displayName ?? selectedSubcategoryNode?.name ?? selectedCategoryNode?.name ?? catalogLabel}
               </h1>
             </div>

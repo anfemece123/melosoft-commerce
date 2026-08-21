@@ -35,6 +35,10 @@ export interface CartItem {
   variantSku?: string | null;
 }
 
+/** A quantity can be set directly or derived from the latest quantity in the
+ * cart. The functional form keeps rapid +/- taps from using a stale render. */
+export type QuantityUpdate = number | ((currentQuantity: number) => number);
+
 interface CartContextValue {
   items: CartItem[];
   totalItems: number;
@@ -45,7 +49,7 @@ interface CartContextValue {
   replaceItem: (lineId: string, item: Omit<CartItem, 'lineId' | 'quantity'>) => CartItem | null;
   // Returns the quantity actually applied after clamping to available stock
   // (may be less than requested; 0 means the line was removed).
-  updateQuantity: (lineId: string, quantity: number) => number;
+  updateQuantity: (lineId: string, quantity: QuantityUpdate) => number;
   removeItem: (lineId: string) => void;
   removeItemsByProductIds: (productIds: string[]) => void;
   clearCart: () => void;
@@ -283,14 +287,9 @@ export function CartProvider({ storeSlug, children }: { storeSlug: string; child
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
 
-  // addItem/updateQuantity compute their return value from `items` (this
-  // render's state) rather than from inside the setItems updater — updater
-  // functions aren't guaranteed to run before the call returns, so mutating
-  // a local variable from within one and reading it right after is unsafe.
-  // Reading `items` directly is correct for the normal one-click-at-a-time
-  // usage in this app (a re-render always happens between clicks); the
-  // functional setItems form below is still used for the actual write so the
-  // state update itself stays correct even under batching.
+  // The returned item is calculated from this render for callers that need
+  // immediate feedback. The functional state update below is the source of
+  // truth, so consecutive taps still use the latest queued cart state.
   const addItem = useCallback((incoming: Omit<CartItem, 'lineId' | 'quantity'> & { quantity?: number }): CartItem | null => {
     const qty = incoming.quantity ?? 1;
     const normalizedIncoming = {
@@ -342,17 +341,42 @@ export function CartProvider({ storeSlug, children }: { storeSlug: string; child
     return result;
   }, [items]);
 
-  const updateQuantity = useCallback((lineId: string, quantity: number): number => {
-    if (quantity <= 0) {
-      setItems((prev) => prev.filter((i) => i.lineId !== lineId));
+  const updateQuantity = useCallback((lineId: string, quantityUpdate: QuantityUpdate): number => {
+    const current = items.find((item) => item.lineId === lineId);
+    if (!current) return 0;
+
+    const requested = typeof quantityUpdate === 'function'
+      ? quantityUpdate(current.quantity)
+      : quantityUpdate;
+
+    if (!Number.isFinite(requested) || requested <= 0) {
+      setItems((previous) => previous.filter((item) => item.lineId !== lineId));
       return 0;
     }
-    const current = items.find((i) => i.lineId === lineId);
-    if (current?.isAvailable === false) return current.quantity;
-    const max = current ? getMaxQuantity(current) : null;
-    const applied = max !== null ? Math.min(quantity, Math.max(max, 1)) : quantity;
+    if (current.isAvailable === false) return current.quantity;
 
-    setItems((prev) => prev.map((i) => (i.lineId === lineId ? { ...i, quantity: applied } : i)));
+    const max = getMaxQuantity(current);
+    if (max !== null && max <= 0) return current.quantity;
+    const normalizedRequested = Math.max(1, Math.floor(requested));
+    const applied = max !== null ? Math.min(normalizedRequested, max) : normalizedRequested;
+
+    setItems((previous) => previous.flatMap((item) => {
+      if (item.lineId !== lineId) return [item];
+      if (item.isAvailable === false) return [item];
+
+      const latestRequested = typeof quantityUpdate === 'function'
+        ? quantityUpdate(item.quantity)
+        : quantityUpdate;
+      if (!Number.isFinite(latestRequested) || latestRequested <= 0) return [];
+
+      const latestMax = getMaxQuantity(item);
+      if (latestMax !== null && latestMax <= 0) return [item];
+      const latestQuantity = Math.max(1, Math.floor(latestRequested));
+      return [{
+        ...item,
+        quantity: latestMax !== null ? Math.min(latestQuantity, latestMax) : latestQuantity,
+      }];
+    }));
     return applied;
   }, [items]);
 

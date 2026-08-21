@@ -13,6 +13,7 @@ export interface StoreCategoryExperienceCreateInput {
   displayName: string;
   description?: string | null;
   logoUrl?: string | null;
+  coverImageUrl?: string | null;
   themeMode: ThemeMode;
   primaryColor: string;
   secondaryColor: string;

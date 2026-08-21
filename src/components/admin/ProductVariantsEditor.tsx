@@ -558,6 +558,9 @@ export function ProductVariantsEditor({
               ? 'Tamaños o presentaciones que el cliente elige y que pueden tener disponibilidad o precio propio.'
               : 'Tallas, colores o presentaciones que el cliente elige para comprar y que pueden tener stock, SKU o precio propio.'}
           </p>
+          <p className="mt-2 text-xs font-medium text-indigo-700">
+            Tamaño recomendado para fotos de variantes: {IMAGE_ASSET_PRESETS.product_image.recommendedWidth} × {IMAGE_ASSET_PRESETS.product_image.recommendedHeight} px
+          </p>
         </div>
         <label className="flex shrink-0 items-center gap-2 text-sm text-gray-700">
           <button

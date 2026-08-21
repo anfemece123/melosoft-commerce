@@ -96,6 +96,7 @@ export function ReviewInvitationPage() {
   const [photoBusyProductId, setPhotoBusyProductId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const reviewImagePreset = getImageAssetPreset('review_image');
 
   useEffect(() => {
     let active = true;
@@ -236,6 +237,9 @@ export function ReviewInvitationPage() {
                       <div>
                         <p className="text-sm font-medium text-gray-700">Fotos (opcional)</p>
                         <p className="mt-1 text-xs text-gray-500">Hasta 3 fotos. Las optimizamos antes de guardarlas.</p>
+                        <p className="mt-1 text-xs font-medium text-indigo-700">
+                          Tamaño recomendado: {reviewImagePreset.recommendedWidth} × {reviewImagePreset.recommendedHeight} px
+                        </p>
                         <div className="mt-3 flex flex-wrap gap-3">
                           {draft.photos.map((photo) => (
                             <div key={photo.id} className="relative h-20 w-20 overflow-hidden rounded-xl border border-gray-200">

@@ -1,4 +1,4 @@
-import type { CartItem } from '@/lib/cart/cartContext';
+import type { CartItem, QuantityUpdate } from '@/lib/cart/cartContext';
 import type { StorefrontTheme } from '../storefront/storefrontTheme';
 import { CartEmptyState } from './CartEmptyState';
 import { CartItemRow } from './CartItemRow';
@@ -7,7 +7,7 @@ interface CartItemsListProps {
   items: CartItem[];
   theme: StorefrontTheme;
   currency: string;
-  onUpdateQuantity: (lineId: string, quantity: number) => number;
+  onUpdateQuantity: (lineId: string, quantity: QuantityUpdate) => number;
   onRemove: (lineId: string) => void;
   onEdit?: (item: CartItem) => void;
 }

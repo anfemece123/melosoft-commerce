@@ -1,5 +1,5 @@
 import { Minus, Pencil, Plus, ShoppingBag, Trash2 } from 'lucide-react';
-import { getMaxQuantity, isOutOfStock, type CartItem } from '@/lib/cart/cartContext';
+import { getMaxQuantity, isOutOfStock, type CartItem, type QuantityUpdate } from '@/lib/cart/cartContext';
 import { formatCurrency } from '@/utils/formatCurrency';
 import type { StorefrontTheme } from '../storefront/storefrontTheme';
 
@@ -7,7 +7,7 @@ interface CartItemRowProps {
   item: CartItem;
   theme: StorefrontTheme;
   currency: string;
-  onUpdateQuantity: (lineId: string, quantity: number) => number;
+  onUpdateQuantity: (lineId: string, quantity: QuantityUpdate) => number;
   onRemove: (lineId: string) => void;
   onEdit?: (item: CartItem) => void;
 }
@@ -88,25 +88,37 @@ export function CartItemRow({ item, theme, currency, onUpdateQuantity, onRemove,
             {item.customizationNotes}
           </p>
         ) : null}
-        <div className="mt-2 flex items-center justify-between">
-          <div className="flex items-center gap-1">
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <div
+            className="inline-flex items-center gap-1 rounded-xl border p-1"
+            style={{ borderColor: theme.border, backgroundColor: theme.surface }}
+            aria-label={`Cantidad de ${item.productName}`}
+          >
             <button
               type="button"
-              onClick={() => onUpdateQuantity(item.lineId, item.quantity - 1)}
-              className="flex h-7 w-7 items-center justify-center rounded-lg border hover:opacity-70 transition-opacity"
+              onClick={() => onUpdateQuantity(item.lineId, (currentQuantity) => currentQuantity - 1)}
+              disabled={item.quantity <= 1}
+              className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-35"
               style={{ borderColor: theme.border, color: theme.text }}
+              aria-label={`Disminuir unidades de ${item.productName}`}
             >
               <Minus className="h-3 w-3" />
             </button>
-            <span className="w-6 text-center text-sm font-semibold" style={{ color: theme.text }}>
+            <span
+              className="min-w-8 px-1 text-center text-sm font-semibold tabular-nums"
+              style={{ color: theme.text }}
+              aria-live="polite"
+            >
               {item.quantity}
             </span>
             <button
               type="button"
-              onClick={() => onUpdateQuantity(item.lineId, item.quantity + 1)}
+              onClick={() => onUpdateQuantity(item.lineId, (currentQuantity) => currentQuantity + 1)}
               disabled={outOfStock || atMax}
-              className="flex h-7 w-7 items-center justify-center rounded-lg border hover:opacity-70 transition-opacity disabled:opacity-40 disabled:hover:opacity-40"
+              className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-35"
               style={{ borderColor: theme.border, color: theme.text }}
+              aria-label={`Aumentar unidades de ${item.productName}`}
+              title={atMax ? `Solo hay ${max} unidad${max === 1 ? '' : 'es'} disponible${max === 1 ? '' : 's'}.` : undefined}
             >
               <Plus className="h-3 w-3" />
             </button>

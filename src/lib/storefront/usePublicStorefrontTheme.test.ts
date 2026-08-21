@@ -11,6 +11,8 @@ const experience: PublicCategoryExperience = {
   categorySlug: 'padel',
   displayName: 'Modo Pádel',
   description: null,
+  logoUrl: null,
+  coverImageUrl: null,
   themeMode: 'dark',
   primaryColor: '#16a34a',
   secondaryColor: '#dcfce7',

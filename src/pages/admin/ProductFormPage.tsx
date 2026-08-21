@@ -1323,6 +1323,9 @@ export function ProductFormPage() {
               Máximo {MAX_IMAGES} imágenes. Arrastra desde el control de cada foto para ordenarlas;
               la primera siempre será la principal. El orden se confirma al guardar el producto.
             </p>
+            <p className="-mt-2 mb-4 text-xs font-medium text-indigo-700">
+              Tamaño recomendado por imagen: {IMAGE_ASSET_PRESETS.product_image.recommendedWidth} × {IMAGE_ASSET_PRESETS.product_image.recommendedHeight} px
+            </p>
 
             <DndContext
               sensors={gallerySensors}

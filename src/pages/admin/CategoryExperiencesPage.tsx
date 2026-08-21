@@ -27,6 +27,7 @@ interface ExperienceForm {
   displayName: string;
   description: string;
   logoUrl: string | null;
+  coverImageUrl: string | null;
   themeMode: ThemeMode;
   primaryColor: string;
   secondaryColor: string;
@@ -41,6 +42,7 @@ const DEFAULT_FORM: ExperienceForm = {
   displayName: '',
   description: '',
   logoUrl: null,
+  coverImageUrl: null,
   themeMode: 'light',
   primaryColor: '#4f46e5',
   secondaryColor: '#eef2ff',
@@ -57,6 +59,7 @@ function toForm(experience?: StoreCategoryExperience | null): ExperienceForm {
     displayName: experience.displayName,
     description: experience.description ?? '',
     logoUrl: experience.logoUrl,
+    coverImageUrl: experience.coverImageUrl,
     themeMode: experience.themeMode,
     primaryColor: experience.primaryColor,
     secondaryColor: experience.secondaryColor,
@@ -90,6 +93,8 @@ export function CategoryExperiencesPage() {
   const [form, setForm] = useState<ExperienceForm>(DEFAULT_FORM);
   const [pendingLogoFile, setPendingLogoFile] = useState<File | null>(null);
   const [pendingLogoPreview, setPendingLogoPreview] = useState<string | null>(null);
+  const [pendingCoverFile, setPendingCoverFile] = useState<File | null>(null);
+  const [pendingCoverPreview, setPendingCoverPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -102,7 +107,8 @@ export function CategoryExperiencesPage() {
 
   useEffect(() => () => {
     if (pendingLogoPreview?.startsWith('blob:')) URL.revokeObjectURL(pendingLogoPreview);
-  }, [pendingLogoPreview]);
+    if (pendingCoverPreview?.startsWith('blob:')) URL.revokeObjectURL(pendingCoverPreview);
+  }, [pendingLogoPreview, pendingCoverPreview]);
 
   useEffect(() => {
     if (!storeId) return;
@@ -134,6 +140,8 @@ export function CategoryExperiencesPage() {
     setForm({ ...DEFAULT_FORM, categoryId: availableCategories[0]?.id ?? '' });
     setPendingLogoFile(null);
     setPendingLogoPreview(null);
+    setPendingCoverFile(null);
+    setPendingCoverPreview(null);
     setModalOpen(true);
   }
 
@@ -142,6 +150,8 @@ export function CategoryExperiencesPage() {
     setForm(toForm(experience));
     setPendingLogoFile(null);
     setPendingLogoPreview(null);
+    setPendingCoverFile(null);
+    setPendingCoverPreview(null);
     setModalOpen(true);
   }
 
@@ -149,11 +159,18 @@ export function CategoryExperiencesPage() {
     setModalOpen(false);
     setPendingLogoFile(null);
     setPendingLogoPreview(null);
+    setPendingCoverFile(null);
+    setPendingCoverPreview(null);
   }
 
   function handleLogoSelect(file: File | null) {
     setPendingLogoFile(file);
     setPendingLogoPreview(file ? URL.createObjectURL(file) : null);
+  }
+
+  function handleCoverSelect(file: File | null) {
+    setPendingCoverFile(file);
+    setPendingCoverPreview(file ? URL.createObjectURL(file) : null);
   }
 
   function setField<K extends keyof ExperienceForm>(field: K, value: ExperienceForm[K]) {
@@ -177,6 +194,7 @@ export function CategoryExperiencesPage() {
         displayName: form.displayName,
         description: form.description || null,
         logoUrl: form.logoUrl,
+        coverImageUrl: form.coverImageUrl,
         themeMode: form.themeMode,
         primaryColor: form.primaryColor,
         secondaryColor: form.secondaryColor,
@@ -195,6 +213,10 @@ export function CategoryExperiencesPage() {
       if (pendingLogoFile) {
         const logoUrl = await categoryExperiencesService.uploadExperienceLogo(storeId, saved.id, pendingLogoFile);
         saved = await categoryExperiencesService.updateExperience(saved.id, { logoUrl });
+      }
+      if (pendingCoverFile) {
+        const coverImageUrl = await categoryExperiencesService.uploadExperienceCover(storeId, saved.id, pendingCoverFile);
+        saved = await categoryExperiencesService.updateExperience(saved.id, { coverImageUrl });
       }
 
       if (editing) {
@@ -312,6 +334,11 @@ export function CategoryExperiencesPage() {
                             {experience.isActive ? 'Activa' : 'Pausada'}
                           </span>
                         </div>
+                        {experience.coverImageUrl && (
+                          <div className="mt-4 overflow-hidden rounded-xl border border-gray-100">
+                            <img src={experience.coverImageUrl} alt={`Portada de ${experience.displayName}`} className="h-24 w-full object-cover" />
+                          </div>
+                        )}
                         <div className="mt-4 grid grid-cols-5 gap-1.5" aria-label="Paleta de colores">
                           {[experience.primaryColor, experience.secondaryColor, experience.accentColor, experience.backgroundColor, experience.textColor].map((color) => <span key={color} className="h-6 rounded-md border border-black/5" style={{ backgroundColor: color }} title={color} />)}
                         </div>
@@ -364,6 +391,21 @@ export function CategoryExperiencesPage() {
             uploading={saving && Boolean(pendingLogoFile)}
             hint="Sube una versión del logo con los colores de este modo. Si lo dejas vacío, se usará el logo general de la empresa."
             aspectClassName="h-24 w-24 rounded-2xl"
+          />
+          <ImageUploadField
+            id="category-experience-cover"
+            label="Imagen de portada del modo (opcional)"
+            assetKind="store_hero_background"
+            previewUrl={pendingCoverPreview ?? form.coverImageUrl}
+            onFileSelect={handleCoverSelect}
+            onClear={() => {
+              setPendingCoverFile(null);
+              setPendingCoverPreview(null);
+              setField('coverImageUrl', null);
+            }}
+            uploading={saving && Boolean(pendingCoverFile)}
+            hint="Se mostrará arriba del catálogo cuando este modo esté activo. Usa una imagen horizontal con espacio para el texto."
+            aspectClassName="h-28 w-full max-w-md rounded-2xl"
           />
           <Textarea label="Descripción breve (opcional)" value={form.description} onChange={(event) => setField('description', event.target.value)} placeholder="Ej. Equipamiento para jugar y mejorar tu nivel." rows={3} />
           <Select label="Contraste del tema" value={form.themeMode} onChange={(event) => setField('themeMode', event.target.value as ThemeMode)} options={[{ value: 'light', label: 'Claro' }, { value: 'dark', label: 'Oscuro' }]} hint="Afecta la lectura del encabezado, superficies y controles." />

@@ -141,6 +141,9 @@ export function ImageUploadField({
             <p className="mt-2 text-xs text-gray-500">
               {hint ?? 'Puedes usar una imagen vertical, horizontal o cuadrada; podrás elegir el recorte antes de subirla.'}
             </p>
+            <p className="mt-1 text-xs font-medium text-indigo-700">
+              Tamaño recomendado: {preset.recommendedWidth} × {preset.recommendedHeight} px
+            </p>
             <p className="mt-1 text-xs text-gray-400">
               JPG, PNG, WebP o AVIF hasta {formatBytes(preset.maxBytes)}. Se optimiza automáticamente antes de guardar.
             </p>

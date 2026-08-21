@@ -2617,6 +2617,7 @@ export interface Database {
           display_name: string;
           description: string | null;
           logo_url: string | null;
+          cover_image_url: string | null;
           theme_mode: string;
           primary_color: string;
           secondary_color: string;
@@ -2637,6 +2638,7 @@ export interface Database {
           display_name: string;
           description?: string | null;
           logo_url?: string | null;
+          cover_image_url?: string | null;
           theme_mode?: string;
           primary_color?: string;
           secondary_color?: string;
@@ -2657,6 +2659,7 @@ export interface Database {
           display_name?: string;
           description?: string | null;
           logo_url?: string | null;
+          cover_image_url?: string | null;
           theme_mode?: string;
           primary_color?: string;
           secondary_color?: string;
@@ -3776,6 +3779,7 @@ export interface Database {
           display_name: string;
           description: string | null;
           logo_url: string | null;
+          cover_image_url: string | null;
           theme_mode: string;
           primary_color: string;
           secondary_color: string;

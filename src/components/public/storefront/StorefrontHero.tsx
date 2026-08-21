@@ -19,6 +19,7 @@ interface StorefrontHeroProps {
   theme: StorefrontTheme;
   storeName: string;
   storeLogoUrl: string | null;
+  dataTestId?: string;
   transparentHeaderOnMobile?: boolean;
   getCtaHref: (slide: PublicStoreHeroSlide) => string;
   fallbackCtaLabel: string;
@@ -75,6 +76,7 @@ export function StorefrontHero({
   theme,
   storeName,
   storeLogoUrl,
+  dataTestId,
   transparentHeaderOnMobile = false,
   getCtaHref,
   fallbackCtaLabel,
@@ -160,6 +162,7 @@ export function StorefrontHero({
   return (
     <section
       id="storefront-hero"
+      data-testid={dataTestId}
       aria-label={`Portada destacada de ${storeName}`}
       aria-roledescription={hasCarousel ? 'carrusel' : undefined}
       className="group/hero relative -mt-[1px] isolate w-full overflow-hidden pb-8 pt-0 md:pb-12"
