@@ -9,7 +9,7 @@ import {
   CatalogProductsDesignStep,
   CatalogProductsCategoryNavStep,
 } from './steps/CatalogProductsSteps';
-import { FeaturedCategoriesInfoStep, FeaturedCategoriesSelectionStep } from './steps/FeaturedCategoriesSteps';
+import { FeaturedCategoriesInfoStep, FeaturedCategoriesSelectionStep, FeaturedCategoriesDesignStep } from './steps/FeaturedCategoriesSteps';
 import { TestimonialsInfoStep, TestimonialsItemsStep, TestimonialsDesignStep } from './steps/TestimonialsSteps';
 import { ImageTextContentStep, ImageTextDesignStep } from './steps/ImageTextSteps';
 import { BenefitsInfoStep, BenefitsItemsStep, BenefitsDesignStep } from './steps/BenefitsSteps';
@@ -97,6 +97,7 @@ export function getWizardSteps(sectionType: HomeSectionType): WizardStepDefiniti
       return [
         { key: 'info', label: 'Información', component: FeaturedCategoriesInfoStep },
         { key: 'selection', label: 'Selección', component: FeaturedCategoriesSelectionStep, isValid: hasNoFieldErrors },
+        { key: 'design', label: 'Diseño', component: FeaturedCategoriesDesignStep },
         confirmStep,
       ];
     case 'testimonials':

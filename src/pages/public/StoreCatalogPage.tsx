@@ -883,7 +883,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
         )}
 
         {/* Main layout: sidebar + grid */}
-        <div className="flex gap-6">
+        <div id="storefront-products" className="flex gap-6">
           {/* Desktop sidebar — sticky so filters stay visible while the
               product grid scrolls. `sticky` (not `fixed`) inside this same
               flex row means it naturally un-sticks once the row's own

@@ -14,12 +14,13 @@ import { canManageStore } from '@/utils/permissions';
 import { homeSectionsService } from '@/features/homeSections/homeSectionsService';
 import { productsService } from '@/features/products/productsService';
 import { categoriesService } from '@/features/categories/categoriesService';
+import { categoryExperiencesService } from '@/features/categoryExperiences/categoryExperiencesService';
 import { storesService } from '@/features/stores/storesService';
 import { domainsService } from '@/features/domains/domainsService';
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import { getProductCardCtaLabel, canUseWebOrders, type PublicCommerceConfig } from '@/lib/commerce/commerceConfig.utils';
 import type { StoreHomeSection } from '@/features/homeSections/homeSections.types';
-import type { HomeSectionType, PublicProductPage, PublicStoreCategory, PublicStorePage } from '@/types/common.types';
+import type { HomeSectionType, PublicCategoryExperience, PublicProductPage, PublicStoreCategory, PublicStorePage } from '@/types/common.types';
 import type { PreviewDevice } from '@/components/admin/homeBuilder/previewFrame/StorefrontSectionPreviewFrame';
 import { notify } from '@/lib/notifications';
 
@@ -36,6 +37,7 @@ export function HomeBuilderPage() {
   // defensively so it can never show up in this list even if one exists.
   const [sections, setSections] = useState<StoreHomeSection[]>([]);
   const [categories, setCategories] = useState<PublicStoreCategory[]>([]);
+  const [experiences, setExperiences] = useState<PublicCategoryExperience[]>([]);
   // Public-shaped data (same fetch StoreHomePage itself uses) so both the
   // canvas's section cards and the wizard's live preview can render the
   // *actual* public section renderer — real theme colors, real product
@@ -60,13 +62,15 @@ export function HomeBuilderPage() {
       categoriesService.getStoreCategories(storeId),
       storesService.getPublicStoreBySlug(store.slug),
       productsService.getPublicProductsByStoreSlug(store.slug),
+      categoryExperiencesService.getPublicExperiences(store.slug).catch(() => []),
     ])
-      .then(([sectionsData, categoriesData, publicStoreData, publicProductsData]) => {
+      .then(([sectionsData, categoriesData, publicStoreData, publicProductsData, experiencesData]) => {
         if (cancelled) return;
         setSections(sectionsData.filter((s) => s.sectionType !== 'hero'));
         setCategories(categoriesData);
         setPublicStore(publicStoreData);
         setPublicProducts(publicProductsData);
+        setExperiences(experiencesData);
       })
       .catch((err) => notify.fromError(err))
       .finally(() => {
@@ -159,6 +163,7 @@ export function HomeBuilderPage() {
           productCardCtaLabel={previewProductCardCtaLabel}
           publicProducts={publicProducts}
           categories={categories}
+          experiences={experiences}
           viewMode={previewDevice}
           onViewModeChange={setPreviewDevice}
           onSectionsChange={setSections}
@@ -183,6 +188,7 @@ export function HomeBuilderPage() {
           storeId={storeId}
           sectionType={creatingType}
           categories={categories}
+          experiences={experiences}
           publicProducts={publicProducts}
           theme={previewTheme}
           storeSlug={store.slug}
@@ -207,6 +213,7 @@ export function HomeBuilderPage() {
           sectionType={editingSection.sectionType}
           existingSection={editingSection}
           categories={categories}
+          experiences={experiences}
           publicProducts={publicProducts}
           theme={previewTheme}
           storeSlug={store.slug}

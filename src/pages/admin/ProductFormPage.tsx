@@ -44,7 +44,7 @@ import { MoneyInput } from '@/components/forms/MoneyInput';
 import { IntegerInput } from '@/components/forms/IntegerInput';
 import { getProductFormLabels } from '@/lib/products/productFormLabels';
 import { useAppSelector } from '@/app/hooks';
-import { selectCurrentStore, selectCurrentCommerceSettings } from '@/features/stores/stores.selectors';
+import { selectCurrentStore, selectCurrentCommerceSettings, selectCurrentBusinessLimits } from '@/features/stores/stores.selectors';
 import { productOptionsService, type ProductOptionGroupDraft } from '@/features/products/productOptionsService';
 import { productsService } from '@/features/products/productsService';
 import { productVariantsService } from '@/features/products/productVariantsService';
@@ -262,6 +262,8 @@ export function ProductFormPage() {
 
   const store = useAppSelector(selectCurrentStore);
   const currentCommerceSettings = useAppSelector(selectCurrentCommerceSettings);
+  const currentLimits = useAppSelector(selectCurrentBusinessLimits);
+  const canUseCarta = currentLimits?.canUseCarta === true;
   const isMenu = currentCommerceSettings?.catalogType === 'menu';
 
   const labels = getProductFormLabels({
@@ -419,6 +421,9 @@ export function ProductFormPage() {
           salePrice: finalSalePrice,
           compareAtPrice: null,
           costPrice: null,
+          // These fields remain in the persistence payload so editing a
+          // product while Carta is disabled does not erase a restaurant's
+          // saved configuration. The controls themselves are module-gated.
           cartaPrice: values.cartaPrice !== '' ? Number(values.cartaPrice) : null,
           showInCarta: values.showInCarta,
           showInEcommerce: values.showInEcommerce,
@@ -1478,41 +1483,49 @@ export function ProductFormPage() {
           </CardBody>
         </Card>
 
-        {/* Carta digital — visual, checkout-free menu (e.g. QR at the table) */}
+        {/* Carta digital — visible solo cuando el módulo está habilitado para la empresa. */}
+        {canUseCarta && (
+          <Card>
+            <CardBody>
+              <SectionHeader
+                title="Carta digital"
+                description="Precio y visibilidad de este producto en el menú visual del local, independientes de la tienda online."
+              />
+              <div className="space-y-4">
+                <MoneyInput
+                  id="cartaPrice"
+                  name="cartaPrice"
+                  label="Precio en la carta del local (opcional)"
+                  currency={currency}
+                  value={formik.values.cartaPrice}
+                  onChange={(val) => void formik.setFieldValue('cartaPrice', val)}
+                  onBlur={() => void formik.setFieldTouched('cartaPrice', true)}
+                  error={formik.touched.cartaPrice ? formik.errors.cartaPrice : undefined}
+                />
+                <p className="text-xs text-gray-400 -mt-2">
+                  Si lo dejas vacío, la carta del local usa el mismo precio de tu tienda online.
+                </p>
+
+                <ToggleField
+                  label="Mostrar en la carta del local"
+                  description="Aparece en el menú visual accesible por QR."
+                  checked={formik.values.showInCarta}
+                  onChange={(v) => void formik.setFieldValue('showInCarta', v)}
+                />
+              </div>
+            </CardBody>
+          </Card>
+        )}
+
         <Card>
           <CardBody>
-            <SectionHeader
-              title="Carta digital"
-              description="Precio y visibilidad de este producto en el menú visual del local, independientes de la tienda online."
+            <SectionHeader title="Visibilidad en la tienda online" description="Controla si este producto aparece en tu catálogo de ecommerce." />
+            <ToggleField
+              label="Mostrar en la tienda online"
+              description="Aparece en tu catálogo de ecommerce."
+              checked={formik.values.showInEcommerce}
+              onChange={(v) => void formik.setFieldValue('showInEcommerce', v)}
             />
-            <div className="space-y-4">
-              <MoneyInput
-                id="cartaPrice"
-                name="cartaPrice"
-                label="Precio en la carta del local (opcional)"
-                currency={currency}
-                value={formik.values.cartaPrice}
-                onChange={(val) => void formik.setFieldValue('cartaPrice', val)}
-                onBlur={() => void formik.setFieldTouched('cartaPrice', true)}
-                error={formik.touched.cartaPrice ? formik.errors.cartaPrice : undefined}
-              />
-              <p className="text-xs text-gray-400 -mt-2">
-                Si lo dejas vacío, la carta del local usa el mismo precio de tu tienda online.
-              </p>
-
-              <ToggleField
-                label="Mostrar en la carta del local"
-                description="Aparece en el menú visual accesible por QR."
-                checked={formik.values.showInCarta}
-                onChange={(v) => void formik.setFieldValue('showInCarta', v)}
-              />
-              <ToggleField
-                label="Mostrar en la tienda online"
-                description="Aparece en tu catálogo de ecommerce."
-                checked={formik.values.showInEcommerce}
-                onChange={(v) => void formik.setFieldValue('showInEcommerce', v)}
-              />
-            </div>
           </CardBody>
         </Card>
 

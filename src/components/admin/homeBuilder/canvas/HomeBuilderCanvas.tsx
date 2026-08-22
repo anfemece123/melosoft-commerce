@@ -8,7 +8,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { homeSectionsService } from '@/features/homeSections/homeSectionsService';
 import type { StoreHomeSection } from '@/features/homeSections/homeSections.types';
-import type { PublicProductPage, PublicStoreCategory } from '@/types/common.types';
+import type { PublicCategoryExperience, PublicProductPage, PublicStoreCategory } from '@/types/common.types';
 import type { StorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import type { PreviewDevice } from '@/components/admin/homeBuilder/previewFrame/StorefrontSectionPreviewFrame';
 import { notify } from '@/lib/notifications';
@@ -25,6 +25,7 @@ interface HomeBuilderCanvasProps {
   productCardCtaLabel: string;
   publicProducts: PublicProductPage[];
   categories: PublicStoreCategory[];
+  experiences: PublicCategoryExperience[];
   /** Lifted to HomeBuilderPage (not owned here) so opening the wizard from
    * "Editar" can start it in sync with whatever device mode the canvas is
    * currently showing. */
@@ -46,6 +47,7 @@ export function HomeBuilderCanvas({
   productCardCtaLabel,
   publicProducts,
   categories,
+  experiences,
   viewMode,
   onViewModeChange,
   onSectionsChange,
@@ -167,6 +169,7 @@ export function HomeBuilderCanvas({
                     productCardCtaLabel={productCardCtaLabel}
                     publicProducts={publicProducts}
                     categories={categories}
+                    experiences={experiences}
                     onEdit={() => onEditSection(section)}
                     onToggleActive={(isActive) => void handleToggleActive(section.id, isActive)}
                     onDelete={() => setDeletingId(section.id)}

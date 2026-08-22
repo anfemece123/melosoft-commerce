@@ -123,6 +123,11 @@ export type HomeSectionContent =
       sectionType: 'featured_categories';
       selectionMode: 'manual' | 'auto';
       maxItems: number;
+      // New sections use wide category-experience covers by default. Missing
+      // values are decoded as the legacy square category-card layout so old
+      // sections keep their previous appearance.
+      imageSource: 'experience_cover' | 'category_image';
+      layout: 'adaptive' | 'grid' | 'carousel';
     }
   | { sectionType: 'testimonials'; layout: 'grid' | 'carousel' }
   | {
@@ -176,6 +181,9 @@ export type HomeSectionContent =
   | { sectionType: 'gallery'; layout: 'grid' | 'carousel' }
   | {
       sectionType: 'catalog_products';
+      // null = all catalog products. When set, this section is a reusable
+      // category-specific block (for example, "Pádel" or "Gym").
+      categoryId: string | null;
       maxItems: number;
       order: CatalogProductsOrder;
       layout: 'grid' | 'carousel';
@@ -200,7 +208,7 @@ export const HOME_SECTION_TYPE_LABELS: Record<HomeSectionType, string> = {
   hero: 'Portada / Hero',
   promo_banners: 'Banners promocionales',
   featured_products: 'Productos destacados',
-  featured_categories: 'Categorías destacadas',
+  featured_categories: 'Categorías con portada',
   testimonials: 'Testimonios',
   image_text: 'Imagen con texto',
   featured_collections: 'Colecciones destacadas',
@@ -214,7 +222,7 @@ export const HOME_SECTION_TYPE_DESCRIPTIONS: Record<HomeSectionType, string> = {
   hero: 'La portada principal de la tienda (se edita desde Configuración).',
   promo_banners: 'Muestra promociones, campañas o descuentos con imagen y enlace.',
   featured_products: 'Muestra productos seleccionados a mano o automáticamente en el inicio.',
-  featured_categories: 'Accesos directos a las categorías de tu catálogo.',
+  featured_categories: 'Muestra categorías con sus portadas de experiencia o una imagen personalizada.',
   testimonials: 'Reseñas o comentarios de tus clientes.',
   image_text: 'Un bloque de imagen junto a un texto y un botón opcional.',
   featured_collections: 'Colecciones destacadas de tu catálogo.',
@@ -267,7 +275,13 @@ export function defaultHomeSectionContent(sectionType: HomeSectionType): HomeSec
         layout: 'carousel',
       };
     case 'featured_categories':
-      return { sectionType, selectionMode: 'auto', maxItems: 6 };
+      return {
+        sectionType,
+        selectionMode: 'auto',
+        maxItems: 6,
+        imageSource: 'experience_cover',
+        layout: 'adaptive',
+      };
     case 'testimonials':
       return { sectionType, layout: 'grid' };
     case 'image_text':
@@ -309,6 +323,7 @@ export function defaultHomeSectionContent(sectionType: HomeSectionType): HomeSec
     case 'catalog_products':
       return {
         sectionType,
+        categoryId: null,
         maxItems: CATALOG_PRODUCTS_DEFAULT_ITEMS,
         order: 'catalog',
         layout: 'carousel',
@@ -348,7 +363,7 @@ export function defaultHomeSectionHeading(sectionType: HomeSectionType): string 
     case 'featured_products':
       return 'Productos destacados';
     case 'featured_categories':
-      return 'Categorías destacadas';
+      return 'Explora por categoría';
     case 'testimonials':
       return 'Lo que dicen nuestros clientes';
     case 'benefits':

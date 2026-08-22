@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import {
   Package, Tag, ShoppingCart, CreditCard, Settings,
   ArrowRight, Users, BarChart2, MapPin, Globe,
-  Building2, Copy, Check, ExternalLink, ShoppingBag, Handshake, Calculator, Sparkles,
+  Building2, Copy, Check, ExternalLink, ShoppingBag, Handshake, Calculator, Sparkles, UtensilsCrossed,
 } from 'lucide-react';
 import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -63,6 +63,7 @@ export function StoreDetailPage() {
   const [updatingPartnerModule, setUpdatingPartnerModule] = useState(false);
   const [updatingAccountingModule, setUpdatingAccountingModule] = useState(false);
   const [updatingCategoryExperiencesModule, setUpdatingCategoryExperiencesModule] = useState(false);
+  const [updatingCartaModule, setUpdatingCartaModule] = useState(false);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [selectedPlanKey, setSelectedPlanKey] = useState('basic');
@@ -164,6 +165,22 @@ export function StoreDetailPage() {
     }
   }
 
+  async function toggleCartaModule() {
+    if (!storeId || !currentLimits || !isAdmin) return;
+    setUpdatingCartaModule(true);
+    try {
+      const updated = await storesService.updateStoreLimits(storeId, {
+        canUseCarta: !currentLimits.canUseCarta,
+      });
+      dispatch(setCurrentLimits(updated));
+      notify.success(updated.canUseCarta ? 'Módulo Carta digital habilitado.' : 'Módulo Carta digital deshabilitado.');
+    } catch (error) {
+      notify.fromError(error, 'No pudimos actualizar el módulo Carta digital.');
+    } finally {
+      setUpdatingCartaModule(false);
+    }
+  }
+
   function openPlanModal() {
     setSelectedPlanKey(currentLimits?.planKey ?? 'basic');
     setPlanModalOpen(true);
@@ -200,6 +217,13 @@ export function StoreDetailPage() {
       to: `/admin/stores/${storeId}/products`,
       icon: <Package className="w-5 h-5 text-violet-600" />,
     },
+    ...(currentLimits?.canUseCarta ? [{
+      title: 'Carta digital',
+      description: 'Menú visual, precios de carta y código QR para el local.',
+      to: `/admin/stores/${storeId}/carta`,
+      icon: <UtensilsCrossed className="w-5 h-5 text-orange-600" />,
+      requiresManage: true,
+    }] : []),
     {
       title: 'Ofertas',
       description: 'Promociones con contador regresivo.',
@@ -491,6 +515,7 @@ export function StoreDetailPage() {
                   { label: 'Partners y códigos', value: currentLimits.canUsePartnerCodes ? 'Habilitado' : 'No' },
                   { label: 'Contabilidad', value: currentLimits.canUseAccounting ? 'Habilitado' : 'No' },
                   { label: 'Experiencias', value: currentLimits.canUseCategoryExperiences ? 'Habilitado' : 'No' },
+                  { label: 'Carta digital', value: currentLimits.canUseCarta ? 'Habilitado' : 'No' },
                 ].map(({ label, value }) => (
                   <div key={label}>
                     <p className="text-gray-400 text-xs uppercase tracking-wide">{label}</p>
@@ -511,6 +536,22 @@ export function StoreDetailPage() {
                     onClick={openPlanModal}
                   >
                     Cambiar plan
+                  </Button>
+                </div>
+              )}
+              {isAdmin && (
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">Módulo Carta digital</p>
+                    <p className="mt-1 text-xs text-gray-500">Los restaurantes lo reciben habilitado automáticamente. Actívalo aquí para cualquier otro tipo de empresa que necesite una carta visual.</p>
+                  </div>
+                  <Button
+                    variant={currentLimits.canUseCarta ? 'outline' : 'primary'}
+                    size="sm"
+                    isLoading={updatingCartaModule}
+                    onClick={() => void toggleCartaModule()}
+                  >
+                    {currentLimits.canUseCarta ? 'Deshabilitar módulo' : 'Habilitar módulo'}
                   </Button>
                 </div>
               )}

@@ -1,5 +1,5 @@
 import type { MouseEvent } from 'react';
-import type { PublicHomeSection, PublicProductPage, PublicStoreCategory } from '@/types/common.types';
+import type { PublicCategoryExperience, PublicHomeSection, PublicProductPage, PublicStoreCategory } from '@/types/common.types';
 import type { StorefrontTheme } from '../storefrontTheme';
 import { PromoBannersSectionRenderer } from './PromoBannersSectionRenderer';
 import { FeaturedProductsSectionRenderer } from './FeaturedProductsSectionRenderer';
@@ -20,6 +20,7 @@ interface HomeSectionRendererProps {
   productCardCtaLabel: string;
   products: PublicProductPage[];
   categories: PublicStoreCategory[];
+  experiences: PublicCategoryExperience[];
   unavailableProductIds: Set<string>;
   onAddToCart?: (event: MouseEvent<HTMLElement>, product: PublicProductPage) => void;
 }
@@ -75,6 +76,7 @@ export function HomeSectionRenderer(props: HomeSectionRendererProps) {
         <FeaturedCategoriesSectionRenderer
           section={section}
           categories={props.categories}
+          experiences={props.experiences}
           theme={props.theme}
           storeSlug={props.storeSlug}
         />

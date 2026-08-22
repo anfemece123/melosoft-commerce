@@ -92,13 +92,19 @@ export function CatalogProductsSectionRenderer({
   const isCatalog = content.sectionType === 'catalog_products';
 
   const maxItems = isCatalog ? content.maxItems : 8;
+  const configuredCategoryId = isCatalog ? content.categoryId : null;
+  const fixedCategoryId = configuredCategoryId && categories.some((category) => category.id === configuredCategoryId)
+    ? configuredCategoryId
+    : null;
   const order = isCatalog ? content.order : 'recent';
   const layout = isCatalog ? content.layout : 'carousel';
   const columnsDesktop = isCatalog ? content.columnsDesktop : 4;
   const visibleMobile = isCatalog ? content.visibleMobile : 1;
   const showViewAllButton = isCatalog ? content.showViewAllButton : true;
   const viewAllLabel = isCatalog ? content.viewAllLabel : 'Ver catálogo completo';
-  const showCategoryNav = isCatalog ? content.showCategoryNav : false;
+  // A fixed category section is already scoped, so it does not also expose
+  // tabs that could silently change the meaning of the block.
+  const showCategoryNav = isCatalog ? content.showCategoryNav && fixedCategoryId === null : false;
   const categoryNavMode = isCatalog ? content.categoryNavMode : 'all';
   const manualCategoryIds = isCatalog ? content.manualCategoryIds : [];
   const defaultCategoryId = isCatalog ? content.defaultCategoryId : null;
@@ -152,7 +158,7 @@ export function CatalogProductsSectionRenderer({
   // an effect (see https://react.dev/learn/you-might-not-need-an-effect) —
   // no setState-in-effect, and the reset is visible in the very same
   // render instead of one tick later.
-  const selectionKey = `${defaultCategoryId ?? ''}|${categoryNavMode}|${manualCategoryIds.join(',')}|${maxVisibleCategories}|${section.id}`;
+  const selectionKey = `${fixedCategoryId ?? ''}|${defaultCategoryId ?? ''}|${categoryNavMode}|${manualCategoryIds.join(',')}|${maxVisibleCategories}|${section.id}`;
   const [prevSelectionKey, setPrevSelectionKey] = useState(selectionKey);
   if (prevSelectionKey !== selectionKey) {
     setPrevSelectionKey(selectionKey);
@@ -161,10 +167,28 @@ export function CatalogProductsSectionRenderer({
 
   if (!isCatalog) return null;
 
-  const scopedProducts =
-    showCategoryNav && selectedCategoryId !== CATALOG_ALL_TAB_ID
-      ? products.filter((p) => productMatchesCategoryTab(p, selectedCategoryId))
-      : products;
+  const activeCategoryId = fixedCategoryId
+    ?? (showCategoryNav && selectedCategoryId !== CATALOG_ALL_TAB_ID ? selectedCategoryId : null);
+  const scopedProducts = activeCategoryId
+    ? products.filter((p) => productMatchesCategoryTab(p, activeCategoryId))
+    : products;
+
+  function buildCategoryCatalogHref(categoryId: string | null): string {
+    if (!categoryId) return buildStorefrontPath(storeSlug, '/catalog');
+    const category = categories.find((item) => item.id === categoryId);
+    if (!category) return buildStorefrontPath(storeSlug, '/catalog');
+    if (!category.parentId) {
+      return buildStorefrontPath(storeSlug, `/catalog?cat=${encodeURIComponent(category.slug)}`);
+    }
+    const parent = categories.find((item) => item.id === category.parentId);
+    if (!parent) return buildStorefrontPath(storeSlug, '/catalog');
+    return buildStorefrontPath(
+      storeSlug,
+      `/catalog?cat=${encodeURIComponent(parent.slug)}&sub=${encodeURIComponent(category.slug)}`,
+    );
+  }
+
+  const viewAllHref = buildCategoryCatalogHref(activeCategoryId);
 
   const allItems = buildCatalogItems(scopedProducts);
   // Restaurant/menu storefronts always honor the same manual positions as
@@ -220,7 +244,7 @@ export function CatalogProductsSectionRenderer({
             </div>
             {showViewAllButton && (
               <Link
-                to={buildStorefrontPath(storeSlug, '/catalog')}
+                to={viewAllHref}
                 className="hidden shrink-0 text-sm font-semibold sm:inline-flex sm:items-center sm:gap-1"
                 style={{ color: theme.primary }}
               >
@@ -266,7 +290,7 @@ export function CatalogProductsSectionRenderer({
         {showViewAllButton && (
           <div className="mt-6 flex justify-center sm:hidden">
             <Link
-              to={buildStorefrontPath(storeSlug, '/catalog')}
+              to={viewAllHref}
               className="inline-flex items-center gap-2 rounded-xl border px-6 py-2.5 text-sm font-semibold transition-opacity hover:opacity-80"
               style={{ borderColor: theme.primary, color: theme.primary }}
             >

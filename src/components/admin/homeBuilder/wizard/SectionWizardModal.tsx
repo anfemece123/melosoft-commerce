@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { homeSectionsService } from '@/features/homeSections/homeSectionsService';
 import { HOME_SECTION_TYPE_LABELS, type StoreHomeSection } from '@/features/homeSections/homeSections.types';
 import { notify } from '@/lib/notifications';
-import type { PublicProductPage, HomeSectionType, PublicStoreCategory } from '@/types/common.types';
+import type { PublicCategoryExperience, PublicProductPage, HomeSectionType, PublicStoreCategory } from '@/types/common.types';
 import type { StorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import {
   createDefaultDraft,
@@ -31,6 +31,7 @@ interface SectionWizardModalProps {
    * *real* public section renderer (real theme, real product cards, real
    * currency) without firing its own fetch per wizard open. */
   categories: PublicStoreCategory[];
+  experiences: PublicCategoryExperience[];
   publicProducts: PublicProductPage[];
   theme: StorefrontTheme;
   storeSlug: string;
@@ -62,6 +63,7 @@ export function SectionWizardModal({
   sectionType,
   existingSection,
   categories,
+  experiences,
   publicProducts,
   theme,
   storeSlug,
@@ -356,6 +358,7 @@ export function SectionWizardModal({
                 productCardCtaLabel={productCardCtaLabel}
                 publicProducts={publicProducts}
                 categories={categories}
+                experiences={experiences}
                 initialDevice={initialPreviewDevice}
               />
             )}

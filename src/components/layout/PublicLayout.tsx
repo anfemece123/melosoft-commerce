@@ -156,7 +156,8 @@ function PublicStoreShell({
   const [catalogMeta, setCatalogMeta] = useState<CatalogMeta | null>(null);
   const [experiences, setExperiences] = useState<Awaited<ReturnType<typeof categoryExperiencesService.getPublicExperiences>>>([]);
   const routeKey = `${location.pathname}${location.search}${location.hash}`;
-  const pendingScrollModeRef = useRef<'restore' | 'top'>('top');
+  const pendingScrollModeRef = useRef<'restore' | 'top' | 'catalog-products'>('top');
+  const previousRouteRef = useRef({ pathname: location.pathname, search: location.search, routeKey });
 
   // Canonical during the /s/:slug ↔ subdomain transition: on a real
   // storefront host (subdomain or verified custom domain) the current
@@ -299,15 +300,27 @@ function PublicStoreShell({
 
   useLayoutEffect(() => {
     setRouteReady(false);
-    pendingScrollModeRef.current =
-      location.state?.restoreScroll === true || navigationType === 'POP'
-        ? 'restore'
-        : 'top';
+    const previousRoute = previousRouteRef.current;
+    const isCatalogRoute = Boolean(matchPath('/s/:storeSlug/catalog', location.pathname))
+      || (isStorefrontHostnameMode(domainMode) && location.pathname === '/catalog');
+    const isCatalogFilterChange = isCatalogRoute
+      && previousRoute.pathname === location.pathname
+      && previousRoute.search !== location.search
+      && previousRoute.routeKey !== routeKey
+      && navigationType !== 'POP'
+      && location.state?.restoreScroll !== true;
 
-    if (location.state?.restoreScroll !== true && navigationType !== 'POP') {
+    pendingScrollModeRef.current = location.state?.restoreScroll === true || navigationType === 'POP'
+      ? 'restore'
+      : isCatalogFilterChange
+        ? 'catalog-products'
+        : 'top';
+    previousRouteRef.current = { pathname: location.pathname, search: location.search, routeKey };
+
+    if (pendingScrollModeRef.current === 'top') {
       window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     }
-  }, [location.state, routeKey, navigationType]);
+  }, [domainMode, location.pathname, location.search, location.state, routeKey, navigationType, setRouteReady]);
 
   useEffect(() => {
     let ticking = false;
@@ -362,6 +375,31 @@ function PublicStoreShell({
 
         window.scrollTo({
           top: Math.min(scrollTop, maxScrollableTop),
+          left: 0,
+          behavior: 'auto',
+        });
+      } else if (pendingScrollModeRef.current === 'catalog-products') {
+        const productsSection = document.getElementById('storefront-products');
+        if (!productsSection) {
+          if (attempt < 12) {
+            timeoutId = window.setTimeout(() => restore(attempt + 1), 60);
+          }
+          return;
+        }
+
+        const header = document.querySelector<HTMLElement>('[data-storefront-header="true"]');
+        const headerStyle = header ? window.getComputedStyle(header) : null;
+        const stickyHeaderOffset = header && headerStyle
+          && (headerStyle.position === 'sticky' || headerStyle.position === 'fixed')
+          ? header.getBoundingClientRect().height
+          : 0;
+        const targetTop = productsSection.getBoundingClientRect().top
+          + window.scrollY
+          - stickyHeaderOffset
+          - 16;
+
+        window.scrollTo({
+          top: Math.max(0, targetTop),
           left: 0,
           behavior: 'auto',
         });

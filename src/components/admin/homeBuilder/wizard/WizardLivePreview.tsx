@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { EyeOff, Monitor, Smartphone } from 'lucide-react';
-import type { PublicProductPage, PublicStoreCategory } from '@/types/common.types';
+import type { PublicCategoryExperience, PublicProductPage, PublicStoreCategory } from '@/types/common.types';
 import type { StorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import {
   StorefrontSectionPreviewFrame,
@@ -19,6 +19,7 @@ interface WizardLivePreviewProps {
   productCardCtaLabel: string;
   publicProducts: PublicProductPage[];
   categories: PublicStoreCategory[];
+  experiences: PublicCategoryExperience[];
   /** Starts the wizard's own device toggle in sync with whatever the
    * canvas is currently showing — the toggle is still local from here on,
    * so switching it inside the wizard never affects the canvas. */
@@ -41,6 +42,7 @@ export function WizardLivePreview({
   productCardCtaLabel,
   publicProducts,
   categories,
+  experiences,
   initialDevice,
 }: WizardLivePreviewProps) {
   const [device, setDevice] = useState<PreviewDevice>(initialDevice);
@@ -104,6 +106,7 @@ export function WizardLivePreview({
           productCardCtaLabel={productCardCtaLabel}
           publicProducts={publicProducts}
           categories={categories}
+          experiences={experiences}
           emptyStateMessage="Todavía no hay contenido para mostrar. Completa este paso para ver la vista previa."
           mobilePreviewScale={0.85}
           mobileMaxHeight={640}

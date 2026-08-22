@@ -2,7 +2,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Eye, EyeOff, GripVertical, Pencil, Trash2 } from 'lucide-react';
 import { HOME_SECTION_TYPE_LABELS, type StoreHomeSection } from '@/features/homeSections/homeSections.types';
-import type { PublicProductPage, PublicStoreCategory } from '@/types/common.types';
+import type { PublicCategoryExperience, PublicProductPage, PublicStoreCategory } from '@/types/common.types';
 import type { StorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import type { PreviewDevice } from '@/components/admin/homeBuilder/previewFrame/StorefrontSectionPreviewFrame';
 import { HomeSectionPreview } from '../previews/HomeSectionPreview';
@@ -18,6 +18,7 @@ interface SortableSectionCardProps {
   productCardCtaLabel: string;
   publicProducts: PublicProductPage[];
   categories: PublicStoreCategory[];
+  experiences: PublicCategoryExperience[];
   onEdit: () => void;
   onToggleActive: (isActive: boolean) => void;
   onDelete: () => void;
@@ -34,6 +35,7 @@ export function SortableSectionCard({
   productCardCtaLabel,
   publicProducts,
   categories,
+  experiences,
   onEdit,
   onToggleActive,
   onDelete,
@@ -115,6 +117,7 @@ export function SortableSectionCard({
           productCardCtaLabel={productCardCtaLabel}
           publicProducts={publicProducts}
           categories={categories}
+          experiences={experiences}
         />
       </div>
     </div>

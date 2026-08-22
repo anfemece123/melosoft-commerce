@@ -175,76 +175,110 @@ export function CatalogProductsCategoryNavStep({ draft, updateDraft, storeId }: 
       : content.categoryNavMode === 'root_only'
       ? categories.filter((c) => !c.parentId)
       : categories;
+  const categoriesById = new Map(categories.map((category) => [category.id, category]));
+  const categoryOptions = categories.map((category) => {
+    const parent = category.parentId ? categoriesById.get(category.parentId) : null;
+    return {
+      value: category.id,
+      label: parent ? `${parent.name} · ${category.name}` : category.name,
+    };
+  });
 
   return (
     <div className="space-y-4">
-      <SwitchField
-        id="catalog-products-show-category-nav"
-        label="Mostrar navegación por categorías"
-        description="Agrega botones de categoría arriba de esta sección para filtrarla en el inicio."
-        checked={content.showCategoryNav}
-        onChange={(checked) => updateDraft({ content: { ...content, showCategoryNav: checked } })}
+      <Select
+        label="Productos de esta sección"
+        value={content.categoryId ?? CATALOG_ALL_TAB_ID}
+        onChange={(e) => updateDraft({
+          content: {
+            ...content,
+            categoryId: e.target.value === CATALOG_ALL_TAB_ID ? null : e.target.value,
+          },
+        })}
+        options={[
+          { value: CATALOG_ALL_TAB_ID, label: 'Todos los productos' },
+          ...categoryOptions,
+        ]}
+        hint="Puedes crear varias secciones y asignar una categoría distinta a cada una."
       />
 
-      {content.showCategoryNav && (
+      {content.categoryId && !categoriesById.has(content.categoryId) && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+          La categoría guardada ya no existe. Selecciona otra para actualizar esta sección.
+        </p>
+      )}
+
+      {!content.categoryId && (
         <>
-          <Select
-            label="Categorías a mostrar"
-            value={content.categoryNavMode}
-            onChange={(e) => updateDraft({ content: { ...content, categoryNavMode: e.target.value as typeof content.categoryNavMode } })}
-            options={Object.entries(CATALOG_NAV_MODE_LABELS).map(([value, label]) => ({ value, label }))}
+          <SwitchField
+            id="catalog-products-show-category-nav"
+            label="Mostrar navegación por categorías"
+            description="Agrega botones de categoría arriba de esta sección para filtrarla en el inicio."
+            checked={content.showCategoryNav}
+            onChange={(checked) => updateDraft({ content: { ...content, showCategoryNav: checked } })}
           />
 
-          {content.categoryNavMode === 'manual' &&
-            (loading ? (
-              <p className="text-sm text-gray-400">Cargando categorías…</p>
-            ) : (
-              <HomeSectionCategoryPicker
-                categories={categories}
-                selectedCategoryIds={content.manualCategoryIds}
-                onChange={(categoryIds) => updateDraft({ content: { ...content, manualCategoryIds: categoryIds } })}
+          {content.showCategoryNav && (
+            <>
+              <Select
+                label="Categorías a mostrar"
+                value={content.categoryNavMode}
+                onChange={(e) => updateDraft({ content: { ...content, categoryNavMode: e.target.value as typeof content.categoryNavMode } })}
+                options={Object.entries(CATALOG_NAV_MODE_LABELS).map(([value, label]) => ({ value, label }))}
               />
-            ))}
 
-          <Select
-            label="Categoría inicial"
-            value={content.defaultCategoryId ?? CATALOG_ALL_TAB_ID}
-            onChange={(e) =>
-              updateDraft({
-                content: {
-                  ...content,
-                  defaultCategoryId: e.target.value === CATALOG_ALL_TAB_ID ? null : e.target.value,
-                },
-              })
-            }
-            options={[
-              { value: CATALOG_ALL_TAB_ID, label: 'Todo' },
-              ...candidateCategories.map((c) => ({ value: c.id, label: c.name })),
-            ]}
-          />
+              {content.categoryNavMode === 'manual' &&
+                (loading ? (
+                  <p className="text-sm text-gray-400">Cargando categorías…</p>
+                ) : (
+                  <HomeSectionCategoryPicker
+                    categories={categories}
+                    selectedCategoryIds={content.manualCategoryIds}
+                    onChange={(categoryIds) => updateDraft({ content: { ...content, manualCategoryIds: categoryIds } })}
+                  />
+                ))}
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Select
-              label="Estilo de navegación"
-              value={content.navStyle}
-              onChange={(e) => updateDraft({ content: { ...content, navStyle: e.target.value as typeof content.navStyle } })}
-              options={Object.entries(CATALOG_NAV_STYLE_LABELS).map(([value, label]) => ({ value, label }))}
-            />
-            <Select
-              label="Alineación"
-              value={content.navAlign}
-              onChange={(e) => updateDraft({ content: { ...content, navAlign: e.target.value as typeof content.navAlign } })}
-              options={Object.entries(CATALOG_NAV_ALIGN_LABELS).map(([value, label]) => ({ value, label }))}
-            />
-          </div>
+              <Select
+                label="Categoría inicial"
+                value={content.defaultCategoryId ?? CATALOG_ALL_TAB_ID}
+                onChange={(e) =>
+                  updateDraft({
+                    content: {
+                      ...content,
+                      defaultCategoryId: e.target.value === CATALOG_ALL_TAB_ID ? null : e.target.value,
+                    },
+                  })
+                }
+                options={[
+                  { value: CATALOG_ALL_TAB_ID, label: 'Todo' },
+                  ...candidateCategories.map((c) => ({ value: c.id, label: c.name })),
+                ]}
+              />
 
-          <Select
-            label="Límite de categorías visibles"
-            value={String(content.maxVisibleCategories)}
-            onChange={(e) => updateDraft({ content: { ...content, maxVisibleCategories: Number(e.target.value) as typeof content.maxVisibleCategories } })}
-            options={CATALOG_NAV_VISIBLE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
-            hint="Si hay más categorías que este límite, se recortan; el resto siempre se puede desplazar horizontalmente."
-          />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Select
+                  label="Estilo de navegación"
+                  value={content.navStyle}
+                  onChange={(e) => updateDraft({ content: { ...content, navStyle: e.target.value as typeof content.navStyle } })}
+                  options={Object.entries(CATALOG_NAV_STYLE_LABELS).map(([value, label]) => ({ value, label }))}
+                />
+                <Select
+                  label="Alineación"
+                  value={content.navAlign}
+                  onChange={(e) => updateDraft({ content: { ...content, navAlign: e.target.value as typeof content.navAlign } })}
+                  options={Object.entries(CATALOG_NAV_ALIGN_LABELS).map(([value, label]) => ({ value, label }))}
+                />
+              </div>
+
+              <Select
+                label="Límite de categorías visibles"
+                value={String(content.maxVisibleCategories)}
+                onChange={(e) => updateDraft({ content: { ...content, maxVisibleCategories: Number(e.target.value) as typeof content.maxVisibleCategories } })}
+                options={CATALOG_NAV_VISIBLE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
+                hint="Si hay más categorías que este límite, se recortan; el resto siempre se puede desplazar horizontalmente."
+              />
+            </>
+          )}
         </>
       )}
     </div>

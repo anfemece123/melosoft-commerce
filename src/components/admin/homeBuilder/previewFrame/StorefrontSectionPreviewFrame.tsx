@@ -1,4 +1,4 @@
-import type { PublicHomeSection, PublicProductPage, PublicStoreCategory } from '@/types/common.types';
+import type { PublicCategoryExperience, PublicHomeSection, PublicProductPage, PublicStoreCategory } from '@/types/common.types';
 import type { StorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import { HomeSectionRenderer } from '@/components/public/storefront/homeSections/HomeSectionRenderer';
 import { StorefrontViewportScaler } from './StorefrontViewportScaler';
@@ -20,6 +20,7 @@ interface StorefrontSectionPreviewFrameProps {
   productCardCtaLabel: string;
   publicProducts: PublicProductPage[];
   categories: PublicStoreCategory[];
+  experiences: PublicCategoryExperience[];
   emptyStateMessage?: string;
   /** Visual shrink for the mobile mockup — the canvas wants it compact
    * (several cards visible at once), the wizard can afford it a bit
@@ -65,6 +66,7 @@ export function StorefrontSectionPreviewFrame({
   productCardCtaLabel,
   publicProducts,
   categories,
+  experiences,
   emptyStateMessage,
   mobilePreviewScale = 0.8,
   mobileMaxHeight,
@@ -112,6 +114,7 @@ export function StorefrontSectionPreviewFrame({
                   productCardCtaLabel={productCardCtaLabel}
                   products={publicProducts}
                   categories={categories}
+                  experiences={experiences}
                   unavailableProductIds={EMPTY_UNAVAILABLE_IDS}
                 />
               </StorefrontMobileFrame>
@@ -128,6 +131,7 @@ export function StorefrontSectionPreviewFrame({
                 productCardCtaLabel={productCardCtaLabel}
                 products={publicProducts}
                 categories={categories}
+                experiences={experiences}
                 unavailableProductIds={EMPTY_UNAVAILABLE_IDS}
               />
             </StorefrontViewportScaler>

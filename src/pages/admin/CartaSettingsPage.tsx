@@ -20,6 +20,7 @@ import {
   UtensilsCrossed,
 } from 'lucide-react';
 import { useAppSelector } from '@/app/hooks';
+import { selectCurrentBusinessLimits } from '@/features/stores/stores.selectors';
 import { AdminPanelShell } from '@/components/admin/AdminPanelShell';
 import { CartaPreviewFrame, type CartaPreviewDevice } from '@/components/admin/carta/CartaPreviewFrame';
 import { CartaNavigationPicker, CartaTemplatePicker } from '@/components/admin/carta/CartaTemplatePicker';
@@ -353,6 +354,9 @@ function buildPreviewPage(
 export function CartaSettingsPage() {
   const { storeId } = useParams<{ storeId: string }>();
   const storeFromState = useAppSelector((state) => state.stores.current);
+  const currentLimits = useAppSelector(selectCurrentBusinessLimits);
+  const cartaLimitsReady = currentLimits !== null;
+  const canUseCarta = currentLimits?.canUseCarta === true;
   const [storeData, setStoreData] = useState<Store | null>(storeFromState);
   const [storeTheme, setStoreTheme] = useState<StoreTheme | null>(null);
   const [categories, setCategories] = useState<PublicStoreCategory[]>([]);
@@ -378,7 +382,7 @@ export function CartaSettingsPage() {
     initialValues: EMPTY_FORM,
     validationSchema: storeCartaSchema,
     onSubmit: async (values) => {
-      if (!storeId) return;
+      if (!storeId || !canUseCarta) return;
       const productOrder = [
         ...categories.flatMap((category) => products.filter((product) => product.categoryId === category.id).map((product) => product.id)),
         ...products.filter((product) => !product.categoryId).map((product) => product.id),
@@ -437,7 +441,7 @@ export function CartaSettingsPage() {
   });
 
   useEffect(() => {
-    if (!storeId) return;
+    if (!storeId || !cartaLimitsReady || !canUseCarta) return;
     let cancelled = false;
     async function load() {
       const issues: string[] = [];
@@ -518,9 +522,9 @@ export function CartaSettingsPage() {
     return () => { cancelled = true; };
     // Formik is intentionally initialized from this one load.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId]);
+  }, [storeId, cartaLimitsReady, canUseCarta]);
 
-  const publicUrl = storeData ? `${domainsService.getPlatformStoreUrl(storeData.slug)}/carta` : null;
+  const publicUrl = canUseCarta && storeData ? `${domainsService.getPlatformStoreUrl(storeData.slug)}/carta` : null;
   const theme = useMemo(() => buildStorefrontTheme({
     mode: storeTheme?.mode,
     primaryColor: storeTheme?.primaryColor,
@@ -545,7 +549,7 @@ export function CartaSettingsPage() {
   }
 
   async function handleCoverImageUpload(file: File | null) {
-    if (!file || !storeId) return;
+    if (!file || !storeId || !canUseCarta) return;
     setCoverImageUploading(true);
     setCoverImageError(null);
     try {
@@ -563,7 +567,7 @@ export function CartaSettingsPage() {
   }
 
   async function handleCoverBackgroundUpload(file: File | null) {
-    if (!file || !storeId) return;
+    if (!file || !storeId || !canUseCarta) return;
     setCoverBackgroundUploading(true);
     setCoverBackgroundError(null);
     try {
@@ -664,6 +668,22 @@ export function CartaSettingsPage() {
     { key: 'organize', label: 'Categorías y platos', icon: ListTree },
     { key: 'publish', label: 'Publicación y QR', icon: QrCode },
   ];
+
+  if (!cartaLimitsReady) {
+    return <AdminPanelShell top={<PageHeader title="Carta digital" sticky={false} className="mb-4" />}><PanelLoadingState label="Preparando tu carta…" /></AdminPanelShell>;
+  }
+
+  if (!canUseCarta) {
+    return (
+      <AdminPanelShell top={<PageHeader title="Carta digital" sticky={false} className="mb-4" />}>
+        <EmptyState
+          icon={<UtensilsCrossed className="h-12 w-12" />}
+          title="Módulo no habilitado para esta empresa"
+          description="La Carta digital está disponible automáticamente para restaurantes. Para los demás negocios, el Super Admin debe habilitar el módulo desde la ficha de la empresa."
+        />
+      </AdminPanelShell>
+    );
+  }
 
   if (loading) {
     return <AdminPanelShell top={<PageHeader title="Carta digital" sticky={false} className="mb-4" />}><PanelLoadingState label="Preparando tu carta…" /></AdminPanelShell>;

@@ -21,7 +21,7 @@ function contentSummaryLine(draft: WizardStepProps['draft']): string | null {
       return `${base} · ${content.layout === 'grid' ? 'grilla' : 'carrusel'}`;
     }
     case 'catalog_products':
-      return `Hasta ${content.maxItems} productos · ${content.layout === 'grid' ? 'grilla' : 'carrusel'}`;
+      return `${content.categoryId ? 'Categoría seleccionada' : 'Todo el catálogo'} · Hasta ${content.maxItems} productos · ${content.layout === 'grid' ? 'grilla' : 'carrusel'}`;
     case 'featured_categories':
       return content.selectionMode === 'manual'
         ? `Selección manual · ${draft.items.length} categoría(s)`

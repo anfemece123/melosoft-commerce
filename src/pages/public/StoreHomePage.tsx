@@ -80,7 +80,7 @@ export function StoreHomePage() {
 function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
   const location = useLocation();
   const { branding: storeBranding } = usePublicStoreBranding();
-  const { activeExperience } = usePublicStoreExperience();
+  const { activeExperience, experiences } = usePublicStoreExperience();
   const { setRouteReady } = usePublicRouteReady();
   const { addItem } = useCart();
   const { locations, selectedLocation } = useSelectedLocation();
@@ -360,6 +360,7 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
               productCardCtaLabel={productCardCtaLabel}
               products={products}
               categories={categories}
+              experiences={experiences}
               unavailableProductIds={unavailableProductIds}
               onAddToCart={handleAddProductToCart}
             />

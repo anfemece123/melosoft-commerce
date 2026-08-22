@@ -106,7 +106,7 @@ function AdminLayoutContent() {
     { label: 'Diseño de inicio', to: `/admin/stores/${storeId}/home-builder`, icon: <LayoutTemplate className="w-5 h-5" /> },
     { label: 'Sucursales', to: `/admin/stores/${storeId}/locations`, icon: <MapPin className="w-5 h-5" /> },
     { label: 'Productos', to: `/admin/stores/${storeId}/products`, icon: <Package className="w-5 h-5" /> },
-    { label: 'Carta digital', to: `/admin/stores/${storeId}/carta`, icon: <UtensilsCrossed className="w-5 h-5" /> },
+    ...(currentLimits?.canUseCarta ? [{ label: 'Carta digital', to: `/admin/stores/${storeId}/carta`, icon: <UtensilsCrossed className="w-5 h-5" /> }] : []),
     {
       label: 'Pedidos',
       to: `/admin/stores/${storeId}/orders`,

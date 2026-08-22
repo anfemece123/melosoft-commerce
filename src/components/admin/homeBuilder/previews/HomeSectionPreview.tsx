@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { homeSectionsService } from '@/features/homeSections/homeSectionsService';
 import { mapStoreHomeSectionToPublicPreviewSection } from '@/features/homeSections/homeSections.mapper';
 import type { StoreHomeSection, StoreHomeSectionItem } from '@/features/homeSections/homeSections.types';
-import type { PublicProductPage, PublicStoreCategory } from '@/types/common.types';
+import type { PublicCategoryExperience, PublicProductPage, PublicStoreCategory } from '@/types/common.types';
 import type { StorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import {
   StorefrontSectionPreviewFrame,
@@ -25,6 +25,7 @@ interface HomeSectionPreviewProps {
    * products/categories fetch per card. */
   publicProducts: PublicProductPage[];
   categories: PublicStoreCategory[];
+  experiences: PublicCategoryExperience[];
 }
 
 const NO_ITEMS_SECTION_TYPES = new Set<StoreHomeSection['sectionType']>(['image_text', 'catalog_products']);
@@ -47,6 +48,7 @@ export function HomeSectionPreview({
   productCardCtaLabel,
   publicProducts,
   categories,
+  experiences,
 }: HomeSectionPreviewProps) {
   const [items, setItems] = useState<StoreHomeSectionItem[]>([]);
   const [loading, setLoading] = useState(!NO_ITEMS_SECTION_TYPES.has(section.sectionType));
@@ -97,6 +99,7 @@ export function HomeSectionPreview({
       productCardCtaLabel={productCardCtaLabel}
       publicProducts={publicProducts}
       categories={categories}
+      experiences={experiences}
       mobilePreviewScale={0.78}
       mobileMaxHeight={420}
       mobileClipMode="fade"

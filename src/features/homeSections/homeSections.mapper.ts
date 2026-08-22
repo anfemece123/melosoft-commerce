@@ -128,6 +128,12 @@ export function parseHomeSectionContent(sectionType: HomeSectionType, raw: Json 
         sectionType,
         selectionMode: record.selectionMode === 'manual' ? 'manual' : 'auto',
         maxItems: typeof record.maxItems === 'number' && record.maxItems > 0 ? record.maxItems : 6,
+        // Older category sections used square category images and a grid.
+        // Keep that exact behavior when these newer presentation fields are
+        // absent; newly created sections get the wide adaptive cover layout
+        // from defaultHomeSectionContent.
+        imageSource: record.imageSource === 'experience_cover' ? 'experience_cover' : 'category_image',
+        layout: record.layout === 'adaptive' || record.layout === 'carousel' ? record.layout : 'grid',
       };
     case 'testimonials':
       return {
@@ -185,6 +191,7 @@ export function parseHomeSectionContent(sectionType: HomeSectionType, raw: Json 
     case 'catalog_products':
       return {
         sectionType,
+        categoryId: typeof record.categoryId === 'string' ? record.categoryId : null,
         maxItems: clampCatalogProductsMaxItems(typeof record.maxItems === 'number' ? record.maxItems : 8),
         order: isCatalogProductsOrder(record.order) ? record.order : 'catalog',
         layout: record.layout === 'grid' ? 'grid' : 'carousel',

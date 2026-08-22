@@ -2569,6 +2569,7 @@ export interface Database {
           can_use_partner_codes: boolean;
           can_use_accounting: boolean;
           can_use_category_experiences: boolean;
+          can_use_carta: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -2586,6 +2587,7 @@ export interface Database {
           can_use_partner_codes?: boolean;
           can_use_accounting?: boolean;
           can_use_category_experiences?: boolean;
+          can_use_carta?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -2603,6 +2605,7 @@ export interface Database {
           can_use_partner_codes?: boolean;
           can_use_accounting?: boolean;
           can_use_category_experiences?: boolean;
+          can_use_carta?: boolean;
           created_at?: string;
           updated_at?: string;
         };
