@@ -20,6 +20,7 @@ import { OwnerCredentialsDialog } from '@/components/admin/OwnerCredentialsDialo
 import { useAppDispatch } from '@/app/hooks';
 import { addStore } from '@/features/stores/storesSlice';
 import { storesService } from '@/features/stores/storesService';
+import { SUBCATEGORIES_BY_VERTICAL } from '@/features/stores/storeCommerceProfiles';
 import { storeCreationSchema } from '@/schemas/storeCreation.schema';
 import type { StoreCreationFormValues } from '@/schemas/storeCreation.schema';
 import { scrollToFirstError, useScrollToFirstFormikError } from '@/hooks/useScrollToFirstFormikError';
@@ -68,48 +69,7 @@ const VERTICAL_OPTIONS: Array<{
   },
 ];
 
-const SUBCATEGORIES: Record<BusinessVertical, Array<{ value: string; label: string }>> = {
-  food_restaurant: [
-    { value: 'restaurante', label: 'Restaurante' },
-    { value: 'comidas_rapidas', label: 'Comidas rápidas' },
-    { value: 'cafeteria', label: 'Cafetería' },
-    { value: 'panaderia', label: 'Panadería' },
-    { value: 'bar_cafe', label: 'Bar / Café' },
-    { value: 'postres', label: 'Postres' },
-    { value: 'otro', label: 'Otro' },
-  ],
-  retail_products: [
-    { value: 'lociones_perfumes', label: 'Lociones / perfumes' },
-    { value: 'ropa_moda', label: 'Ropa / moda' },
-    { value: 'gafas_accesorios', label: 'Gafas / accesorios' },
-    { value: 'tecnologia', label: 'Tecnología' },
-    { value: 'belleza_cosmeticos', label: 'Belleza / cosméticos' },
-    { value: 'salud_bienestar', label: 'Salud / bienestar' },
-    { value: 'mascotas', label: 'Mascotas' },
-    { value: 'hogar_deco', label: 'Hogar y deco' },
-    { value: 'deporte', label: 'Deporte' },
-    { value: 'joyeria', label: 'Joyería' },
-    { value: 'accesorios', label: 'Accesorios' },
-    { value: 'otro', label: 'Otro' },
-  ],
-  catalog_quote: [
-    { value: 'b2b_mayorista', label: 'B2B / Mayorista' },
-    { value: 'fabricante', label: 'Fabricante' },
-    { value: 'productos_a_medida', label: 'Productos a medida' },
-    { value: 'servicios_cotizables', label: 'Servicios cotizables' },
-    { value: 'artesanias', label: 'Artesanías' },
-    { value: 'catalogo_general', label: 'Catálogo general' },
-    { value: 'otro', label: 'Otro' },
-  ],
-  real_estate: [
-    { value: 'inmobiliaria', label: 'Inmobiliaria' },
-    { value: 'venta_inmuebles', label: 'Venta de inmuebles' },
-    { value: 'arriendo', label: 'Arriendo' },
-    { value: 'proyectos_nuevos', label: 'Proyectos nuevos' },
-    { value: 'agente_independiente', label: 'Agente independiente' },
-    { value: 'otro', label: 'Otro' },
-  ],
-};
+const SUBCATEGORIES = SUBCATEGORIES_BY_VERTICAL;
 
 const VERTICAL_PRESET_SUMMARY: Record<BusinessVertical, string[]> = {
   food_restaurant: [

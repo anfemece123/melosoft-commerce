@@ -79,6 +79,8 @@ import type { StoreFacet } from '@/features/facets/facets.types';
 import { IMAGE_ASSET_PRESETS } from '@/lib/images/imageAssetPresets';
 import { disposeLoadedImageFile, type LoadedImageFile, validateImageFile } from '@/lib/images/imageFile.utils';
 import { disposeLoadedProductVideo, validateProductVideoFile, type LoadedProductVideo } from '@/lib/videos/videoFile.utils';
+import { FragrancePyramidEditor } from '@/components/admin/FragrancePyramidEditor';
+import { isFragranceStore, mapFragranceNoteSections } from '@/lib/storefront/fragrancePyramid';
 
 const MAX_IMAGES = 5;
 
@@ -1751,12 +1753,39 @@ export function ProductFormPage() {
               title="Descripción avanzada"
               description="Bloques opcionales para enriquecer la página del producto."
             />
-            <ProductDescriptionSectionsEditor
-              sections={descriptionSections}
-              onChange={setDescriptionSections}
-              vertical={store?.businessVertical ?? null}
-              subcategory={store?.businessSubcategory ?? null}
-            />
+            {(() => {
+              const fragranceStore = isFragranceStore(store?.businessSubcategory);
+              const noteSections = fragranceStore ? Object.values(mapFragranceNoteSections(descriptionSections)) : [];
+              const noteIds = new Set(noteSections.map((section) => section.id));
+              return (
+                <>
+                  {fragranceStore && (
+                    <div className="mb-4">
+                      <FragrancePyramidEditor sections={descriptionSections} onChange={setDescriptionSections} />
+                    </div>
+                  )}
+                  <ProductDescriptionSectionsEditor
+                    sections={
+                      fragranceStore
+                        ? descriptionSections.filter((section) => !noteIds.has(section.id))
+                        : descriptionSections
+                    }
+                    onChange={(nextSections) => {
+                      if (!fragranceStore) {
+                        setDescriptionSections(nextSections);
+                        return;
+                      }
+                      // The pyramid editor above owns the 3 note sections —
+                      // merge them back in untouched so this generic
+                      // editor's add/reorder/delete can't silently drop them.
+                      setDescriptionSections([...nextSections, ...noteSections]);
+                    }}
+                    vertical={store?.businessVertical ?? null}
+                    subcategory={store?.businessSubcategory ?? null}
+                  />
+                </>
+              );
+            })()}
           </CardBody>
         </Card>
 

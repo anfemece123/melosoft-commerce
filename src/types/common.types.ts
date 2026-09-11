@@ -183,6 +183,7 @@ export interface PublicStorePage {
   storeName: string;
   slogan: string | null;
   businessType: string | null;
+  businessSubcategory: string | null;
   description: string | null;
   logoUrl: string | null;
   faviconUrl: string | null;

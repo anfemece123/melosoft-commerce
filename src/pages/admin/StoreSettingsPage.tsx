@@ -41,7 +41,7 @@ import { storeThemeSchema } from '@/schemas/storeTheme.schema';
 import { getThemeColors, THEME_PRESET_LIST } from '@/utils/themePresets';
 import { cn } from '@/utils/cn';
 import type { BusinessCategory, CatalogType, CommerceMode, DeliveryMode, ThemeMode, ThemePreset, PublicHeaderSettings, PublicHeaderStyle, LogoSize, MenuTextSize, HeaderMenuMode, WhatsappButtonLayout } from '@/types/common.types';
-import { COMMERCE_PROFILES } from '@/features/stores/storeCommerceProfiles';
+import { COMMERCE_PROFILES, SUBCATEGORIES_BY_VERTICAL } from '@/features/stores/storeCommerceProfiles';
 import { DEFAULT_HEADER_SETTINGS } from '@/types/common.types';
 import type { Store } from '@/features/stores/stores.types';
 import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
@@ -494,6 +494,7 @@ export function StoreSettingsPage() {
       whatsappNumber: sanitizePhoneInput(currentStore?.whatsappNumber ?? ''),
       supportEmail: currentStore?.supportEmail ?? '',
       city: currentStore?.city ?? '',
+      businessSubcategory: currentStore?.businessSubcategory ?? '',
       heroTitle: '',
       heroSubtitle: '',
       heroCtaLabel: '',
@@ -511,6 +512,7 @@ export function StoreSettingsPage() {
           whatsappNumber: values.whatsappNumber,
           supportEmail: values.supportEmail || null,
           city: values.city || null,
+          businessSubcategory: values.businessSubcategory || null,
           logoUrl: currentStore.logoUrl,
         });
         dispatch(updateStoreAction(updated));
@@ -1195,6 +1197,20 @@ export function StoreSettingsPage() {
                 {...generalFormik.getFieldProps('city')}
                 error={generalFormik.touched.city ? generalFormik.errors.city : undefined}
               />
+
+              {currentStore?.businessVertical && (
+                <Select
+                  id="businessSubcategory"
+                  label="Rubro específico"
+                  hint="Activa funciones exclusivas de tu rubro en la tienda pública, como la pirámide olfativa en Lociones / perfumes."
+                  options={[
+                    { value: '', label: 'Sin especificar' },
+                    ...SUBCATEGORIES_BY_VERTICAL[currentStore.businessVertical],
+                  ]}
+                  {...generalFormik.getFieldProps('businessSubcategory')}
+                  error={generalFormik.touched.businessSubcategory ? generalFormik.errors.businessSubcategory : undefined}
+                />
+              )}
 
               {typeof generalFormik.status === 'string' && (
                 <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">

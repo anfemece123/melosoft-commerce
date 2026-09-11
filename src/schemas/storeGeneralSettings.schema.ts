@@ -8,6 +8,7 @@ export const storeGeneralSettingsSchema = Yup.object({
   whatsappNumber: colombianMobilePhoneSchema.required('WhatsApp requerido'),
   supportEmail: Yup.string().trim().email('Email inválido').nullable(),
   city: Yup.string().trim().max(100).nullable(),
+  businessSubcategory: Yup.string().trim().max(60).nullable(),
   heroTitle: Yup.string().trim().max(120).nullable(),
   heroSubtitle: Yup.string().trim().max(260).nullable(),
   heroCtaLabel: Yup.string().trim().max(40).nullable(),

@@ -44,6 +44,14 @@ const REAL_ESTATE_SUGGESTIONS: SuggestedSection[] = [
 ];
 
 const SUBCATEGORY_OVERRIDES: Record<string, SuggestedSection[]> = {
+  // Notas de salida/corazón/fondo have their own dedicated fields —
+  // FragrancePyramidEditor, shown above this generic editor for
+  // perfume stores (see src/lib/storefront/fragrancePyramid.ts).
+  lociones_perfumes: [
+    { title: 'Especificaciones técnicas', icon: 'wrench', placeholder: 'Concentración, volumen, origen...' },
+    { title: 'Modo de uso', icon: 'fileText', placeholder: 'Aplicar sobre puntos de pulso...' },
+    { title: 'Cuidado y conservación', icon: 'lightbulb', placeholder: 'Conservar lejos de la luz solar directa...' },
+  ],
   barberia: [
     { title: 'Qué incluye el servicio', icon: 'checkCircle', placeholder: 'Describe los pasos del servicio...' },
     { title: 'Duración', icon: 'clock', placeholder: 'Tiempo aproximado del servicio...' },

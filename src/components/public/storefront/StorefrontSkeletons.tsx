@@ -155,34 +155,10 @@ export function StorefrontHomeSkeleton({
                 </div>
 
                 <div className="order-1 flex justify-center lg:order-2 lg:justify-end">
-                  <div className="relative">
-                    <div
-                      className="absolute left-1/2 top-6 h-[248px] w-[248px] -translate-x-1/2 rounded-full sm:top-7 sm:h-[320px] sm:w-[320px] md:h-[390px] md:w-[390px] lg:h-[470px] lg:w-[470px]"
-                      style={{ backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(216,224,232,0.82)' }}
-                    />
-                    <div
-                      className="relative flex h-[208px] w-[208px] items-end justify-center overflow-hidden rounded-full border sm:h-[268px] sm:w-[268px] md:h-[420px] md:w-[420px] lg:h-[500px] lg:w-[500px]"
-                      style={{
-                        borderColor: theme.border,
-                        backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.5)',
-                      }}
-                    >
-                      <Skeleton className="h-[78%] w-[72%] rounded-[42%_42%_26%_26%/38%_38%_22%_22%]" style={{ backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.72)' }} />
-                      <div
-                        className="absolute bottom-0 left-0 right-0 h-[84px]"
-                        style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.03) 0%, rgba(0,0,0,0.12) 100%)' }}
-                      />
-                    </div>
-                    <div
-                      className="absolute right-[-6px] top-5 h-[94px] w-[94px] rounded-full border-[3px] p-[4px] sm:right-0 sm:top-8 sm:h-[110px] sm:w-[110px] md:top-10 md:h-[132px] md:w-[132px]"
-                      style={{
-                        borderColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.16)' : '#d6dce2',
-                        backgroundColor: theme.mode === 'dark' ? 'rgba(15,23,42,0.9)' : 'rgba(255,255,255,0.96)',
-                      }}
-                    >
-                      <Skeleton className="h-full w-full rounded-full" style={{ backgroundColor: theme.softPrimary }} />
-                    </div>
-                  </div>
+                  <Skeleton
+                    className="h-[208px] w-full max-w-[420px] rounded-[28px] sm:h-[268px] md:h-[360px] lg:h-[420px]"
+                    style={{ backgroundColor: theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.6)' }}
+                  />
                 </div>
               </div>
             </div>

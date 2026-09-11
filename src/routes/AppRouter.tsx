@@ -23,6 +23,7 @@ import { ProductFormPage } from '@/pages/admin/ProductFormPage';
 import { OffersPage } from '@/pages/admin/OffersPage';
 import { OfferFormPage } from '@/pages/admin/OfferFormPage';
 import { LocationsPage } from '@/pages/admin/LocationsPage';
+import { VelaireImportPage } from '@/pages/admin/VelaireImportPage';
 import { CartaSettingsPage } from '@/pages/admin/CartaSettingsPage';
 import { ProductsLayout } from '@/pages/admin/products/ProductsLayout';
 import { ProductCategoriesPage } from '@/pages/admin/products/ProductCategoriesPage';
@@ -92,6 +93,7 @@ export function AppRouter() {
                 <Route path="/admin/stores/:storeId/settings" element={<StoreSettingsPage />} />
                 <Route path="/admin/stores/:storeId/home-builder" element={<HomeBuilderPage />} />
                 <Route path="/admin/stores/:storeId/locations" element={<LocationsPage />} />
+                <Route path="/admin/stores/:storeId/tools/velaire-import" element={<VelaireImportPage />} />
                 <Route path="/admin/stores/:storeId/carta" element={<CartaSettingsPage />} />
                 <Route path="/admin/stores/:storeId/products" element={<ProductsLayout />}>
                   <Route index element={<ProductsPage />} />

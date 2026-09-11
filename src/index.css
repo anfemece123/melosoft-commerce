@@ -12,15 +12,22 @@ body {
   margin: 0;
 }
 
-@keyframes melosoft-loader-progress {
-  0% {
-    transform: translateX(-135%);
+@keyframes melosoft-loader-breathe {
+  0%,
+  100% {
+    opacity: 1;
   }
   50% {
-    transform: translateX(105%);
+    opacity: 0.55;
   }
-  100% {
-    transform: translateX(270%);
+}
+
+@keyframes skeleton-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(200%);
   }
 }
 

@@ -3736,6 +3736,7 @@ export interface Database {
           store_name: string;
           slogan: string | null;
           business_type: string | null;
+          business_subcategory: string | null;
           description: string | null;
           logo_url: string | null;
           favicon_url: string | null;

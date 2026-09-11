@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { MessageCircle, AlertCircle, Lock, ShoppingBag, ChevronLeft, ChevronRight, ChevronDown, Package, UtensilsCrossed, PlayCircle } from 'lucide-react';
 import { getProductIcon } from '@/features/products/productDescriptionIcons';
+import { FragrancePyramid } from '@/components/public/storefront/FragrancePyramid';
+import { isFragranceStore, extractFragranceNotes } from '@/lib/storefront/fragrancePyramid';
 import { StorefrontActionButton } from '@/components/public/storefront/StorefrontActionButton';
 import { StorefrontBackButton } from '@/components/public/storefront/StorefrontBackButton';
 import { StorefrontBreadcrumbs } from '@/components/public/storefront/StorefrontBreadcrumbs';
@@ -408,6 +410,11 @@ function ProductLandingContent({
   const visibleDescriptionSections = (product?.descriptionSections ?? [])
     .filter((section) => section?.isVisible !== false)
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  // Perfume stores only: fold the three note sections into a visual
+  // pyramid instead of plain accordion rows. See fragrancePyramid.ts.
+  const fragranceMatch = isFragranceStore(storeBranding?.businessSubcategory)
+    ? extractFragranceNotes(visibleDescriptionSections)
+    : null;
   const detailAccordionItems = [
     product?.shortDescription
       ? {
@@ -425,12 +432,14 @@ function ProductLandingContent({
           icon: null,
         }
       : null,
-    ...visibleDescriptionSections.map((section) => ({
-      key: section.id,
-      title: section.title,
-      content: section.content,
-      icon: section.icon,
-    })),
+    ...visibleDescriptionSections
+      .filter((section) => !fragranceMatch?.matchedIds.has(section.id))
+      .map((section) => ({
+        key: section.id,
+        title: section.title,
+        content: section.content,
+        icon: section.icon,
+      })),
   ].filter(Boolean) as Array<{ key: string; title: string; content: string; icon: string | null }>;
   const recommendedItems = useMemo(() => {
     if (!product) return [];
@@ -1225,6 +1234,8 @@ function ProductLandingContent({
                 {ctaConfig.label}
               </div>
             )}
+
+            {fragranceMatch && <FragrancePyramid notes={fragranceMatch.notes} theme={theme} />}
           </div>
         </div>
 

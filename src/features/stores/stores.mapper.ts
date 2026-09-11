@@ -145,6 +145,7 @@ export function mapPublicStorePageRowToPublicStorePage(row: PublicStorePageRow):
     storeName: row.store_name,
     slogan: row.slogan,
     businessType: row.business_type,
+    businessSubcategory: row.business_subcategory,
     description: row.description,
     logoUrl: row.logo_url,
     faviconUrl: row.favicon_url,
