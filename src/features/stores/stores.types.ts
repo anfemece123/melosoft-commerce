@@ -179,6 +179,8 @@ export interface StoreLimit {
   canUseAccounting: boolean;
   canUseCategoryExperiences: boolean;
   canUseCarta: boolean;
+  canUseCustomerBook: boolean;
+  canUseCustomerCapture: boolean;
   createdAt: string;
   updatedAt: string;
 }

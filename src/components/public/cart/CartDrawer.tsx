@@ -19,12 +19,18 @@ import { useCartLocationAvailability } from './useCartLocationAvailability';
 import { getPickupLocations } from '@/lib/orders/fulfillment';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 import { OrderingStatusNotice } from './OrderingStatusNotice';
+import { CartRecommendationsSection } from './CartRecommendationsSection';
+import { useCart } from '@/lib/cart/cartContext';
+import { getActivePrice } from '@/lib/pricing/pricing.utils';
+import type { PublicProductPage } from '@/types/common.types';
+import { notify } from '@/lib/notifications';
 
 interface CartDrawerProps {
   open: boolean;
   onClose: () => void;
   theme: StorefrontTheme;
   storeName: string;
+  storeId: string;
   storeSlug: string;
   currency: string;
   whatsappNumber: string | null;
@@ -41,6 +47,7 @@ interface CartDrawerProps {
   onlineCheckoutEnabled?: boolean | null;
   whatsappOrderUpdatesRequired?: boolean;
   experienceCategorySlug?: string | null;
+  isMenu?: boolean;
 }
 
 export function CartDrawer({
@@ -48,6 +55,7 @@ export function CartDrawer({
   onClose,
   theme,
   storeName,
+  storeId,
   storeSlug,
   currency,
   whatsappNumber,
@@ -64,8 +72,10 @@ export function CartDrawer({
   onlineCheckoutEnabled,
   whatsappOrderUpdatesRequired = false,
   experienceCategorySlug = null,
+  isMenu = false,
 }: CartDrawerProps) {
   const navigate = useNavigate();
+  const { addItem } = useCart();
   const experienceQuery = experienceCategorySlug ? `?cat=${encodeURIComponent(experienceCategorySlug)}` : '';
   const {
     items,
@@ -119,9 +129,9 @@ export function CartDrawer({
     useLocationChangeWithCheck();
   const { unavailableIds: cartUnavailableIds } = useCartLocationAvailability(items, locations, selectedLocation, open);
 
-  const storeId = selectedLocation?.storeId ?? locations[0]?.storeId ?? null;
+  const locationStoreId = selectedLocation?.storeId ?? locations[0]?.storeId ?? null;
   const visibleCartUnavailableIds =
-    open && storeId && selectedLocation && items.length > 0
+    open && locationStoreId && selectedLocation && items.length > 0
       ? cartUnavailableIds
       : new Set<string>();
   const unavailableItems = items.filter((i) => visibleCartUnavailableIds.has(i.productId));
@@ -133,6 +143,34 @@ export function CartDrawer({
     for (const item of unavailableItems) {
       removeItem(item.lineId);
     }
+  }
+
+  function addRecommendedProduct(product: PublicProductPage) {
+    const added = addItem({
+      productId: product.productId,
+      storeId,
+      productSlug: product.productSlug,
+      productName: product.productName,
+      productType: product.productType,
+      categoryId: product.categoryId,
+      categoryName: product.categoryName,
+      imageUrl: product.mainImageUrl,
+      unitPrice: getActivePrice(product.regularPrice, product.salePrice),
+      customizationNotes: null,
+      customizations: [],
+      stock: product.stock,
+      trackInventory: product.trackInventory,
+      isAvailable: product.isAvailable,
+    });
+    if (!added) {
+      notify.warning(
+        product.productType === 'menu_item'
+          ? `"${product.productName}" está agotado por el momento.`
+          : `"${product.productName}" no tiene stock disponible.`
+      );
+      return;
+    }
+    notify.cartSuccess(`"${product.productName}" agregado al pedido`);
   }
 
   if (!open) return null;
@@ -163,19 +201,35 @@ export function CartDrawer({
               onClose={onClose}
             />
 
-            <CartItemsList
-              items={items}
-              theme={theme}
-              currency={currency}
-              onUpdateQuantity={updateQuantity}
-              onRemove={removeItem}
-              onEdit={(item) => {
-                onClose();
-                void navigate(buildStorefrontPath(storeSlug, `/p/${item.productSlug}${experienceQuery}`), {
-                  state: { editCartLineId: item.lineId, returnTo: 'cart' },
-                });
-              }}
-            />
+            <div className="flex min-h-0 flex-1 flex-col">
+              <CartItemsList
+                items={items}
+                theme={theme}
+                currency={currency}
+                onUpdateQuantity={updateQuantity}
+                onRemove={removeItem}
+                onEdit={(item) => {
+                  onClose();
+                  void navigate(buildStorefrontPath(storeSlug, `/p/${item.productSlug}${experienceQuery}`), {
+                    state: { editCartLineId: item.lineId, returnTo: 'cart' },
+                  });
+                }}
+              />
+
+              {items.length > 0 && (
+                <CartRecommendationsSection
+                  layout="drawer"
+                  theme={theme}
+                  storeSlug={storeSlug}
+                  currency={currency}
+                  isMenu={isMenu}
+                  excludedProductIds={items.map((item) => item.productId)}
+                  unavailableProductIds={visibleCartUnavailableIds}
+                  showCartButton
+                  onAddProduct={addRecommendedProduct}
+                />
+              )}
+            </div>
 
             {items.length > 0 && (
               <CartSummary

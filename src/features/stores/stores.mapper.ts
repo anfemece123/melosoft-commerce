@@ -206,6 +206,14 @@ export function mapPublicStorePageRowToPublicStorePage(row: PublicStorePageRow):
     cartaEnabled: row.carta_enabled,
     cartaListed: row.carta_listed,
     partnerCodesEnabled: row.partner_codes_enabled,
+    customerCaptureEnabled: row.customer_capture_enabled,
+    customerCaptureTitle: row.customer_capture_title,
+    customerCaptureDescription: row.customer_capture_description,
+    customerCaptureIncentiveText: row.customer_capture_incentive_text,
+    customerCaptureSuccessMessage: row.customer_capture_success_message,
+    customerCaptureCollectPhone: row.customer_capture_collect_phone,
+    customerEmailMarketingEnabled: row.customer_email_marketing_enabled,
+    customerWhatsappMarketingEnabled: row.customer_whatsapp_marketing_enabled,
   };
 }
 
@@ -440,6 +448,8 @@ export function mapStoreLimitRowToStoreLimit(row: StoreLimitRow): StoreLimit {
     canUseAccounting: row.can_use_accounting,
     canUseCategoryExperiences: row.can_use_category_experiences,
     canUseCarta: row.can_use_carta,
+    canUseCustomerBook: row.can_use_customer_book,
+    canUseCustomerCapture: row.can_use_customer_capture,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -459,6 +469,8 @@ export function mapStoreLimitUpdateToRow(data: StoreLimitUpdate): StoreLimitRowU
   if (data.canUseAccounting !== undefined) row.can_use_accounting = data.canUseAccounting;
   if (data.canUseCategoryExperiences !== undefined) row.can_use_category_experiences = data.canUseCategoryExperiences;
   if (data.canUseCarta !== undefined) row.can_use_carta = data.canUseCarta;
+  if (data.canUseCustomerBook !== undefined) row.can_use_customer_book = data.canUseCustomerBook;
+  if (data.canUseCustomerCapture !== undefined) row.can_use_customer_capture = data.canUseCustomerCapture;
   return row;
 }
 

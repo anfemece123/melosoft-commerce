@@ -1686,6 +1686,177 @@ export interface Database {
         };
         Relationships: [];
       };
+      customer_consents: {
+        Row: {
+          id: string;
+          store_id: string;
+          customer_id: string;
+          channel: string;
+          purpose: string;
+          granted: boolean;
+          source: string;
+          policy_version: string | null;
+          captured_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          customer_id: string;
+          channel: string;
+          purpose?: string;
+          granted: boolean;
+          source: string;
+          policy_version?: string | null;
+          captured_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          customer_id?: string;
+          channel?: string;
+          purpose?: string;
+          granted?: boolean;
+          source?: string;
+          policy_version?: string | null;
+          captured_at?: string;
+        };
+        Relationships: [];
+      };
+      customer_preferences: {
+        Row: {
+          customer_id: string;
+          email_marketing_status: string;
+          whatsapp_marketing_status: string;
+          email_consent_at: string | null;
+          whatsapp_consent_at: string | null;
+          email_revoked_at: string | null;
+          whatsapp_revoked_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          customer_id: string;
+          email_marketing_status?: string;
+          whatsapp_marketing_status?: string;
+          email_consent_at?: string | null;
+          whatsapp_consent_at?: string | null;
+          email_revoked_at?: string | null;
+          whatsapp_revoked_at?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          customer_id?: string;
+          email_marketing_status?: string;
+          whatsapp_marketing_status?: string;
+          email_consent_at?: string | null;
+          whatsapp_consent_at?: string | null;
+          email_revoked_at?: string | null;
+          whatsapp_revoked_at?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      customers: {
+        Row: {
+          id: string;
+          store_id: string;
+          full_name: string;
+          email: string | null;
+          phone: string | null;
+          normalized_email: string | null;
+          normalized_phone: string | null;
+          status: string;
+          source: string;
+          notes: string | null;
+          first_order_at: string | null;
+          last_order_at: string | null;
+          order_count: number;
+          total_spent: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          full_name?: string;
+          email?: string | null;
+          phone?: string | null;
+          normalized_email?: string | null;
+          normalized_phone?: string | null;
+          status?: string;
+          source?: string;
+          notes?: string | null;
+          first_order_at?: string | null;
+          last_order_at?: string | null;
+          order_count?: number;
+          total_spent?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          full_name?: string;
+          email?: string | null;
+          phone?: string | null;
+          normalized_email?: string | null;
+          normalized_phone?: string | null;
+          status?: string;
+          source?: string;
+          notes?: string | null;
+          first_order_at?: string | null;
+          last_order_at?: string | null;
+          order_count?: number;
+          total_spent?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      store_customer_settings: {
+        Row: {
+          id: string;
+          store_id: string;
+          capture_enabled: boolean;
+          collect_phone: boolean;
+          capture_title: string;
+          capture_description: string;
+          incentive_text: string | null;
+          success_message: string;
+          email_marketing_enabled: boolean;
+          whatsapp_marketing_enabled: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          store_id: string;
+          capture_enabled?: boolean;
+          collect_phone?: boolean;
+          capture_title?: string;
+          capture_description?: string;
+          incentive_text?: string | null;
+          success_message?: string;
+          email_marketing_enabled?: boolean;
+          whatsapp_marketing_enabled?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          store_id?: string;
+          capture_enabled?: boolean;
+          collect_phone?: boolean;
+          capture_title?: string;
+          capture_description?: string;
+          incentive_text?: string | null;
+          success_message?: string;
+          email_marketing_enabled?: boolean;
+          whatsapp_marketing_enabled?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       email_notifications: {
         Row: {
           id: string;
@@ -1796,6 +1967,7 @@ export interface Database {
           partner_code_id: string | null;
           partner_code: string | null;
           partner_name: string | null;
+          customer_id: string | null;
           currency: string;
           status: string;
           payment_status: string;
@@ -1838,6 +2010,7 @@ export interface Database {
           partner_code_id?: string | null;
           partner_code?: string | null;
           partner_name?: string | null;
+          customer_id?: string | null;
           currency?: string;
           status?: string;
           payment_status?: string;
@@ -1880,6 +2053,7 @@ export interface Database {
           partner_code_id?: string | null;
           partner_code?: string | null;
           partner_name?: string | null;
+          customer_id?: string | null;
           currency?: string;
           status?: string;
           payment_status?: string;
@@ -2570,6 +2744,8 @@ export interface Database {
           can_use_accounting: boolean;
           can_use_category_experiences: boolean;
           can_use_carta: boolean;
+          can_use_customer_book: boolean;
+          can_use_customer_capture: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -2588,6 +2764,8 @@ export interface Database {
           can_use_accounting?: boolean;
           can_use_category_experiences?: boolean;
           can_use_carta?: boolean;
+          can_use_customer_book?: boolean;
+          can_use_customer_capture?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -2606,6 +2784,8 @@ export interface Database {
           can_use_accounting?: boolean;
           can_use_category_experiences?: boolean;
           can_use_carta?: boolean;
+          can_use_customer_book?: boolean;
+          can_use_customer_capture?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -3617,6 +3797,14 @@ export interface Database {
           carta_enabled: boolean;
           carta_listed: boolean;
           partner_codes_enabled: boolean;
+          customer_capture_enabled: boolean;
+          customer_capture_title: string | null;
+          customer_capture_description: string | null;
+          customer_capture_incentive_text: string | null;
+          customer_capture_success_message: string | null;
+          customer_capture_collect_phone: boolean | null;
+          customer_email_marketing_enabled: boolean | null;
+          customer_whatsapp_marketing_enabled: boolean | null;
         };
         Relationships: [];
       };
@@ -4023,6 +4211,24 @@ export interface Database {
       };
     };
     Functions: {
+      backfill_store_customers: {
+        Args: {
+          p_store_id: string;
+        };
+        Returns: number;
+      };
+      capture_store_contact: {
+        Args: {
+          p_store_slug: string;
+          p_full_name?: string | null;
+          p_email?: string | null;
+          p_phone?: string | null;
+          p_marketing_email_opt_in?: boolean;
+          p_marketing_whatsapp_opt_in?: boolean;
+          p_source?: string;
+        };
+        Returns: Json;
+      };
       claim_pending_email_notifications: {
         Args: {
           p_limit?: number;
@@ -4170,6 +4376,16 @@ export interface Database {
           p_partner_code?: string | null;
         };
         Returns: Json;
+      };
+      create_store_customer: {
+        Args: {
+          p_store_id: string;
+          p_full_name: string;
+          p_email?: string | null;
+          p_phone?: string | null;
+          p_notes?: string | null;
+        };
+        Returns: Database['public']['Tables']['customers']['Row'];
       };
       preview_partner_code: {
         Args: {
@@ -4401,6 +4617,13 @@ export type OfferImageRowInsert = Database['public']['Tables']['offer_images']['
 export type OrderRow = Database['public']['Tables']['orders']['Row'];
 export type OrderRowInsert = Database['public']['Tables']['orders']['Insert'];
 export type OrderRowUpdate = Database['public']['Tables']['orders']['Update'];
+
+export type CustomerRow = Database['public']['Tables']['customers']['Row'];
+export type CustomerRowInsert = Database['public']['Tables']['customers']['Insert'];
+export type CustomerRowUpdate = Database['public']['Tables']['customers']['Update'];
+export type CustomerPreferencesRow = Database['public']['Tables']['customer_preferences']['Row'];
+export type StoreCustomerSettingsRow = Database['public']['Tables']['store_customer_settings']['Row'];
+export type StoreCustomerSettingsRowUpdate = Database['public']['Tables']['store_customer_settings']['Update'];
 
 export type OrderItemRow = Database['public']['Tables']['order_items']['Row'];
 export type OrderItemRowInsert = Database['public']['Tables']['order_items']['Insert'];

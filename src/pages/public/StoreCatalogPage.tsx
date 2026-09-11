@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { Package, UtensilsCrossed, Search, AlertCircle, SlidersHorizontal, X } from 'lucide-react';
 import { StorefrontBreadcrumbs } from '@/components/public/storefront/StorefrontBreadcrumbs';
@@ -127,6 +127,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
   const [unavailableProductIds, setUnavailableProductIds] = useState<Set<string>>(new Set());
   const [totalProductCount, setTotalProductCount] = useState(0);
   const [serverPriceRange, setServerPriceRange] = useState({ min: 0, max: 0 });
+  const [catalogSidebarTop, setCatalogSidebarTop] = useState(16);
   const selectedCategoryIdForQuery = useMemo(
     () => categories.find((category) => category.slug === filters.categorySlug)?.id ?? null,
     [categories, filters.categorySlug]
@@ -161,6 +162,33 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
   const catalogLoading = contentLoading
     || !categoryMetadataReady
     || completedCatalogQueryKey !== catalogQueryKey;
+
+  // The public header can be sticky, fixed, compact, or multi-row depending
+  // on the store's design. A hard-coded `top-24` can therefore hide the first
+  // filter controls behind the header. Measure the real header and keep the
+  // sidebar immediately below it, with a small consistent breathing room.
+  useLayoutEffect(() => {
+    const header = document.querySelector<HTMLElement>('[data-storefront-header="true"]');
+    if (!header) return;
+
+    const updateSidebarOffset = () => {
+      const headerStyle = window.getComputedStyle(header);
+      const headerIsOverlay = headerStyle.position === 'sticky' || headerStyle.position === 'fixed';
+      const headerHeight = headerIsOverlay ? header.getBoundingClientRect().height : 0;
+      setCatalogSidebarTop(Math.max(16, Math.ceil(headerHeight + 16)));
+    };
+
+    updateSidebarOffset();
+    const resizeObserver = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(updateSidebarOffset)
+      : null;
+    resizeObserver?.observe(header);
+    window.addEventListener('resize', updateSidebarOffset);
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', updateSidebarOffset);
+    };
+  }, [activeExperience?.id, location.pathname, location.search, storeBranding?.storeId]);
 
   // Sync local search box when URL query changes externally
   useEffect(() => {
@@ -887,12 +915,16 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
           {/* Desktop sidebar — sticky so filters stay visible while the
               product grid scrolls. `sticky` (not `fixed`) inside this same
               flex row means it naturally un-sticks once the row's own
-              bottom is reached, so it can never overlap the footer. The
-              top offset is a safe estimate for the header's height (both
-              header style variants render as a single content row) —
-              nudge `lg:top-24`/`lg:max-h-[calc(100vh-6rem)]` together if a
-              particular store's header is taller than usual. */}
-          <div className="hidden shrink-0 lg:block lg:sticky lg:top-24 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto lg:pr-1">
+              bottom is reached, so it can never overlap the footer. Its
+              offset and available height are measured from the real public
+              header above, so the first filter is never hidden underneath it. */}
+          <div
+            className="hidden shrink-0 lg:block lg:sticky lg:overflow-y-auto lg:pr-1"
+            style={{
+              top: `${catalogSidebarTop}px`,
+              maxHeight: `calc(100vh - ${catalogSidebarTop + 16}px)`,
+            }}
+          >
             {/* Desktop search */}
             <form onSubmit={handleSearchSubmit} className="relative mb-4 w-56">
               <input

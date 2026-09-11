@@ -24,6 +24,7 @@ import type { ProductCountStats } from '@/features/products/products.types';
 import { domainsService } from '@/features/domains/domainsService';
 import { plansService } from '@/features/plans/plansService';
 import type { SubscriptionPlan } from '@/features/plans/plans.types';
+import { customersService } from '@/features/customers/customersService';
 import { notify } from '@/lib/notifications';
 
 const CATALOG_TYPE_LABELS: Record<string, string> = {
@@ -64,6 +65,8 @@ export function StoreDetailPage() {
   const [updatingAccountingModule, setUpdatingAccountingModule] = useState(false);
   const [updatingCategoryExperiencesModule, setUpdatingCategoryExperiencesModule] = useState(false);
   const [updatingCartaModule, setUpdatingCartaModule] = useState(false);
+  const [updatingCustomerModule, setUpdatingCustomerModule] = useState(false);
+  const [updatingCustomerCaptureModule, setUpdatingCustomerCaptureModule] = useState(false);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [selectedPlanKey, setSelectedPlanKey] = useState('basic');
@@ -181,6 +184,45 @@ export function StoreDetailPage() {
     }
   }
 
+  async function toggleCustomerModule() {
+    if (!storeId || !currentLimits || !isAdmin) return;
+    const nextEnabled = !currentLimits.canUseCustomerBook;
+    setUpdatingCustomerModule(true);
+    try {
+      const updated = await storesService.updateStoreLimits(storeId, {
+        canUseCustomerBook: nextEnabled,
+        ...(nextEnabled ? {} : { canUseCustomerCapture: false }),
+      });
+      dispatch(setCurrentLimits(updated));
+      if (nextEnabled) {
+        const imported = await customersService.backfillStoreCustomers(storeId);
+        notify.success(`Módulo Clientes habilitado. Se vincularon ${imported} pedidos históricos.`);
+      } else {
+        notify.success('Módulo Clientes deshabilitado. Los datos existentes se conservan.');
+      }
+    } catch (error) {
+      notify.fromError(error, 'No pudimos actualizar el módulo Clientes.');
+    } finally {
+      setUpdatingCustomerModule(false);
+    }
+  }
+
+  async function toggleCustomerCaptureModule() {
+    if (!storeId || !currentLimits || !isAdmin || !currentLimits.canUseCustomerBook) return;
+    setUpdatingCustomerCaptureModule(true);
+    try {
+      const updated = await storesService.updateStoreLimits(storeId, {
+        canUseCustomerCapture: !currentLimits.canUseCustomerCapture,
+      });
+      dispatch(setCurrentLimits(updated));
+      notify.success(updated.canUseCustomerCapture ? 'Captación pública habilitada.' : 'Captación pública deshabilitada.');
+    } catch (error) {
+      notify.fromError(error, 'No pudimos actualizar la captación pública.');
+    } finally {
+      setUpdatingCustomerCaptureModule(false);
+    }
+  }
+
   function openPlanModal() {
     setSelectedPlanKey(currentLimits?.planKey ?? 'basic');
     setPlanModalOpen(true);
@@ -222,6 +264,13 @@ export function StoreDetailPage() {
       description: 'Menú visual, precios de carta y código QR para el local.',
       to: `/admin/stores/${storeId}/carta`,
       icon: <UtensilsCrossed className="w-5 h-5 text-orange-600" />,
+      requiresManage: true,
+    }] : []),
+    ...(currentLimits?.canUseCustomerBook ? [{
+      title: 'Clientes y contactos',
+      description: 'Fichas de clientes, contactos voluntarios y preferencias de comunicación.',
+      to: `/admin/stores/${storeId}/customers`,
+      icon: <Users className="w-5 h-5 text-indigo-600" />,
       requiresManage: true,
     }] : []),
     {
@@ -516,6 +565,8 @@ export function StoreDetailPage() {
                   { label: 'Contabilidad', value: currentLimits.canUseAccounting ? 'Habilitado' : 'No' },
                   { label: 'Experiencias', value: currentLimits.canUseCategoryExperiences ? 'Habilitado' : 'No' },
                   { label: 'Carta digital', value: currentLimits.canUseCarta ? 'Habilitado' : 'No' },
+                  { label: 'Clientes y contactos', value: currentLimits.canUseCustomerBook ? 'Habilitado' : 'No' },
+                  { label: 'Captación pública', value: currentLimits.canUseCustomerCapture ? 'Habilitada' : 'No' },
                 ].map(({ label, value }) => (
                   <div key={label}>
                     <p className="text-gray-400 text-xs uppercase tracking-wide">{label}</p>
@@ -536,6 +587,38 @@ export function StoreDetailPage() {
                     onClick={openPlanModal}
                   >
                     Cambiar plan
+                  </Button>
+                </div>
+              )}
+              {isAdmin && (
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">Módulo Clientes y contactos</p>
+                    <p className="mt-1 text-xs text-gray-500">Crea una ficha por persona, vincula pedidos y conserva la información separada por empresa. Al activarlo, importa los pedidos históricos sin cambiar su contenido.</p>
+                  </div>
+                  <Button
+                    variant={currentLimits.canUseCustomerBook ? 'outline' : 'primary'}
+                    size="sm"
+                    isLoading={updatingCustomerModule}
+                    onClick={() => void toggleCustomerModule()}
+                  >
+                    {currentLimits.canUseCustomerBook ? 'Deshabilitar módulo' : 'Habilitar módulo'}
+                  </Button>
+                </div>
+              )}
+              {isAdmin && currentLimits.canUseCustomerBook && (
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-800">Captación pública de contactos</p>
+                    <p className="mt-1 text-xs text-gray-500">Permite mostrar un formulario voluntario en la tienda. La empresa configura el mensaje y los canales desde Clientes.</p>
+                  </div>
+                  <Button
+                    variant={currentLimits.canUseCustomerCapture ? 'outline' : 'primary'}
+                    size="sm"
+                    isLoading={updatingCustomerCaptureModule}
+                    onClick={() => void toggleCustomerCaptureModule()}
+                  >
+                    {currentLimits.canUseCustomerCapture ? 'Deshabilitar captación' : 'Habilitar captación'}
                   </Button>
                 </div>
               )}

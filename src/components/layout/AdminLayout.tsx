@@ -24,18 +24,20 @@ import {
   Calculator,
   Layers,
   Sparkles,
+  UsersRound,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
 import { logout } from '@/features/auth/authSlice';
 import { authService } from '@/features/auth/authService';
-import { selectIsPlatformAdmin } from '@/features/auth/auth.selectors';
+import { selectAuthProfile, selectIsPlatformAdmin } from '@/features/auth/auth.selectors';
 import { selectCurrentBusinessLimits, selectCurrentStore, selectMyMemberships } from '@/features/stores/stores.selectors';
 import { PendingOrdersBadgeProvider } from '@/features/orders/PendingOrdersBadgeContext';
 import { usePendingOrdersBadge } from '@/features/orders/usePendingOrdersBadge';
 import { domainsService } from '@/features/domains/domainsService';
 import { MelosoftBrand } from '@/components/ui/MelosoftBrand';
 import { AdminStoreIdentityMark } from './AdminStoreIdentityMark';
+import { canManageStore } from '@/utils/permissions';
 
 interface NavItem {
   label: string;
@@ -70,6 +72,7 @@ function AdminLayoutContent() {
   const { pathname } = useLocation();
 
   const user = useAppSelector((s) => s.auth.user);
+  const profile = useAppSelector(selectAuthProfile);
   const myMemberships = useAppSelector(selectMyMemberships);
   const currentStore = useAppSelector(selectCurrentStore);
   const currentLimits = useAppSelector(selectCurrentBusinessLimits);
@@ -79,6 +82,7 @@ function AdminLayoutContent() {
   const storeIdFromUrl = pathname.match(/^\/admin\/stores\/([^/]+)/)?.[1];
   const firstActiveMembership = myMemberships.find((m) => m.status === 'active');
   const storeId = storeIdFromUrl ?? firstActiveMembership?.storeId ?? '';
+  const canManageCustomers = Boolean(storeId && canManageStore(profile, myMemberships, storeId));
 
   const storeName = currentStore?.name ?? 'Mi Tienda';
   const storeSlug = currentStore?.slug;
@@ -114,6 +118,7 @@ function AdminLayoutContent() {
       badge: pendingCount > 0 ? pendingCount : undefined,
       badgeUrgent: hasOverduePending,
     },
+    ...(currentLimits?.canUseCustomerBook && canManageCustomers ? [{ label: 'Clientes', to: `/admin/stores/${storeId}/customers`, icon: <UsersRound className="w-5 h-5" /> }] : []),
     { label: 'Pagos', to: `/admin/stores/${storeId}/payments`, icon: <CreditCard className="w-5 h-5" /> },
     { label: 'Reseñas', to: `/admin/stores/${storeId}/reviews`, icon: <Star className="w-5 h-5" /> },
     ...(currentLimits?.canUsePartnerCodes ? [{ label: 'Partners', to: `/admin/stores/${storeId}/partners`, icon: <Handshake className="w-5 h-5" /> }] : []),

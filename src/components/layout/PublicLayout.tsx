@@ -310,7 +310,10 @@ function PublicStoreShell({
       && navigationType !== 'POP'
       && location.state?.restoreScroll !== true;
 
-    pendingScrollModeRef.current = location.state?.restoreScroll === true || navigationType === 'POP'
+    // Only an explicit storefront back action should restore a previous
+    // position. Treating every browser POP as a restore can bring back an
+    // old catalog/home scroll when the visitor simply changes pages.
+    pendingScrollModeRef.current = location.state?.restoreScroll === true
       ? 'restore'
       : isCatalogFilterChange
         ? 'catalog-products'
@@ -473,6 +476,7 @@ function PublicStoreShell({
             onClose={() => setCartOpen(false)}
             theme={theme}
             storeName={branding.storeName}
+            storeId={branding.storeId}
             storeSlug={storeSlug}
             currency={branding.currency}
             whatsappNumber={branding.whatsappNumber}
@@ -489,6 +493,7 @@ function PublicStoreShell({
             onlineCheckoutEnabled={branding.onlineCheckoutEnabled}
             whatsappOrderUpdatesRequired={branding.whatsappOrderUpdatesRequired}
             experienceCategorySlug={activeExperience?.categorySlug}
+            isMenu={branding.catalogType === 'menu'}
           />
         ) : null}
         </div>

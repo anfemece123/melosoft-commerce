@@ -244,6 +244,14 @@ export interface PublicStorePage {
   cartaEnabled: boolean;
   cartaListed: boolean;
   partnerCodesEnabled: boolean;
+  customerCaptureEnabled: boolean;
+  customerCaptureTitle: string | null;
+  customerCaptureDescription: string | null;
+  customerCaptureIncentiveText: string | null;
+  customerCaptureSuccessMessage: string | null;
+  customerCaptureCollectPhone: boolean | null;
+  customerEmailMarketingEnabled: boolean | null;
+  customerWhatsappMarketingEnabled: boolean | null;
 }
 
 /** Stable destination persisted for each public-cover button. Entity targets

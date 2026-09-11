@@ -37,6 +37,7 @@ import { ReviewsPage } from '@/pages/admin/ReviewsPage';
 import { PartnersPage } from '@/pages/admin/PartnersPage';
 import { AccountingPage } from '@/pages/admin/AccountingPage';
 import { CategoryExperiencesPage } from '@/pages/admin/CategoryExperiencesPage';
+import { CustomersPage } from '@/pages/admin/CustomersPage';
 import { PlatformWhatsappConnectionsPage } from '@/pages/admin/PlatformWhatsappConnectionsPage';
 import { MyStoresPage } from '@/pages/admin/MyStoresPage';
 import { StoreHomePage } from '@/pages/public/StoreHomePage';
@@ -112,6 +113,7 @@ export function AppRouter() {
                   element={<OfferFormPage />}
                 />
                 <Route path="/admin/stores/:storeId/orders" element={<OrdersPage />} />
+                <Route path="/admin/stores/:storeId/customers" element={<CustomersPage />} />
                 <Route path="/admin/stores/:storeId/payments" element={<PaymentsPage />} />
                 <Route path="/admin/stores/:storeId/reviews" element={<ReviewsPage />} />
                 <Route path="/admin/stores/:storeId/partners" element={<PartnersPage />} />

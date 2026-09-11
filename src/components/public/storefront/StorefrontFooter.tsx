@@ -8,6 +8,7 @@ import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 import { useSelectedLocation } from '@/lib/locations/locationContext';
 import { summarizeWeeklySchedule } from '@/lib/locations/schedule.utils';
 import { buildWhatsAppContactUrl } from '@/lib/whatsapp/whatsappUrl';
+import { CustomerCaptureCard } from './CustomerCaptureCard';
 
 interface StorefrontFooterProps {
   theme: StorefrontTheme;
@@ -121,6 +122,11 @@ export function StorefrontFooter({ theme, branding, locations }: StorefrontFoote
       style={{ borderColor: footerDivider, backgroundColor: footerBackground }}
     >
       <div className={`mx-auto w-full ${STOREFRONT_CONTAINER_CLASS} px-4 sm:px-6 lg:px-8`}>
+        {branding.customerCaptureEnabled && (
+          <div className="border-b py-10" style={{ borderColor: footerDivider }}>
+            <CustomerCaptureCard branding={branding} theme={theme} />
+          </div>
+        )}
         <div className="grid gap-10 py-12 md:grid-cols-2 xl:grid-cols-[1.25fr_1fr_1.05fr]">
           <section className="max-w-sm">
             <div className="flex items-center gap-3">
