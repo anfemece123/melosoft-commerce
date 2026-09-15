@@ -202,6 +202,7 @@ export function CatalogOrderingPage() {
   }, [context, contextValue, loading, storeId]);
 
   const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
+  const categoriesById = useMemo(() => new Map(categories.map((category) => [category.id, category])), [categories]);
   const orderedProducts = useMemo(() => {
     const ordered = orderedProductIds
       .map((id) => productsById.get(id))
@@ -209,18 +210,29 @@ export function CatalogOrderingPage() {
     const present = new Set(ordered.map((product) => product.id));
     const relevantMissing = products.filter((product) => {
       if (present.has(product.id)) return false;
-      if (context.type === 'category') return product.categoryId === context.id;
+      if (context.type === 'category') {
+        if (product.categoryId === context.id) return true;
+        const productCategory = categoriesById.get(product.categoryId ?? '');
+        return productCategory?.parentId === context.id;
+      }
       if (context.type === 'collection') return product.collections.some((collection) => collection.id === context.id);
       return true;
     });
     return [...ordered, ...relevantMissing];
-  }, [context, orderedProductIds, products, productsById]);
+  }, [categoriesById, context, orderedProductIds, products, productsById]);
 
   const categoryParentId = categoryParentValue === 'root' ? null : categoryParentValue;
   const productOrderLoading = loadedContextValue !== contextValue;
   const categorySiblings = useMemo(() => categories
     .filter((category) => category.parentId === categoryParentId)
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)), [categories, categoryParentId]);
+
+  const selectedCategoryChildren = useMemo(() => {
+    if (context.type !== 'category') return [];
+    return categories
+      .filter((category) => category.parentId === context.id)
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+  }, [categories, context]);
 
   if (!storeId) return null;
   if (loading) return <PanelLoadingState label="Cargando orden del catálogo…" />;
@@ -295,7 +307,11 @@ export function CatalogOrderingPage() {
 
   const contextOptions = [
     { value: 'catalog', label: 'Catálogo general · pantalla inicial' },
-    ...categories.map((category) => ({ value: `category:${category.id}`, label: `Categoría · ${categoryLabel(category, categories)}` })),
+    ...categories.map((category) => {
+      const hasChildren = categories.some((child) => child.parentId === category.id);
+      const suffix = hasChildren ? ' · todas las subcategorías' : '';
+      return { value: `category:${category.id}`, label: `Categoría · ${categoryLabel(category, categories)}${suffix}` };
+    }),
     ...collections.map((collection) => ({ value: `collection:${collection.id}`, label: `Colección · ${collection.name}` })),
   ];
   const parentsWithChildren = categories.filter((category) => categories.some((child) => child.parentId === category.id));
@@ -393,6 +409,14 @@ export function CatalogOrderingPage() {
               disabled={productSaveStatus === 'saving'}
             />
           </div>
+
+          {selectedCategoryChildren.length > 0 ? (
+            <p className="text-xs text-gray-500">
+              Esta categoría tiene subcategorías: aquí ordenas todos sus {isMenu ? 'platos' : 'productos'} juntos,
+              mezclados sin importar la subcategoría. Si prefieres ordenar solo una subcategoría, selecciónala
+              arriba en «Vista que quieres ordenar».
+            </p>
+          ) : null}
 
           {productOrderLoading ? (
             <PanelLoadingState label="Cargando posiciones…" />
