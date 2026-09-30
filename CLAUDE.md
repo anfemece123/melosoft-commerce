@@ -389,6 +389,14 @@ Modo por empresa, activado solo por el Super Admin, para negocios sin precios fi
 - Público: `StorefrontProductCard` (sin precio/descuento/"Agotado" por stock; botón "Consultar precio"), `ProductLandingPage` (sin precio, stock ni carrito; CTA "Consultar precio por WhatsApp" con variante y enlace), catálogo sin orden/filtro por precio ni "En oferta", carrito oculto, `/cart`, `/checkout` y `/o/:offerSlug` redirigen al catálogo, ofertas ocultas en la portada, metadatos SEO/preview sin precio (`api/_lib/storefrontSeo.ts`).
 - Admin: interruptor con confirmación en `StoreDetailPage`; `src/features/stores/whatsappInquiryMode.ts` oculta Pedidos, Pagos, Ofertas y Partners (nav, accesos rápidos y URL directa para el equipo de la empresa); Configuración comercial y pestaña Pagos reemplazadas por aviso; `ProductFormPage` usa precio de referencia opcional (0 por defecto) sin descuentos.
 
+### Búsqueda de productos con sugerencias en vivo ✅
+
+- Migración 161: `catalog_search_normalize()` (minúsculas, sin tildes ni puntuación), `catalog_search_tokens()`, `catalog_search_token_in()` (plural → singular), `public_catalog_query_matches(store_slug, query)` — matcher único: todas las palabras en cualquier orden sobre nombre, marca/atributos, categoría y descripción, con ranking y fallback de errores de escritura (`pg_trgm.word_similarity`) solo si no hay coincidencias exactas. Lo usan `public_catalog_suggest` (dropdown, jsonb con productos + atajos de marca/categoría + total) y `public_catalog_search_page/count/price_bounds` (orden por relevancia con `sort=relevance`).
+- `src/features/productSearch/`: tipos, mapper, `productSearchService.getSuggestions` (abortable), `useProductSearchSuggestions` (debounce 200 ms, cancelación, caché LRU compartida).
+- `StorefrontSearchBox`: combobox ARIA con teclado (↑ ↓ Enter Esc), imagen/marca/precio (sin precio en modo consulta WhatsApp), búsquedas recientes (localStorage), usado en los 4 buscadores de `StorefrontHeader`.
+- `StoreCatalogPage` ya no re-filtra el texto en cliente — el servidor es la única fuente de verdad del `q`.
+- Migración 162 (rendimiento): la vista `public_product_pages` es cara (arma JSON de facetas/variantes/colecciones por producto: ~1–5 s para una tienda de 300 productos). Búsqueda, sugerencias, conteo y rango de precios ahora se calculan sobre tablas base; `public_catalog_search_page` filtra/ordena/pagina en tablas base y solo lee la vista para las filas de la página. Índice `idx_product_facet_values_facet_value_id`. **Regla: ninguna función pública nueva debe escanear `public_product_pages` completa.**
+
 ---
 
 *Última actualización: 2026-07-21 (Fase 9 completada — dominios y subdominios definitivos)*

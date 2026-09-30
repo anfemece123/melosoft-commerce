@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Search } from 'lucide-react';
 import type { StorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import type { CatalogFilters, FacetFilter } from './catalogFilter.types';
-import type { PublicStoreCategory, PublicStoreCollection, PublicStoreFacet } from '@/types/common.types';
+import type { PublicStoreCategory, PublicStoreCollection, PublicStoreFacet, PublicStoreFacetValue } from '@/types/common.types';
 import { formatCurrency } from '@/utils/formatCurrency';
 
 export interface CatalogFilterSidebarProps {
@@ -119,6 +119,80 @@ function CheckboxItem({
         {label}
       </span>
     </button>
+  );
+}
+
+/** Facets with more values than this get a search box and a
+ * "Ver todas" toggle instead of one long list (e.g. 70+ brands). */
+const LONG_FACET_THRESHOLD = 8;
+const COLLAPSED_FACET_VALUES = 6;
+
+function normalizeForSearch(text: string): string {
+  return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function FacetValueList({
+  facetName,
+  values,
+  selectedSlugs,
+  theme,
+  renderValue,
+}: {
+  facetName: string;
+  values: PublicStoreFacetValue[];
+  selectedSlugs: string[];
+  theme: StorefrontTheme;
+  renderValue: (value: PublicStoreFacetValue) => React.ReactNode;
+}) {
+  const [query, setQuery] = useState('');
+  const [expanded, setExpanded] = useState(false);
+
+  if (values.length <= LONG_FACET_THRESHOLD) return <>{values.map(renderValue)}</>;
+
+  const normalizedQuery = normalizeForSearch(query.trim());
+  const matching = normalizedQuery
+    ? values.filter((value) => normalizeForSearch(value.value).includes(normalizedQuery))
+    : values;
+  // Values keep the store's order (most relevant first); a selected value
+  // stays visible even when it falls outside the collapsed slice.
+  const shown = normalizedQuery || expanded
+    ? matching
+    : matching.filter((value, index) => index < COLLAPSED_FACET_VALUES || selectedSlugs.includes(value.slug));
+
+  return (
+    <>
+      <label
+        className="mb-1.5 flex h-8 items-center gap-2 rounded-lg border px-2"
+        style={{ borderColor: theme.border, backgroundColor: theme.surfaceAlt }}
+      >
+        <Search className="h-3.5 w-3.5 shrink-0" style={{ color: theme.mutedText }} />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={`Buscar ${facetName.toLowerCase()}`}
+          aria-label={`Buscar ${facetName.toLowerCase()}`}
+          className="min-w-0 flex-1 bg-transparent text-xs outline-none"
+          style={{ color: theme.text }}
+        />
+      </label>
+      <div className={expanded && !normalizedQuery ? 'max-h-72 overflow-y-auto pr-1' : undefined}>
+        {shown.map(renderValue)}
+      </div>
+      {normalizedQuery && matching.length === 0 && (
+        <p className="px-1.5 py-1.5 text-xs" style={{ color: theme.mutedText }}>Sin resultados</p>
+      )}
+      {!normalizedQuery && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 px-1.5 text-xs font-semibold transition-opacity hover:opacity-70"
+          style={{ color: theme.primary }}
+        >
+          {expanded ? 'Ver menos' : `Ver todas (${values.length})`}
+        </button>
+      )}
+    </>
   );
 }
 
@@ -249,22 +323,31 @@ export function CatalogFilterSidebar({
       )}
 
       {/* Facets */}
-      {visibleFacets.map((facet) => {
+      {visibleFacets.map((facet, facetIndex) => {
         const isMulti = facet.inputType === 'multi_select';
         const selectedValues = getFacetValues(facet.slug);
+        // The first filter is the store's main one (e.g. Marca) — shown
+        // open even when it is long, since FacetValueList keeps it compact.
+        const defaultOpen = facetIndex === 0 || facet.values.length <= LONG_FACET_THRESHOLD || selectedValues.length > 0;
         return (
-          <FilterSection key={facet.id} title={facet.name} theme={theme} defaultOpen={facet.values.length <= 8}>
+          <FilterSection key={facet.id} title={facet.name} theme={theme} defaultOpen={defaultOpen}>
             {!isMulti && (
               <RadioItem label="Todos" selected={selectedValues.length === 0} theme={theme} onClick={() => set({ facets: filters.facets.filter((f) => f.facetSlug !== facet.slug) })} />
             )}
-            {facet.values.map((val) => {
-              const selected = selectedValues.includes(val.slug);
-              return isMulti ? (
-                <CheckboxItem key={val.id} label={val.value} checked={selected} theme={theme} onClick={() => toggleFacetValue(facet.slug, val.slug, true)} />
-              ) : (
-                <RadioItem key={val.id} label={val.value} selected={selected} theme={theme} onClick={() => toggleFacetValue(facet.slug, val.slug, false)} />
-              );
-            })}
+            <FacetValueList
+              facetName={facet.name}
+              values={facet.values}
+              selectedSlugs={selectedValues}
+              theme={theme}
+              renderValue={(val) => {
+                const selected = selectedValues.includes(val.slug);
+                return isMulti ? (
+                  <CheckboxItem key={val.id} label={val.value} checked={selected} theme={theme} onClick={() => toggleFacetValue(facet.slug, val.slug, true)} />
+                ) : (
+                  <RadioItem key={val.id} label={val.value} selected={selected} theme={theme} onClick={() => toggleFacetValue(facet.slug, val.slug, false)} />
+                );
+              }}
+            />
           </FilterSection>
         );
       })}

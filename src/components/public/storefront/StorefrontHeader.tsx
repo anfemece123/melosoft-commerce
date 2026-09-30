@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronDown, Menu, Search, ShoppingCart, X } from 'lucide-react';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { ChevronDown, Menu, ShoppingCart, X } from 'lucide-react';
 import { PublicStoreLogo } from './PublicStoreLogo';
 import { MobileNavDrawer } from './MobileNavDrawer';
 import { MegaMenuPanel } from './MegaMenuPanel';
+import { StorefrontSearchBox } from './StorefrontSearchBox';
 import { StoreStatusBadge } from './StoreStatusBadge';
 import { HeaderNavigationIcon } from './HeaderNavigationIcon';
 import { STOREFRONT_CONTAINER_CLASS, type StorefrontTheme } from './storefrontTheme';
@@ -92,7 +93,6 @@ export function StorefrontHeader({
   scheduleLoading = false,
 }: StorefrontHeaderProps & { categories?: PublicStoreCategory[] }) {
   const settings = resolveHeaderSettings(headerSettings ?? DEFAULT_HEADER_SETTINGS);
-  const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { activeExperience } = usePublicStoreExperience();
@@ -100,8 +100,6 @@ export function StorefrontHeader({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [megaMenuItemId, setMegaMenuItemId] = useState<string | null>(null);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState(searchParams.get('q') ?? '');
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const megaMenuOpenTimerRef = useRef<number | null>(null);
   const megaMenuCloseTimerRef = useRef<number | null>(null);
@@ -333,12 +331,6 @@ export function StorefrontHeader({
     boxShadow: shouldBeTransparent ? 'none' : `0 12px 30px ${theme.shadow}`,
   };
 
-  function handleSearchSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const q = searchQuery.trim();
-    void navigate(buildStorefrontPath(storeSlug, q ? `/catalog?q=${encodeURIComponent(q)}` : '/catalog'));
-  }
-
   // ── Shared sub-components ──────────────────────────────────
 
   function renderCartButton() {
@@ -562,45 +554,30 @@ export function StorefrontHeader({
 
                 {/* RIGHT: search + cart + hamburger */}
                 <div className="relative flex items-center justify-end gap-2 md:gap-3">
-                  <form
-                    onSubmit={handleSearchSubmit}
-                    className="relative hidden w-full min-w-[190px] max-w-[250px] xl:block"
+                  <StorefrontSearchBox
+                    theme={theme}
+                    storeSlug={storeSlug}
+                    placeholder={searchPlaceholder}
+                    className="hidden w-full min-w-[190px] max-w-[250px] xl:block"
+                    inputClassName="h-10 w-full rounded-md border pl-4 pr-14 text-[12px] outline-none"
+                    inputStyle={{ borderColor: controlBorder, backgroundColor: controlBg, color: theme.text }}
+                    panelPlacement="end"
                     onMouseEnter={closeMegaMenuImmediately}
-                  >
-                    <input
-                      ref={searchInputRef}
-                      type="search"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder={searchPlaceholder}
-                      className="h-10 w-full rounded-md border pl-4 pr-10 text-[12px] outline-none"
-                      style={{ borderColor: controlBorder, backgroundColor: controlBg, color: theme.text }}
-                    />
-                    <button type="submit" aria-label="Buscar" className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <Search className="h-4 w-4" style={{ color: theme.mutedText }} />
-                    </button>
-                  </form>
+                  />
                   {renderCartButton()}
                   {renderHamburgerButton('xl')}
                 </div>
               </div>
 
               {/* Mobile search */}
-              <form onSubmit={handleSearchSubmit} className="mt-3 xl:hidden">
-                <div className="relative w-full">
-                  <input
-                    type="search"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={searchPlaceholder}
-                    className="h-10 w-full rounded-md border pl-4 pr-10 text-[12px] outline-none"
-                    style={{ borderColor: controlBorder, backgroundColor: controlBg, color: theme.text }}
-                  />
-                  <button type="submit" aria-label="Buscar" className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <Search className="h-4 w-4" style={{ color: theme.mutedText }} />
-                  </button>
-                </div>
-              </form>
+              <StorefrontSearchBox
+                theme={theme}
+                storeSlug={storeSlug}
+                placeholder={searchPlaceholder}
+                className="mt-3 w-full xl:hidden"
+                inputClassName="h-10 w-full rounded-md border pl-4 pr-14 text-[16px] outline-none sm:text-[12px]"
+                inputStyle={{ borderColor: controlBorder, backgroundColor: controlBg, color: theme.text }}
+              />
             </div>
 
             {/* MegaMenuPanel — full width below nav */}
@@ -693,24 +670,15 @@ export function StorefrontHeader({
             )}
 
             {/* Search centered, desktop */}
-            <form
-              onSubmit={handleSearchSubmit}
-              className="relative mx-auto hidden max-w-[480px] flex-1 lg:block"
+            <StorefrontSearchBox
+              theme={theme}
+              storeSlug={storeSlug}
+              placeholder={searchPlaceholder}
+              className="mx-auto hidden max-w-[480px] flex-1 lg:block"
+              inputClassName="h-10 w-full rounded-xl border pl-4 pr-14 text-[13px] outline-none"
+              inputStyle={{ borderColor: controlBorder, backgroundColor: controlBg, color: theme.text }}
               onMouseEnter={closeMegaMenuImmediately}
-            >
-              <input
-                ref={searchInputRef}
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={searchPlaceholder}
-                className="h-10 w-full rounded-xl border pl-4 pr-10 text-[13px] outline-none"
-                style={{ borderColor: controlBorder, backgroundColor: controlBg, color: theme.text }}
-              />
-              <button type="submit" aria-label="Buscar" className="absolute right-3 top-1/2 -translate-y-1/2">
-                <Search className="h-4 w-4" style={{ color: theme.mutedText }} />
-              </button>
-            </form>
+            />
 
             {/* Right */}
             <div className="relative ml-auto flex shrink-0 items-center gap-2 lg:ml-0">
@@ -721,19 +689,14 @@ export function StorefrontHeader({
 
           {/* Row 2: search mobile + nav desktop */}
           <div className="pb-2">
-            <form onSubmit={handleSearchSubmit} className="relative mb-2 lg:hidden">
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={searchPlaceholder}
-                className="h-9 w-full rounded-xl border pl-4 pr-10 text-[13px] outline-none"
-                style={{ borderColor: controlBorder, backgroundColor: controlBg, color: theme.text }}
-              />
-              <button type="submit" aria-label="Buscar" className="absolute right-3 top-1/2 -translate-y-1/2">
-                <Search className="h-4 w-4" style={{ color: theme.mutedText }} />
-              </button>
-            </form>
+            <StorefrontSearchBox
+              theme={theme}
+              storeSlug={storeSlug}
+              placeholder={searchPlaceholder}
+              className="mb-2 lg:hidden"
+              inputClassName="h-9 w-full rounded-xl border pl-4 pr-14 text-[16px] outline-none sm:text-[13px]"
+              inputStyle={{ borderColor: controlBorder, backgroundColor: controlBg, color: theme.text }}
+            />
 
             {/* Desktop nav centered */}
             {renderDesktopNav()}

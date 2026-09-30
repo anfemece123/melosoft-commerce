@@ -18,6 +18,8 @@ import { notify } from '@/lib/notifications';
 import type { ImportRowResult, VelaireCatalogRow } from '@/features/products/velaireImport/velaireImport.types';
 import { VelaireImageUploadCard } from './VelaireImageUploadCard';
 import { VelaireGenderSyncCard } from './VelaireGenderSyncCard';
+import { VelaireBrandSyncCard } from './VelaireBrandSyncCard';
+import { VelaireProductRepairCard } from './VelaireProductRepairCard';
 import type { ProductDescriptionSection } from '@/types/common.types';
 
 // Dynamically imported (not a static top-level import) — this JSON is
@@ -352,6 +354,14 @@ export function VelaireImportPage() {
 
         {!wrongStore && catalog && storeId && (
           <VelaireGenderSyncCard storeId={storeId} catalog={catalog} />
+        )}
+
+        {!wrongStore && catalog && storeId && (
+          <VelaireBrandSyncCard storeId={storeId} catalog={catalog} />
+        )}
+
+        {!wrongStore && catalog && storeId && (
+          <VelaireProductRepairCard storeId={storeId} catalog={catalog} />
         )}
 
         {(running || finished) && (

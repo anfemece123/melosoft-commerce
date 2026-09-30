@@ -48,6 +48,12 @@ import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 
 const CATALOG_PAGE_SIZE = 24;
 const MIN_FILTER_RESULTS_BEFORE_PREFETCH = 18;
+// Attribute filters (Marca, Género…) are matched client-side, so a
+// partial page would show only some of e.g. a brand's products. While one
+// is active the catalog is loaded in bigger pages until it is complete,
+// up to this many products (beyond it, infinite scroll takes over).
+const FACET_FILTER_PAGE_SIZE = 96;
+const MAX_PRODUCTS_FOR_COMPLETE_FACET_FILTER = 600;
 // Deliberately wider than the shared STOREFRONT_CONTAINER_CLASS (used by
 // home/PDP/header/footer) — the catalog's sidebar+grid layout benefits
 // from more room than a plain content section, and this is the one page
@@ -200,6 +206,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
   }, [searchParams.get('q')]);
 
   const hasMoreProducts = products.length < totalProductCount;
+  const facetFilterActive = filters.facets.length > 0;
 
   const loadNextProductsPage = useCallback(async (reset = false) => {
     if (!categoryMetadataReady) return;
@@ -235,7 +242,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
         onlyOnSale: filters.onlyOnSale,
         sortKey: sort,
         offset,
-        limit: CATALOG_PAGE_SIZE,
+        limit: facetFilterActive ? FACET_FILTER_PAGE_SIZE : CATALOG_PAGE_SIZE,
       });
 
       if (requestVersionRef.current !== requestVersion) return;
@@ -270,6 +277,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
     }
   }, [
     catalogLoading,
+    facetFilterActive,
     filters.categorySlug,
     filters.collectionSlug,
     filters.onlyFeatured,
@@ -505,15 +513,10 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
     if (filters.onlyOnSale) {
       list = list.filter((p) => p.salePrice !== null && p.salePrice < p.regularPrice);
     }
-    if (filters.query.trim()) {
-      const q = filters.query.trim().toLowerCase();
-      list = list.filter(
-        (p) =>
-          p.productName.toLowerCase().includes(q) ||
-          p.description.toLowerCase().includes(q) ||
-          (p.categoryName ?? '').toLowerCase().includes(q)
-      );
-    }
+    // The text query is resolved server-side (public_catalog_query_matches:
+    // accent-insensitive, any word order, brand/attributes, typo fallback),
+    // so `products` already holds only matches — re-filtering here with a
+    // plain substring would drop valid results such as "latafa" → Lattafa.
 
     // From here on, work at the catalog-item (card) level, not the product
     // level — a product with showVariantsAsCards splits into one item per
@@ -618,7 +621,9 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
     filters.onlyOnSale;
 
   const hasActiveSearch = !!filters.query;
-  const shouldAutoPrefetchForFilters = (hasAnyFilter || hasActiveSearch) && filteredAndSorted.length < MIN_FILTER_RESULTS_BEFORE_PREFETCH;
+  const shouldAutoPrefetchForFilters =
+    (facetFilterActive && products.length < MAX_PRODUCTS_FOR_COMPLETE_FACET_FILTER)
+    || ((hasAnyFilter || hasActiveSearch) && filteredAndSorted.length < MIN_FILTER_RESULTS_BEFORE_PREFETCH);
 
   useEffect(() => {
     if (!shouldAutoPrefetchForFilters || catalogLoading || loadingMore || !hasMoreProducts) return;

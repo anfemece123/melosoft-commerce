@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Plus, Pencil, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Plus, Pencil, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -167,12 +167,19 @@ function FacetCard({
   categories,
   onUpdate,
   onDelete,
+  onMoveUp,
+  onMoveDown,
+  moving,
 }: {
   facet: StoreFacet;
   storeId: string;
   categories: PublicStoreCategory[];
   onUpdate: (updated: StoreFacet) => void;
   onDelete: () => void;
+  /** Undefined when the facet is already first / last. */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  moving: boolean;
 }) {
   const [values, setValues] = useState<StoreFacetValue[]>(facet.values);
   const [newValue, setNewValue] = useState('');
@@ -311,6 +318,26 @@ function FacetCard({
             </div>
             <button
               type="button"
+              onClick={onMoveUp}
+              disabled={!onMoveUp || moving}
+              className="text-gray-400 hover:text-indigo-600 transition-colors shrink-0 disabled:opacity-30 disabled:hover:text-gray-400"
+              aria-label="Subir"
+              title="Subir"
+            >
+              <ArrowUp className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={onMoveDown}
+              disabled={!onMoveDown || moving}
+              className="text-gray-400 hover:text-indigo-600 transition-colors shrink-0 disabled:opacity-30 disabled:hover:text-gray-400"
+              aria-label="Bajar"
+              title="Bajar"
+            >
+              <ArrowDown className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
               onClick={() => setEditing(true)}
               className="text-gray-400 hover:text-indigo-600 transition-colors shrink-0"
               aria-label="Editar"
@@ -385,6 +412,29 @@ export function ProductFiltersPage() {
   const [form, setForm] = useState<FacetForm>(EMPTY_FACET_FORM);
   const [saving, setSaving] = useState(false);
   const [formNameError, setFormNameError] = useState<string | undefined>();
+  const [moving, setMoving] = useState(false);
+
+  /** Swaps a facet with its neighbour. The list order is the order of the
+   * filters in the public catalog and header menu. */
+  async function moveFacet(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= facets.length) return;
+    const previous = facets;
+    const next = [...facets];
+    [next[index], next[target]] = [next[target], next[index]];
+    const reordered = next.map((facet, i) => ({ ...facet, sortOrder: i }));
+    setFacets(reordered);
+    setMoving(true);
+    try {
+      const changed = reordered.filter((facet) => previous.find((p) => p.id === facet.id)?.sortOrder !== facet.sortOrder);
+      await Promise.all(changed.map((facet) => facetsService.updateFacet(facet.id, { sortOrder: facet.sortOrder })));
+    } catch (err) {
+      setFacets(previous);
+      notify.fromError(err, 'No se pudo cambiar el orden.');
+    } finally {
+      setMoving(false);
+    }
+  }
 
   async function load() {
     if (!storeId) return;
@@ -522,7 +572,10 @@ export function ProductFiltersPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {facets.map((facet) => (
+          <p className="text-xs text-gray-500">
+            Usa las flechas para ordenar: este es el orden en que se ven los filtros en el catálogo y en el menú de la tienda.
+          </p>
+          {facets.map((facet, index) => (
             <FacetCard
               key={facet.id}
               facet={facet}
@@ -532,6 +585,9 @@ export function ProductFiltersPage() {
                 setFacets((prev) => prev.map((f) => (f.id === updated.id ? updated : f)))
               }
               onDelete={() => setFacets((prev) => prev.filter((f) => f.id !== facet.id))}
+              onMoveUp={index > 0 ? () => void moveFacet(index, -1) : undefined}
+              onMoveDown={index < facets.length - 1 ? () => void moveFacet(index, 1) : undefined}
+              moving={moving}
             />
           ))}
         </div>

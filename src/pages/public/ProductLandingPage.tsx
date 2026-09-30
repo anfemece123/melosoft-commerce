@@ -74,6 +74,7 @@ import { readPublicPageCache, writePublicPageCache } from '@/lib/storefront/publ
 import { buildCatalogItems } from '@/lib/storefront/catalogItems';
 import { useResolvedStoreSlug } from '@/lib/storefront/storefrontDomainContext';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
+import { brandCatalogQuery, findBrandFacetValue } from '@/lib/storefront/brandFacet';
 import { buildWhatsAppContactUrl, normalizePhoneForWhatsApp } from '@/lib/whatsapp/whatsappUrl';
 import { useWhatsappInquiryMode } from '@/lib/commerce/useWhatsappInquiryMode';
 import {
@@ -653,6 +654,7 @@ function ProductLandingContent({
     .slice()
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .filter((option) => !option.controlsMedia);
+  const brand = findBrandFacetValue(product.facetValues);
   const productEyebrow = currentProduct.isFeatured
     ? 'Lo mas nuevo'
     : primaryCategory?.name ?? 'Producto destacado';
@@ -948,9 +950,21 @@ function ProductLandingContent({
 
           <div className="space-y-5 pt-1">
             <div className="space-y-2">
-              <p className="text-sm font-semibold" style={{ color: theme.primary }}>
-                {productEyebrow}
-              </p>
+              {brand ? (
+                <Link
+                  to={buildStorefrontPath(storeSlug, brandCatalogQuery(brand.valueSlug))}
+                  className="inline-flex items-center gap-1 text-sm font-semibold uppercase tracking-[0.12em] transition-opacity hover:opacity-70"
+                  style={{ color: theme.primary }}
+                  aria-label={`Ver todos los productos de ${brand.value}`}
+                >
+                  {brand.value}
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Link>
+              ) : (
+                <p className="text-sm font-semibold" style={{ color: theme.primary }}>
+                  {productEyebrow}
+                </p>
+              )}
               <div className="space-y-1">
                 <h1 className="text-[1.55rem] font-medium leading-tight lg:text-[1.8rem]" style={{ color: theme.text }}>
                   {product.productName}
