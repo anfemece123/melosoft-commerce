@@ -1,4 +1,4 @@
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ShoppingBag, Tag } from 'lucide-react';
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
 import { usePublicStorefrontTheme } from '@/lib/storefront/usePublicStorefrontTheme';
@@ -23,7 +23,17 @@ import { OrderingStatusNotice } from '@/components/public/cart/OrderingStatusNot
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 
+/** Catálogo con consulta por WhatsApp has no cart nor checkout: a stale
+ * bookmark or shared link lands on the catalog instead. */
 export function StoreCheckoutPage() {
+  const { branding } = usePublicStoreBranding();
+  if (branding?.whatsappInquiryMode) {
+    return <Navigate to={buildStorefrontPath(branding.storeSlug, '/catalog')} replace />;
+  }
+  return <StoreCheckoutPageContent />;
+}
+
+function StoreCheckoutPageContent() {
   const { storeSlug: routeStoreSlug } = useParams<{ storeSlug: string }>();
   const storeSlug = useResolvedStoreSlug(routeStoreSlug);
   const navigate = useNavigate();

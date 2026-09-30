@@ -21,10 +21,22 @@ import type { PublicStoreCategory, ThemeMode } from '@/types/common.types';
 import { canManageStore } from '@/utils/permissions';
 import { notify } from '@/lib/notifications';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
+import { ExperienceAmbienceFields } from '@/components/admin/experiences/ExperienceAmbienceFields';
+import { ExperienceGatewayCard } from '@/components/admin/experiences/ExperienceGatewayCard';
+import { ExperiencePreview } from '@/components/admin/experiences/ExperiencePreview';
+import type { StoreExperienceGateway } from '@/features/categoryExperiences/categoryExperiences.types';
+import type {
+  ExperienceBackgroundPattern,
+  ExperienceBackgroundStyle,
+  ExperienceHeadingFont,
+} from '@/types/common.types';
+import { buildExperienceBackdropStyle, EXPERIENCE_HEADING_FONTS } from '@/lib/storefront/experienceAmbience';
+import type { ExperienceStylePreset } from '@/lib/storefront/experiencePresets';
 
 interface ExperienceForm {
   categoryId: string;
   displayName: string;
+  tagline: string;
   description: string;
   logoUrl: string | null;
   coverImageUrl: string | null;
@@ -35,11 +47,17 @@ interface ExperienceForm {
   backgroundColor: string;
   textColor: string;
   buttonRadius: string;
+  backgroundStyle: ExperienceBackgroundStyle;
+  backgroundPattern: ExperienceBackgroundPattern;
+  backgroundImageUrl: string | null;
+  backgroundIntensity: number;
+  headingFont: ExperienceHeadingFont;
 }
 
 const DEFAULT_FORM: ExperienceForm = {
   categoryId: '',
   displayName: '',
+  tagline: '',
   description: '',
   logoUrl: null,
   coverImageUrl: null,
@@ -50,6 +68,11 @@ const DEFAULT_FORM: ExperienceForm = {
   backgroundColor: '#ffffff',
   textColor: '#111827',
   buttonRadius: '24px',
+  backgroundStyle: 'solid',
+  backgroundPattern: 'dots',
+  backgroundImageUrl: null,
+  backgroundIntensity: 50,
+  headingFont: 'default',
 };
 
 function toForm(experience?: StoreCategoryExperience | null): ExperienceForm {
@@ -57,6 +80,7 @@ function toForm(experience?: StoreCategoryExperience | null): ExperienceForm {
   return {
     categoryId: experience.categoryId,
     displayName: experience.displayName,
+    tagline: experience.tagline ?? '',
     description: experience.description ?? '',
     logoUrl: experience.logoUrl,
     coverImageUrl: experience.coverImageUrl,
@@ -67,6 +91,11 @@ function toForm(experience?: StoreCategoryExperience | null): ExperienceForm {
     backgroundColor: experience.backgroundColor,
     textColor: experience.textColor,
     buttonRadius: experience.buttonRadius,
+    backgroundStyle: experience.backgroundStyle,
+    backgroundPattern: experience.backgroundPattern,
+    backgroundImageUrl: experience.backgroundImageUrl,
+    backgroundIntensity: experience.backgroundIntensity,
+    headingFont: experience.headingFont,
   };
 }
 
@@ -95,6 +124,9 @@ export function CategoryExperiencesPage() {
   const [pendingLogoPreview, setPendingLogoPreview] = useState<string | null>(null);
   const [pendingCoverFile, setPendingCoverFile] = useState<File | null>(null);
   const [pendingCoverPreview, setPendingCoverPreview] = useState<string | null>(null);
+  const [pendingBackgroundFile, setPendingBackgroundFile] = useState<File | null>(null);
+  const [pendingBackgroundPreview, setPendingBackgroundPreview] = useState<string | null>(null);
+  const [gateway, setGateway] = useState<StoreExperienceGateway | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -108,7 +140,8 @@ export function CategoryExperiencesPage() {
   useEffect(() => () => {
     if (pendingLogoPreview?.startsWith('blob:')) URL.revokeObjectURL(pendingLogoPreview);
     if (pendingCoverPreview?.startsWith('blob:')) URL.revokeObjectURL(pendingCoverPreview);
-  }, [pendingLogoPreview, pendingCoverPreview]);
+    if (pendingBackgroundPreview?.startsWith('blob:')) URL.revokeObjectURL(pendingBackgroundPreview);
+  }, [pendingLogoPreview, pendingCoverPreview, pendingBackgroundPreview]);
 
   useEffect(() => {
     if (!storeId) return;
@@ -120,10 +153,12 @@ export function CategoryExperiencesPage() {
     Promise.all([
       categoriesService.getStoreCategories(storeId, { activeOnly: true }),
       categoryExperiencesService.getStoreExperiences(storeId),
-    ]).then(([loadedCategories, loadedExperiences]) => {
+      categoryExperiencesService.getGateway(storeId).catch(() => null),
+    ]).then(([loadedCategories, loadedExperiences, loadedGateway]) => {
       if (cancelled) return;
       setCategories(loadedCategories);
       setExperiences(loadedExperiences);
+      setGateway(loadedGateway);
       setError(null);
     }).catch((loadError) => {
       if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'No pudimos cargar las experiencias.');
@@ -142,6 +177,8 @@ export function CategoryExperiencesPage() {
     setPendingLogoPreview(null);
     setPendingCoverFile(null);
     setPendingCoverPreview(null);
+    setPendingBackgroundFile(null);
+    setPendingBackgroundPreview(null);
     setModalOpen(true);
   }
 
@@ -152,6 +189,8 @@ export function CategoryExperiencesPage() {
     setPendingLogoPreview(null);
     setPendingCoverFile(null);
     setPendingCoverPreview(null);
+    setPendingBackgroundFile(null);
+    setPendingBackgroundPreview(null);
     setModalOpen(true);
   }
 
@@ -161,6 +200,8 @@ export function CategoryExperiencesPage() {
     setPendingLogoPreview(null);
     setPendingCoverFile(null);
     setPendingCoverPreview(null);
+    setPendingBackgroundFile(null);
+    setPendingBackgroundPreview(null);
   }
 
   function handleLogoSelect(file: File | null) {
@@ -171,6 +212,28 @@ export function CategoryExperiencesPage() {
   function handleCoverSelect(file: File | null) {
     setPendingCoverFile(file);
     setPendingCoverPreview(file ? URL.createObjectURL(file) : null);
+  }
+
+  function handleBackgroundSelect(file: File | null) {
+    setPendingBackgroundFile(file);
+    setPendingBackgroundPreview(file ? URL.createObjectURL(file) : null);
+  }
+
+  function applyPreset(preset: ExperienceStylePreset) {
+    setForm((current) => ({
+      ...current,
+      themeMode: preset.themeMode,
+      primaryColor: preset.primaryColor,
+      secondaryColor: preset.secondaryColor,
+      accentColor: preset.accentColor,
+      backgroundColor: preset.backgroundColor,
+      textColor: preset.textColor,
+      buttonRadius: preset.buttonRadius,
+      backgroundStyle: preset.backgroundStyle,
+      backgroundPattern: preset.backgroundPattern,
+      backgroundIntensity: preset.backgroundIntensity,
+      headingFont: preset.headingFont,
+    }));
   }
 
   function setField<K extends keyof ExperienceForm>(field: K, value: ExperienceForm[K]) {
@@ -187,11 +250,16 @@ export function CategoryExperiencesPage() {
       notify.error('Usa colores hexadecimales válidos, por ejemplo #4f46e5.');
       return;
     }
+    if (form.backgroundStyle === 'image' && !form.backgroundImageUrl && !pendingBackgroundFile) {
+      notify.error('Sube la imagen de fondo o elige otro estilo de fondo.');
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
         categoryId: form.categoryId,
         displayName: form.displayName,
+        tagline: form.tagline || null,
         description: form.description || null,
         logoUrl: form.logoUrl,
         coverImageUrl: form.coverImageUrl,
@@ -202,6 +270,11 @@ export function CategoryExperiencesPage() {
         backgroundColor: form.backgroundColor,
         textColor: form.textColor,
         buttonRadius: form.buttonRadius,
+        backgroundStyle: form.backgroundStyle,
+        backgroundPattern: form.backgroundPattern,
+        backgroundImageUrl: form.backgroundImageUrl,
+        backgroundIntensity: form.backgroundIntensity,
+        headingFont: form.headingFont,
       };
       let saved: StoreCategoryExperience;
       if (editing) {
@@ -217,6 +290,10 @@ export function CategoryExperiencesPage() {
       if (pendingCoverFile) {
         const coverImageUrl = await categoryExperiencesService.uploadExperienceCover(storeId, saved.id, pendingCoverFile);
         saved = await categoryExperiencesService.updateExperience(saved.id, { coverImageUrl });
+      }
+      if (pendingBackgroundFile) {
+        const backgroundImageUrl = await categoryExperiencesService.uploadExperienceBackground(storeId, saved.id, pendingBackgroundFile);
+        saved = await categoryExperiencesService.updateExperience(saved.id, { backgroundImageUrl });
       }
 
       if (editing) {
@@ -263,7 +340,7 @@ export function CategoryExperiencesPage() {
       top={(
         <PageHeader
           title="Experiencias por categoría"
-          description="Crea una identidad visual distinta —nombre, logo y colores— para cada línea de tu catálogo."
+          description="Crea una identidad visual distinta —nombre, logo, colores, fondo y tipografía— para cada línea o marca de tu catálogo."
           action={canManage && limits?.canUseCategoryExperiences && availableCategories.length > 0 ? (
             <Button onClick={openCreate} leftIcon={<Plus className="h-4 w-4" />}>Nueva experiencia</Button>
           ) : undefined}
@@ -286,6 +363,18 @@ export function CategoryExperiencesPage() {
           </Card>
         ) : (
           <>
+            {!loading && (
+              <ExperienceGatewayCard
+                key={gateway?.storeId ?? 'new-gateway'}
+                storeId={storeId}
+                storeSlug={store.slug}
+                gateway={gateway}
+                activeExperienceCount={experiences.filter((item) => item.isActive).length}
+                canManage={canManage}
+                onSaved={setGateway}
+              />
+            )}
+
             <Card className="mb-6 border-indigo-100 bg-indigo-50/60">
               <CardBody className="flex items-start gap-4">
                 <div className="rounded-xl bg-white p-3 text-indigo-600 shadow-sm"><Palette className="h-5 w-5" /></div>
@@ -315,7 +404,23 @@ export function CategoryExperiencesPage() {
                   const category = categoryById.get(experience.categoryId);
                   const previewHref = category ? buildStorefrontPath(store.slug, `/catalog?cat=${encodeURIComponent(category.slug)}`) : null;
                   return (
-                    <Card key={experience.id} className={!experience.isActive ? 'opacity-65' : undefined}>
+                    <Card key={experience.id} className={`overflow-hidden ${!experience.isActive ? 'opacity-65' : ''}`}>
+                      <div
+                        aria-hidden="true"
+                        className="flex h-16 items-end px-5 pb-2"
+                        style={buildExperienceBackdropStyle({
+                          ...experience,
+                          backgroundStyle: experience.backgroundStyle === 'solid' ? 'gradient' : experience.backgroundStyle,
+                          backgroundIntensity: Math.max(experience.backgroundIntensity, 60),
+                        })}
+                      >
+                        <span
+                          className="truncate text-lg font-bold"
+                          style={{ color: experience.textColor, fontFamily: EXPERIENCE_HEADING_FONTS[experience.headingFont].family ?? undefined }}
+                        >
+                          {experience.tagline || experience.displayName}
+                        </span>
+                      </div>
                       <CardBody>
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex min-w-0 items-center gap-3">
@@ -372,69 +477,118 @@ export function CategoryExperiencesPage() {
           </div>
         )}
       >
-        <div className="space-y-5">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Select label="Categoría del catálogo" value={form.categoryId} onChange={(event) => setField('categoryId', event.target.value)} options={availableCategories.map((category) => ({ value: category.id, label: categoryLabel(category) }))} placeholder="Selecciona una categoría" disabled={Boolean(editing)} hint="Los productos se filtran por esta categoría real." />
-            <Input label="Nombre visible en el header" value={form.displayName} onChange={(event) => setField('displayName', event.target.value)} placeholder="Ej. Modo Pádel" hint="Aparecerá arriba en la tienda cuando este modo esté activo." />
-          </div>
-          <ImageUploadField
-            id="category-experience-logo"
-            label="Logo de este modo (opcional)"
-            assetKind="store_logo"
-            previewUrl={pendingLogoPreview ?? form.logoUrl}
-            onFileSelect={handleLogoSelect}
-            onClear={() => {
-              setPendingLogoFile(null);
-              setPendingLogoPreview(null);
-              setField('logoUrl', null);
-            }}
-            uploading={saving && Boolean(pendingLogoFile)}
-            hint="Sube una versión del logo con los colores de este modo. Si lo dejas vacío, se usará el logo general de la empresa."
-            aspectClassName="h-24 w-24 rounded-2xl"
-          />
-          <ImageUploadField
-            id="category-experience-cover"
-            label="Imagen de portada del modo (opcional)"
-            assetKind="store_hero_background"
-            previewUrl={pendingCoverPreview ?? form.coverImageUrl}
-            onFileSelect={handleCoverSelect}
-            onClear={() => {
-              setPendingCoverFile(null);
-              setPendingCoverPreview(null);
-              setField('coverImageUrl', null);
-            }}
-            uploading={saving && Boolean(pendingCoverFile)}
-            hint="Se mostrará arriba del catálogo cuando este modo esté activo. Usa una imagen horizontal con espacio para el texto."
-            aspectClassName="h-28 w-full max-w-md rounded-2xl"
-          />
-          <Textarea label="Descripción breve (opcional)" value={form.description} onChange={(event) => setField('description', event.target.value)} placeholder="Ej. Equipamiento para jugar y mejorar tu nivel." rows={3} />
-          <Select label="Contraste del tema" value={form.themeMode} onChange={(event) => setField('themeMode', event.target.value as ThemeMode)} options={[{ value: 'light', label: 'Claro' }, { value: 'dark', label: 'Oscuro' }]} hint="Afecta la lectura del encabezado, superficies y controles." />
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900">Paleta visual</h3>
-            <p className="mt-1 text-xs text-gray-500">Usa colores hexadecimales de seis dígitos. Puedes copiar la paleta de la marca o definir una identidad para cada línea.</p>
-            <div className="mt-3 grid gap-4 sm:grid-cols-2">
-              {([
-                ['primaryColor', 'Color principal', 'Botones, enlaces y acciones'],
-                ['secondaryColor', 'Color secundario', 'Superficies y fondos suaves'],
-                ['accentColor', 'Color de acento', 'Destacados y elementos promocionales'],
-                ['backgroundColor', 'Color de fondo', 'Fondo general de la experiencia'],
-                ['textColor', 'Color del texto', 'Títulos y contenido principal'],
-              ] as const).map(([field, label, hint]) => (
-                <div key={field} className="flex items-end gap-2">
-                  <Input label={label} value={form[field]} onChange={(event) => setField(field, event.target.value)} hint={hint} />
-                  <input aria-label={`Selector ${label}`} type="color" value={isHexColor(form[field]) ? form[field] : '#000000'} onChange={(event) => setField(field, event.target.value)} className="mb-1 h-10 w-12 cursor-pointer rounded-lg border border-gray-300 bg-white p-1" />
-                </div>
-              ))}
+        <div className="space-y-6">
+          <section className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Select label="Categoría del catálogo" value={form.categoryId} onChange={(event) => setField('categoryId', event.target.value)} options={availableCategories.map((category) => ({ value: category.id, label: categoryLabel(category) }))} placeholder="Selecciona una categoría" disabled={Boolean(editing)} hint="Los productos se filtran por esta categoría real." />
+              <Input label="Nombre visible" value={form.displayName} onChange={(event) => setField('displayName', event.target.value)} placeholder="Ej. Sakura Sushi Bar" hint="Aparece en el header, la portada de selección y la cabecera." />
             </div>
-          </div>
-          <Select label="Radio de botones" value={form.buttonRadius} onChange={(event) => setField('buttonRadius', event.target.value)} options={[{ value: '8px', label: 'Compacto' }, { value: '14px', label: 'Suave' }, { value: '24px', label: 'Redondeado' }, { value: '9999px', label: 'Píldora' }]} />
-          <div className="rounded-xl border border-gray-200 p-4" style={{ backgroundColor: form.backgroundColor, color: form.textColor }}>
-            <p className="text-xs font-semibold uppercase tracking-wide opacity-60">Vista previa</p>
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <div><p className="font-semibold">{form.displayName || 'Nombre de la experiencia'}</p><p className="mt-1 text-xs opacity-65">Así se sentirán los botones y el color principal.</p></div>
-              <span className="rounded-lg px-3 py-2 text-xs font-semibold text-white" style={{ backgroundColor: form.primaryColor, borderRadius: form.buttonRadius }}>Explorar</span>
+            <Input label="Frase corta (opcional)" value={form.tagline} maxLength={80} onChange={(event) => setField('tagline', event.target.value)} placeholder="Ej. Cocina japonesa · Robata" hint="Se muestra en mayúsculas pequeñas sobre el nombre." />
+            <Textarea label="Descripción breve (opcional)" value={form.description} onChange={(event) => setField('description', event.target.value)} placeholder="Ej. Rolls de autor, nigiris y ramen al estilo Tokio." rows={3} />
+          </section>
+
+          <section className="space-y-4 border-t border-gray-100 pt-5">
+            <ImageUploadField
+              id="category-experience-logo"
+              label="Logo (opcional)"
+              assetKind="store_logo"
+              previewUrl={pendingLogoPreview ?? form.logoUrl}
+              onFileSelect={handleLogoSelect}
+              onClear={() => {
+                setPendingLogoFile(null);
+                setPendingLogoPreview(null);
+                setField('logoUrl', null);
+              }}
+              uploading={saving && Boolean(pendingLogoFile)}
+              hint="Si lo dejas vacío, se usará el logo general de la empresa."
+              aspectClassName="h-24 w-24 rounded-2xl"
+            />
+            <ImageUploadField
+              id="category-experience-cover"
+              label="Foto de portada (opcional)"
+              assetKind="store_hero_background"
+              previewUrl={pendingCoverPreview ?? form.coverImageUrl}
+              onFileSelect={handleCoverSelect}
+              onClear={() => {
+                setPendingCoverFile(null);
+                setPendingCoverPreview(null);
+                setField('coverImageUrl', null);
+              }}
+              uploading={saving && Boolean(pendingCoverFile)}
+              hint="Se usa arriba del catálogo y en la portada de selección. Mantén el plato o ambiente principal al centro de la foto."
+              aspectClassName="h-28 w-full max-w-md rounded-2xl"
+            />
+          </section>
+
+          <section className="border-t border-gray-100 pt-5">
+            <ExperienceAmbienceFields
+              primaryColor={isHexColor(form.primaryColor) ? form.primaryColor : '#4f46e5'}
+              accentColor={isHexColor(form.accentColor) ? form.accentColor : '#7c3aed'}
+              secondaryColor={isHexColor(form.secondaryColor) ? form.secondaryColor : '#eef2ff'}
+              backgroundColor={isHexColor(form.backgroundColor) ? form.backgroundColor : '#ffffff'}
+              themeMode={form.themeMode}
+              backgroundStyle={form.backgroundStyle}
+              backgroundPattern={form.backgroundPattern}
+              backgroundIntensity={form.backgroundIntensity}
+              headingFont={form.headingFont}
+              onPresetApply={applyPreset}
+              onBackgroundStyleChange={(value) => setField('backgroundStyle', value)}
+              onBackgroundPatternChange={(value) => setField('backgroundPattern', value)}
+              onBackgroundIntensityChange={(value) => setField('backgroundIntensity', value)}
+              onHeadingFontChange={(value) => setField('headingFont', value)}
+              imageField={(
+                <ImageUploadField
+                  id="category-experience-background"
+                  label="Imagen de fondo"
+                  assetKind="store_hero_background"
+                  previewUrl={pendingBackgroundPreview ?? form.backgroundImageUrl}
+                  onFileSelect={handleBackgroundSelect}
+                  onClear={() => {
+                    setPendingBackgroundFile(null);
+                    setPendingBackgroundPreview(null);
+                    setField('backgroundImageUrl', null);
+                  }}
+                  uploading={saving && Boolean(pendingBackgroundFile)}
+                  hint="Texturas funcionan mejor que fotos con mucho detalle: madera, mármol, pizarra, lino. Se suaviza con el color de fondo para que todo se lea bien."
+                  aspectClassName="h-28 w-full max-w-md rounded-2xl"
+                />
+              )}
+            />
+          </section>
+
+          <section className="space-y-4 border-t border-gray-100 pt-5">
+            <Select label="Contraste del tema" value={form.themeMode} onChange={(event) => setField('themeMode', event.target.value as ThemeMode)} options={[{ value: 'light', label: 'Claro' }, { value: 'dark', label: 'Oscuro' }]} hint="Afecta la lectura del encabezado, superficies y controles." />
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">Paleta visual</h3>
+              <p className="mt-1 text-xs text-gray-500">Usa colores hexadecimales de seis dígitos.</p>
+              <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                {([
+                  ['primaryColor', 'Color principal', 'Botones, enlaces y acciones'],
+                  ['secondaryColor', 'Color secundario', 'Superficies y fondos suaves'],
+                  ['accentColor', 'Color de acento', 'Frase corta y destacados'],
+                  ['backgroundColor', 'Color de fondo', 'Base del fondo de la página'],
+                  ['textColor', 'Color del texto', 'Títulos y contenido principal'],
+                ] as const).map(([field, label, hint]) => (
+                  <div key={field} className="flex items-end gap-2">
+                    <Input label={label} value={form[field]} onChange={(event) => setField(field, event.target.value)} hint={hint} />
+                    <input aria-label={`Selector ${label}`} type="color" value={isHexColor(form[field]) ? form[field] : '#000000'} onChange={(event) => setField(field, event.target.value)} className="mb-1 h-10 w-12 cursor-pointer rounded-lg border border-gray-300 bg-white p-1" />
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+            <Select label="Radio de botones" value={form.buttonRadius} onChange={(event) => setField('buttonRadius', event.target.value)} options={[{ value: '8px', label: 'Compacto' }, { value: '14px', label: 'Suave' }, { value: '24px', label: 'Redondeado' }, { value: '9999px', label: 'Píldora' }]} />
+          </section>
+
+          <section className="border-t border-gray-100 pt-5">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Vista previa</p>
+            <ExperiencePreview
+              values={{
+                ...form,
+                logoUrl: pendingLogoPreview ?? form.logoUrl,
+                backgroundImageUrl: pendingBackgroundPreview ?? form.backgroundImageUrl,
+              }}
+            />
+          </section>
         </div>
       </Modal>
     </AdminPanelShell>

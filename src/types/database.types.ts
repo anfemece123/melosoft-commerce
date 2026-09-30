@@ -2746,6 +2746,7 @@ export interface Database {
           can_use_carta: boolean;
           can_use_customer_book: boolean;
           can_use_customer_capture: boolean;
+          whatsapp_inquiry_mode: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -2766,6 +2767,7 @@ export interface Database {
           can_use_carta?: boolean;
           can_use_customer_book?: boolean;
           can_use_customer_capture?: boolean;
+          whatsapp_inquiry_mode?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -2786,6 +2788,7 @@ export interface Database {
           can_use_carta?: boolean;
           can_use_customer_book?: boolean;
           can_use_customer_capture?: boolean;
+          whatsapp_inquiry_mode?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -2808,6 +2811,12 @@ export interface Database {
           background_color: string;
           text_color: string;
           button_radius: string;
+          background_style: string;
+          background_pattern: string;
+          background_image_url: string | null;
+          background_intensity: number;
+          heading_font: string;
+          tagline: string | null;
           is_active: boolean;
           sort_order: number;
           created_at: string;
@@ -2829,6 +2838,12 @@ export interface Database {
           background_color?: string;
           text_color?: string;
           button_radius?: string;
+          background_style?: string;
+          background_pattern?: string;
+          background_image_url?: string | null;
+          background_intensity?: number;
+          heading_font?: string;
+          tagline?: string | null;
           is_active?: boolean;
           sort_order?: number;
           created_at?: string;
@@ -2850,8 +2865,44 @@ export interface Database {
           background_color?: string;
           text_color?: string;
           button_radius?: string;
+          background_style?: string;
+          background_pattern?: string;
+          background_image_url?: string | null;
+          background_intensity?: number;
+          heading_font?: string;
+          tagline?: string | null;
           is_active?: boolean;
           sort_order?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      store_experience_gateways: {
+        Row: {
+          store_id: string;
+          is_enabled: boolean;
+          placement: string;
+          title: string | null;
+          subtitle: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          store_id: string;
+          is_enabled?: boolean;
+          placement?: string;
+          title?: string | null;
+          subtitle?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          store_id?: string;
+          is_enabled?: boolean;
+          placement?: string;
+          title?: string | null;
+          subtitle?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -3797,6 +3848,7 @@ export interface Database {
           whatsapp_button_layout: string;
           carta_enabled: boolean;
           carta_listed: boolean;
+          whatsapp_inquiry_mode: boolean;
           partner_codes_enabled: boolean;
           customer_capture_enabled: boolean;
           customer_capture_title: string | null;
@@ -3970,6 +4022,7 @@ export interface Database {
           category_slug: string;
           display_name: string;
           description: string | null;
+          tagline: string | null;
           logo_url: string | null;
           cover_image_url: string | null;
           theme_mode: string;
@@ -3979,7 +4032,24 @@ export interface Database {
           background_color: string;
           text_color: string;
           button_radius: string;
+          background_style: string;
+          background_pattern: string;
+          background_image_url: string | null;
+          background_intensity: number;
+          heading_font: string;
           sort_order: number;
+        };
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
+      public_store_experience_gateways: {
+        Row: {
+          store_id: string;
+          store_slug: string;
+          placement: string;
+          title: string | null;
+          subtitle: string | null;
         };
         Insert: never;
         Update: never;
@@ -4692,6 +4762,9 @@ export type StoreLimitRowUpdate = Database['public']['Tables']['store_limits']['
 export type StoreCategoryExperienceRow = Database['public']['Tables']['store_category_experiences']['Row'];
 export type StoreCategoryExperienceRowInsert = Database['public']['Tables']['store_category_experiences']['Insert'];
 export type StoreCategoryExperienceRowUpdate = Database['public']['Tables']['store_category_experiences']['Update'];
+export type StoreExperienceGatewayRow = Database['public']['Tables']['store_experience_gateways']['Row'];
+export type StoreExperienceGatewayRowInsert = Database['public']['Tables']['store_experience_gateways']['Insert'];
+export type PublicStoreExperienceGatewayRow = Database['public']['Views']['public_store_experience_gateways']['Row'];
 export type SubscriptionPlanRow = Database['public']['Tables']['subscription_plans']['Row'];
 export type SubscriptionPlanRowInsert = Database['public']['Tables']['subscription_plans']['Insert'];
 export type SubscriptionPlanRowUpdate = Database['public']['Tables']['subscription_plans']['Update'];

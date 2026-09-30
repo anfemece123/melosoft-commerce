@@ -369,6 +369,26 @@ Arquitectura: panel en `https://commerce.melosoftapp.com`, storefront de cada em
 - `public/robots.txt` nuevo. `.env.example`/`src/lib/env.ts`: `VITE_PUBLIC_SITE_URL`/`VITE_STOREFRONT_ROOT_DOMAIN`/`VITE_PLATFORM_HOSTNAMES` documentadas con semántica explícita y valores `melosoftapp.com`.
 - Riesgo residual documentado (no resuelto en esta fase): las rutas `/admin/*` no están segregadas por host — un `platform_admin` que inicie sesión manualmente desde un subdominio de tienda técnicamente accede al panel ahí también (localStorage/sesión de Supabase son por origen, no se comparten solos). Mitigado puntualmente para WhatsApp Embedded Signup; no mitigado en general.
 
+### Experiencias multimarca (restaurantes 2 en 1) ✅
+
+Extiende el módulo Experiencias (`can_use_category_experiences`) para empresas con varias marcas en una tienda.
+
+- Migración 159: columnas `background_style` (solid/gradient/pattern/image), `background_pattern`, `background_image_url`, `background_intensity`, `heading_font`, `tagline` en `store_category_experiences`; tabla `store_experience_gateways` (portada de selección, 1 fila por empresa, RLS owner/admin + entitlement); vistas `public_store_category_experiences` (ampliada) y `public_store_experience_gateways`.
+- `src/lib/storefront/experienceAmbience.ts`: presets de tipografía (Google Fonts cargadas bajo demanda), patrones SVG, `buildExperienceBackdropStyle()` — única función que pinta el fondo (admin y público).
+- `src/lib/storefront/experiencePresets.ts`: 8 estilos listos para restaurantes.
+- `StorefrontTheme.canvas`: fondo de raíz de página (transparente si hay fondo decorativo); `--storefront-heading-font` + `[data-storefront-heading-font]` en `index.css`.
+- Público: `ExperienceBackdrop` (capa fija en `PublicLayout`), `ExperienceGateway` (portada dividida en `StoreHomePage`), `ExperienceIntro` + `ExperienceSwitcher` (en `StoreCatalogPage`, solo cuando la portada de selección está activa — la empresa "modo" no cambia).
+- Admin: `CategoryExperiencesPage` con `ExperienceGatewayCard`, `ExperienceAmbienceFields`, `ExperiencePreview`.
+
+### Catálogo con consulta por WhatsApp ✅
+
+Modo por empresa, activado solo por el Super Admin, para negocios sin precios fijos (p. ej. Velaire, perfumería).
+
+- Migración 160: `store_limits.whatsapp_inquiry_mode` (RLS: solo `platform_admin` escribe). Trigger BEFORE en `store_commerce_settings` fuerza `catalog_only` + solo WhatsApp (sin web orders, contraentrega ni pago en línea) mientras esté activo → `create_store_order_base` y `create-wompi-payment` rechazan pedidos/pagos también en servidor. Al desactivar no se restaura nada: la empresa queda en "Solo WhatsApp" y elige su forma de venta en Configuración. Expuesto como `whatsapp_inquiry_mode` al final de `public_store_pages`.
+- `src/lib/commerce/whatsappInquiry.ts` (mensaje y URL de consulta) + `useWhatsappInquiryMode()` (lee `PublicStoreBrandingContext`, sin request extra).
+- Público: `StorefrontProductCard` (sin precio/descuento/"Agotado" por stock; botón "Consultar precio"), `ProductLandingPage` (sin precio, stock ni carrito; CTA "Consultar precio por WhatsApp" con variante y enlace), catálogo sin orden/filtro por precio ni "En oferta", carrito oculto, `/cart`, `/checkout` y `/o/:offerSlug` redirigen al catálogo, ofertas ocultas en la portada, metadatos SEO/preview sin precio (`api/_lib/storefrontSeo.ts`).
+- Admin: interruptor con confirmación en `StoreDetailPage`; `src/features/stores/whatsappInquiryMode.ts` oculta Pedidos, Pagos, Ofertas y Partners (nav, accesos rápidos y URL directa para el equipo de la empresa); Configuración comercial y pestaña Pagos reemplazadas por aviso; `ProductFormPage` usa precio de referencia opcional (0 por defecto) sin descuentos.
+
 ---
 
 *Última actualización: 2026-07-21 (Fase 9 completada — dominios y subdominios definitivos)*

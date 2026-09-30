@@ -3,6 +3,8 @@ import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { Package, UtensilsCrossed, Search, AlertCircle, SlidersHorizontal, X } from 'lucide-react';
 import { StorefrontBreadcrumbs } from '@/components/public/storefront/StorefrontBreadcrumbs';
 import { CategoryExperienceBanner } from '@/components/public/storefront/CategoryExperienceBanner';
+import { ExperienceIntro } from '@/components/public/storefront/experiences/ExperienceIntro';
+import { ExperienceSwitcher } from '@/components/public/storefront/experiences/ExperienceSwitcher';
 import { CatalogFilterSidebar } from '@/components/public/catalog/CatalogFilterSidebar';
 import { CatalogFilterDrawer } from '@/components/public/catalog/CatalogFilterDrawer';
 import { SORT_OPTIONS, filtersFromUrl, filtersToUrl } from '@/components/public/catalog/catalogFilter.types';
@@ -28,6 +30,7 @@ import { usePublicStoreExperience } from '@/components/layout/PublicStoreExperie
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
 import { usePublicRouteReady } from '@/components/layout/PublicRouteReadyContext';
 import { useCart } from '@/lib/cart/cartContext';
+import { useWhatsappInquiryMode } from '@/lib/commerce/useWhatsappInquiryMode';
 import { useSelectedLocation } from '@/lib/locations/locationContext';
 import { notify } from '@/lib/notifications';
 import { getActivePrice } from '@/lib/pricing/pricing.utils';
@@ -99,7 +102,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { branding: storeBranding } = usePublicStoreBranding();
-  const { activeExperience } = usePublicStoreExperience();
+  const { activeExperience, experiences, gateway } = usePublicStoreExperience();
   const { setRouteReady } = usePublicRouteReady();
   const { addItem } = useCart();
   const { selectedLocation } = useSelectedLocation();
@@ -383,10 +386,18 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
 
   const catalogLabel = getCatalogLabel(commerceConfig);
   const productCardCtaLabel = getProductCardCtaLabel(commerceConfig);
-  const showCartButton = canUseWebOrders(commerceConfig);
+  const inquiry = useWhatsappInquiryMode();
+  const showCartButton = !inquiry.enabled && canUseWebOrders(commerceConfig);
+  const sortOptions = inquiry.enabled
+    ? SORT_OPTIONS.filter((opt) => opt.key !== 'price_asc' && opt.key !== 'price_desc')
+    : SORT_OPTIONS;
   const isMenu = store?.catalogType === 'menu';
   const currency = store?.currency ?? 'COP';
   const hasExperienceCover = Boolean(activeExperience?.coverImageUrl);
+  // Multi-brand companies (gateway enabled) get a full identity block per
+  // experience plus a switcher; single-brand "modes" keep the lighter header.
+  const showExperienceIntro = Boolean(gateway && activeExperience);
+  const hideCatalogTitle = hasExperienceCover || showExperienceIntro;
 
   // ── Derived data ─────────────────────────────────────────────
   // Unified facet list: real store facets, with any product variant option
@@ -675,7 +686,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
     );
   }
 
-  const bgColor = theme.background;
+  const bgColor = theme.canvas;
 
   return (
     <div
@@ -685,6 +696,19 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
       <div className={`${CATALOG_CONTAINER_CLASS} mx-auto px-4 py-6 sm:px-6 md:py-8 lg:px-8`}>
         {activeExperience?.coverImageUrl && (
           <CategoryExperienceBanner theme={theme} experience={activeExperience} />
+        )}
+
+        {showExperienceIntro && activeExperience && (
+          <ExperienceIntro theme={theme} experience={activeExperience} overlapsCover={hasExperienceCover} />
+        )}
+
+        {gateway && (
+          <ExperienceSwitcher
+            experiences={experiences}
+            activeExperience={activeExperience}
+            theme={theme}
+            storeSlug={storeSlug}
+          />
         )}
 
         {/* Breadcrumbs */}
@@ -709,17 +733,19 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              {!hasExperienceCover && (isMenu
+              {!hideCatalogTitle && (isMenu
                 ? <UtensilsCrossed className="w-5 h-5 shrink-0" style={{ color: theme.primary }} />
                 : <Package className="w-5 h-5 shrink-0" style={{ color: theme.primary }} />)}
-              <h1 className={hasExperienceCover ? 'sr-only' : 'text-xl font-bold'} style={{ color: theme.text }}>
-                {activeExperience?.displayName ?? selectedSubcategoryNode?.name ?? selectedCategoryNode?.name ?? catalogLabel}
-              </h1>
+              {!showExperienceIntro && (
+                <h1 className={hideCatalogTitle ? 'sr-only' : 'text-xl font-bold'} style={{ color: theme.text }}>
+                  {activeExperience?.displayName ?? selectedSubcategoryNode?.name ?? selectedCategoryNode?.name ?? catalogLabel}
+                </h1>
+              )}
             </div>
             {store?.storeName && (
               <p className="mt-0.5 text-sm" style={{ color: theme.mutedText }}>
                 {store.storeName}
-                {activeExperience?.description ? ` · ${activeExperience.description}` : null}
+                {activeExperience?.description && !showExperienceIntro ? ` · ${activeExperience.description}` : null}
                 {!catalogLoading && (
                   <span className="ml-1">
                     · {hasAnyFilter || hasActiveSearch
@@ -743,7 +769,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
                 color: theme.text,
               }}
             >
-              {SORT_OPTIONS.map((opt) => (
+              {sortOptions.map((opt) => (
                 <option key={opt.key} value={opt.key}>
                   {opt.label}
                 </option>
@@ -806,7 +832,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
               color: theme.text,
             }}
           >
-            {SORT_OPTIONS.map((opt) => (
+            {sortOptions.map((opt) => (
               <option key={opt.key} value={opt.key}>
                 {opt.label}
               </option>
@@ -959,6 +985,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
               facets={visibleFacets}
               priceRange={priceRange}
               currency={currency}
+              hidePricing={inquiry.enabled}
             />
           </div>
 
@@ -1085,6 +1112,7 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
         facets={visibleFacets}
         priceRange={priceRange}
         currency={currency}
+        hidePricing={inquiry.enabled}
         resultCount={hasAnyFilter || hasActiveSearch ? filteredAndSorted.length : totalProductCount}
       />
 

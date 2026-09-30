@@ -25,7 +25,9 @@ import { StorefrontMediaFrame } from '@/components/public/storefront/StorefrontM
 import { StorefrontRatingStars } from '@/components/public/storefront/StorefrontRatingStars';
 import { StorefrontHomeSkeleton } from '@/components/public/storefront/StorefrontSkeletons';
 import { StorefrontCampaignOffersSection } from '@/components/public/storefront/StorefrontCampaignOffersSection';
+import { StorefrontProductCard } from '@/components/public/storefront/StorefrontProductCard';
 import { HomeSectionRenderer } from '@/components/public/storefront/homeSections/HomeSectionRenderer';
+import { ExperienceGateway } from '@/components/public/storefront/experiences/ExperienceGateway';
 import { STOREFRONT_CONTAINER_CLASS } from '@/components/public/storefront/storefrontTheme';
 import { usePublicStorefrontTheme } from '@/lib/storefront/usePublicStorefrontTheme';
 import { usePublicStoreBranding } from '@/components/layout/PublicStoreBrandingContext';
@@ -53,6 +55,8 @@ import { useResolvedStoreSlug } from '@/lib/storefront/storefrontDomainContext';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 import { resolveHeroCtaHref } from '@/lib/storefront/heroCta';
 import { getVariantPriceRange } from '@/lib/products/productVariants.utils';
+import { buildCatalogItems } from '@/lib/storefront/catalogItems';
+import { useWhatsappInquiryMode } from '@/lib/commerce/useWhatsappInquiryMode';
 
 interface StoreHomeCachePayload {
   store: PublicStorePage | null;
@@ -80,9 +84,10 @@ export function StoreHomePage() {
 function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
   const location = useLocation();
   const { branding: storeBranding } = usePublicStoreBranding();
-  const { activeExperience, experiences } = usePublicStoreExperience();
+  const { activeExperience, experiences, gateway } = usePublicStoreExperience();
   const { setRouteReady } = usePublicRouteReady();
   const { addItem } = useCart();
+  const inquiry = useWhatsappInquiryMode();
   const { locations, selectedLocation } = useSelectedLocation();
   const cacheKey = `store-home:${storeSlug}`;
   const cachedPayload = useMemo(
@@ -223,7 +228,7 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
     );
   }
 
-  const bgColor = theme.background;
+  const bgColor = theme.canvas;
   const commerceConfig: PublicCommerceConfig = {
     catalogType: store.catalogType,
     commerceMode: store.commerceMode,
@@ -241,12 +246,26 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
   const catalogLabel = getCatalogLabel(commerceConfig);
   const productCardCtaLabel = getProductCardCtaLabel(commerceConfig);
   const noPurchaseMessage = getNoPurchaseMethodMessage(commerceConfig);
-  const showCartButton = canUseWebOrders(commerceConfig);
+  const showCartButton = !inquiry.enabled && canUseWebOrders(commerceConfig);
 
   const isMenu = store.catalogType === 'menu';
   const heroTitle = store.heroTitle?.trim() || store.slogan?.trim() || store.storeName;
   const heroDescription = store.heroSubtitle?.trim() || store.description?.trim() || null;
-  const hasHero = store.heroEnabled !== false;
+  const visibleGateway = gateway && !activeExperience ? gateway : null;
+  const gatewayIsPortada = visibleGateway?.placement === 'replace_hero';
+  const hasHero = store.heroEnabled !== false && !gatewayIsPortada;
+  const gatewayElement = visibleGateway ? (
+    <ExperienceGateway
+      gateway={visibleGateway}
+      experiences={experiences}
+      theme={theme}
+      storeSlug={storeSlug}
+      storeName={store.storeName}
+      storeLogoUrl={store.logoUrl}
+      isMenu={isMenu}
+      asPortada={gatewayIsPortada}
+    />
+  ) : null;
   const resolvedHeroSlides = heroSlides.length > 0
     ? heroSlides
     : [
@@ -328,6 +347,8 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
     <div style={{ backgroundColor: bgColor, color: theme.text, minHeight: '100vh', ...theme.cssVars }}>
       {/* Portada/Hero — always rendered from store_hero_slides / Store
           Settings, independent of the Home Builder. */}
+      {gatewayIsPortada ? gatewayElement : null}
+
       {hasHero ? (
         <StorefrontHero
           theme={theme}
@@ -345,6 +366,8 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
           slides={resolvedHeroSlides}
         />
       ) : null}
+
+      {!gatewayIsPortada ? gatewayElement : null}
 
       {hasDynamicSections ? (
         <div id="storefront-catalog">
@@ -420,7 +443,24 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
                 return (
                 <>
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
-                  {displayedProducts.map((product) => {
+                  {inquiry.enabled ? buildCatalogItems(displayedProducts).map((item) => (
+                    // Catálogo con consulta por WhatsApp: the shared card
+                    // already hides prices/stock and shows the inquiry CTA.
+                    <StorefrontProductCard
+                      key={item.id}
+                      item={item}
+                      theme={theme}
+                      storeSlug={storeSlug}
+                      currency={store.currency}
+                      isMenu={isMenu}
+                      isUnavailable={unavailableProductIds.has(item.product.productId) || item.isOutOfStock}
+                      showCartButton={false}
+                      productCardCtaLabel={productCardCtaLabel}
+                      categoryLabel={item.product.categoryName}
+                      linkState={{ fromStorefront: true, fromPath: `${location.pathname}${location.search}${location.hash}` }}
+                      onLinkClick={persistCurrentScrollPosition}
+                    />
+                  )) : displayedProducts.map((product) => {
                     const outOfStock = isOutOfStock(product);
                     const isUnavailable = unavailableProductIds.has(product.productId) || outOfStock;
                     return (
@@ -588,7 +628,7 @@ function StoreHomeContent({ storeSlug }: { storeSlug: string }) {
       )}
 
       <StorefrontCampaignOffersSection
-        campaigns={campaigns}
+        campaigns={inquiry.enabled ? [] : campaigns}
         theme={theme}
         storeSlug={storeSlug}
         currency={store.currency}

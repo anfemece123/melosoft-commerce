@@ -22,6 +22,12 @@ const experience: PublicCategoryExperience = {
   backgroundColor: '#052e16',
   textColor: '#f0fdf4',
   buttonRadius: '14px',
+  tagline: null,
+  backgroundStyle: 'solid',
+  backgroundPattern: 'dots',
+  backgroundImageUrl: null,
+  backgroundIntensity: 50,
+  headingFont: 'default',
   sortOrder: 0,
 };
 

@@ -207,6 +207,7 @@ export function mapPublicStorePageRowToPublicStorePage(row: PublicStorePageRow):
     cartaEnabled: row.carta_enabled,
     cartaListed: row.carta_listed,
     partnerCodesEnabled: row.partner_codes_enabled,
+    whatsappInquiryMode: row.whatsapp_inquiry_mode ?? false,
     customerCaptureEnabled: row.customer_capture_enabled,
     customerCaptureTitle: row.customer_capture_title,
     customerCaptureDescription: row.customer_capture_description,
@@ -451,6 +452,7 @@ export function mapStoreLimitRowToStoreLimit(row: StoreLimitRow): StoreLimit {
     canUseCarta: row.can_use_carta,
     canUseCustomerBook: row.can_use_customer_book,
     canUseCustomerCapture: row.can_use_customer_capture,
+    whatsappInquiryMode: row.whatsapp_inquiry_mode ?? false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -472,6 +474,7 @@ export function mapStoreLimitUpdateToRow(data: StoreLimitUpdate): StoreLimitRowU
   if (data.canUseCarta !== undefined) row.can_use_carta = data.canUseCarta;
   if (data.canUseCustomerBook !== undefined) row.can_use_customer_book = data.canUseCustomerBook;
   if (data.canUseCustomerCapture !== undefined) row.can_use_customer_capture = data.canUseCustomerCapture;
+  if (data.whatsappInquiryMode !== undefined) row.whatsapp_inquiry_mode = data.whatsappInquiryMode;
   return row;
 }
 

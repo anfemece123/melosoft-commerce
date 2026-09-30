@@ -25,6 +25,9 @@ export interface StoreSeoRow {
   carta_enabled: boolean;
   primary_color: string | null;
   background_color: string | null;
+  /** Catálogo con consulta por WhatsApp — never publish a price (it's 0 or
+   * outdated) nor a stock status, both are confirmed in the chat. */
+  whatsapp_inquiry_mode?: boolean | null;
 }
 
 export interface ProductSeoRow {
@@ -322,7 +325,7 @@ function productPrice(row: ProductSeoRow): number {
 async function getStore(storeSlug: string): Promise<StoreSeoRow | null> {
   const rows = await selectRows<StoreSeoRow>(
     'public_store_pages',
-    'store_id,store_slug,store_name,slogan,description,logo_url,favicon_url,hero_image_url,hero_background_image_url,country,city,currency,carta_enabled,primary_color,background_color',
+    'store_id,store_slug,store_name,slogan,description,logo_url,favicon_url,hero_image_url,hero_background_image_url,country,city,currency,carta_enabled,primary_color,background_color,whatsapp_inquiry_mode',
     { store_slug: storeSlug },
     { limit: 1 },
   );
@@ -429,8 +432,9 @@ export async function resolveSeoDocument(request: Request): Promise<SeoDocument 
     if (!pageSlug) return null;
     const product = await getProduct(storeSlug, pageSlug);
     if (!product) return null;
-    const price = productPrice(product);
-    const available = product.is_available && (!product.track_inventory || product.stock > 0);
+    const inquiryOnly = store.whatsapp_inquiry_mode === true;
+    const price = inquiryOnly ? null : productPrice(product);
+    const available = inquiryOnly ? null : product.is_available && (!product.track_inventory || product.stock > 0);
     const description = cleanText(product.short_description || product.description, `Conoce ${product.product_name} en ${store.store_name}.`);
     const imageUrl = absoluteUrl(product.main_image_url || product.logo_url || store.logo_url, getRequestOrigin(request));
     const title = `${product.product_name} | ${store.store_name}`;
@@ -461,14 +465,16 @@ export async function resolveSeoDocument(request: Request): Promise<SeoDocument 
         image: [imageUrl],
         category: product.category_name || undefined,
         brand: { '@type': 'Brand', name: store.store_name },
-        offers: {
-          '@type': 'Offer',
-          url: canonicalUrl,
-          priceCurrency: store.currency,
-          price: price.toFixed(2),
-          availability: available ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-          itemCondition: 'https://schema.org/NewCondition',
-        },
+        ...(price === null ? {} : {
+          offers: {
+            '@type': 'Offer',
+            url: canonicalUrl,
+            priceCurrency: store.currency,
+            price: price.toFixed(2),
+            availability: available ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+            itemCondition: 'https://schema.org/NewCondition',
+          },
+        }),
       }],
     };
   }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { NavLink, Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Store,
@@ -32,6 +32,7 @@ import { logout } from '@/features/auth/authSlice';
 import { authService } from '@/features/auth/authService';
 import { selectAuthProfile, selectIsPlatformAdmin } from '@/features/auth/auth.selectors';
 import { selectCurrentBusinessLimits, selectCurrentStore, selectMyMemberships } from '@/features/stores/stores.selectors';
+import { isAdminPathHiddenByInquiryMode } from '@/features/stores/whatsappInquiryMode';
 import { PendingOrdersBadgeProvider } from '@/features/orders/PendingOrdersBadgeContext';
 import { usePendingOrdersBadge } from '@/features/orders/usePendingOrdersBadge';
 import { domainsService } from '@/features/domains/domainsService';
@@ -125,7 +126,7 @@ function AdminLayoutContent() {
     ...(currentLimits?.canUseAccounting ? [{ label: 'Contabilidad', to: `/admin/stores/${storeId}/accounting`, icon: <Calculator className="w-5 h-5" /> }] : []),
     ...(currentLimits?.canUseCategoryExperiences ? [{ label: 'Experiencias', to: `/admin/stores/${storeId}/experiences`, icon: <Sparkles className="w-5 h-5" /> }] : []),
     { label: 'WhatsApp', to: `/admin/stores/${storeId}/whatsapp`, icon: <MessageCircle className="w-5 h-5" /> },
-  ] : [];
+  ].filter((item) => !isAdminPathHiddenByInquiryMode(currentLimits, item.to)) : [];
 
   const navItems = isAdmin ? platformAdminNav : ownerNav;
 
@@ -348,7 +349,13 @@ function AdminLayoutContent() {
 
         {/* Page content */}
         <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 lg:p-8">
-          <Outlet />
+          {/* Catálogo con consulta por WhatsApp hides orders/payments/offers/
+              partners from the company's own team (the nav already omits
+              them); a stale bookmark lands on the store home instead. The
+              platform admin keeps access to inspect existing data. */}
+          {!isAdmin && storeId && isAdminPathHiddenByInquiryMode(currentLimits, pathname)
+            ? <Navigate to={`/admin/stores/${storeId}`} replace />
+            : <Outlet />}
         </main>
       </div>
     </div>

@@ -148,7 +148,7 @@ function PaymentResultContent({ storeSlug }: { storeSlug: string }) {
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-4 py-16"
-      style={{ backgroundColor: theme.background, color: theme.text, ...theme.cssVars }}
+      style={{ backgroundColor: theme.canvas, color: theme.text, ...theme.cssVars }}
     >
       <div className="w-full max-w-md space-y-6">
 

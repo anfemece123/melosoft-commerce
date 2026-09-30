@@ -15,6 +15,8 @@ export interface CatalogFilterSidebarProps {
   facets: PublicStoreFacet[];
   priceRange: { min: number; max: number };
   currency: string;
+  /** Catálogo con consulta por WhatsApp: no price range nor "En oferta". */
+  hidePricing?: boolean;
   className?: string;
 }
 
@@ -130,6 +132,7 @@ export function CatalogFilterSidebar({
   facets,
   priceRange,
   currency,
+  hidePricing = false,
   className = '',
 }: CatalogFilterSidebarProps) {
   const [priceMinInput, setPriceMinInput] = useState(filters.priceMin?.toString() ?? '');
@@ -267,7 +270,7 @@ export function CatalogFilterSidebar({
       })}
 
       {/* Price range */}
-      {priceRange.max > 0 && (
+      {!hidePricing && priceRange.max > 0 && (
         <FilterSection title="Precio" theme={theme} defaultOpen={false}>
           <div className="space-y-2">
             <div className="flex gap-2">
@@ -305,7 +308,9 @@ export function CatalogFilterSidebar({
       {/* Más filtros */}
       <FilterSection title="Más filtros" theme={theme} defaultOpen={false}>
         <CheckboxItem label="Destacados" checked={filters.onlyFeatured} theme={theme} onClick={() => set({ onlyFeatured: !filters.onlyFeatured })} />
-        <CheckboxItem label="En oferta" checked={filters.onlyOnSale} theme={theme} onClick={() => set({ onlyOnSale: !filters.onlyOnSale })} />
+        {!hidePricing && (
+          <CheckboxItem label="En oferta" checked={filters.onlyOnSale} theme={theme} onClick={() => set({ onlyOnSale: !filters.onlyOnSale })} />
+        )}
       </FilterSection>
     </aside>
   );

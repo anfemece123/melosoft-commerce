@@ -85,6 +85,25 @@ describe('storefront SEO resolver', () => {
     });
   });
 
+  it('never publishes price or stock for a WhatsApp inquiry catalog', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('/rpc/resolve_store_domain')) return json([]);
+      if (url.pathname.endsWith('/public_store_pages')) return json([{ ...storeRow, whatsapp_inquiry_mode: true }]);
+      if (url.pathname.endsWith('/public_product_pages')) return json([productRow]);
+      throw new Error(`Unexpected request: ${url}`);
+    }));
+
+    const request = new Request(
+      'https://commerce.melosoftapp.com/api/storefront-preview?storeSlug=cafe-central&routePath=/p/cafe-especial',
+    );
+    const document = await resolveSeoDocument(request);
+
+    expect(document?.price).toBeNull();
+    expect(document?.available).toBeNull();
+    expect(document?.structuredData[0]).not.toHaveProperty('offers');
+  });
+
   it('builds branded metadata and an OG card for the main store link', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));

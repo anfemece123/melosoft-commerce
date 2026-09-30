@@ -181,6 +181,8 @@ export interface StoreLimit {
   canUseCarta: boolean;
   canUseCustomerBook: boolean;
   canUseCustomerCapture: boolean;
+  /** Catálogo sin precios ni carrito; cada producto se consulta por WhatsApp. */
+  whatsappInquiryMode: boolean;
   createdAt: string;
   updatedAt: string;
 }

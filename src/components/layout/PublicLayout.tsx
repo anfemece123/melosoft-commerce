@@ -6,7 +6,6 @@ import { StorefrontHeader } from '@/components/public/storefront/StorefrontHeade
 import { StorefrontPageLoader } from '@/components/public/storefront/StorefrontPageLoader';
 import { WhatsappFloatingButton } from '@/components/public/storefront/WhatsappFloatingButton';
 import { CartaFloatingButton } from '@/components/public/storefront/CartaFloatingButton';
-import { buildStorefrontTheme } from '@/components/public/storefront/storefrontTheme';
 import { storesService } from '@/features/stores/storesService';
 import { categoriesService, buildCategoryTree } from '@/features/categories/categoriesService';
 import { collectionsService } from '@/features/collections/collectionsService';
@@ -34,6 +33,10 @@ import { domainsService } from '@/features/domains/domainsService';
 import { buildWhatsAppContactUrl } from '@/lib/whatsapp/whatsappUrl';
 import { categoryExperiencesService } from '@/features/categoryExperiences/categoryExperiencesService';
 import { PublicStoreExperienceProvider } from './PublicStoreExperienceContext';
+import { ExperienceBackdrop } from '@/components/public/storefront/experiences/ExperienceBackdrop';
+import { buildThemeWithExperience } from '@/lib/storefront/usePublicStorefrontTheme';
+import { useExperienceHeadingFont } from '@/lib/storefront/experienceAmbience';
+import type { PublicExperienceGateway } from '@/types/common.types';
 
 export function PublicLayout() {
   const location = useLocation();
@@ -155,6 +158,7 @@ function PublicStoreShell({
   const [routeReady, setRouteReady] = useState(false);
   const [catalogMeta, setCatalogMeta] = useState<CatalogMeta | null>(null);
   const [experiences, setExperiences] = useState<Awaited<ReturnType<typeof categoryExperiencesService.getPublicExperiences>>>([]);
+  const [gatewaySettings, setGatewaySettings] = useState<PublicExperienceGateway | null>(null);
   const routeKey = `${location.pathname}${location.search}${location.hash}`;
   const pendingScrollModeRef = useRef<'restore' | 'top' | 'catalog-products'>('top');
   const previousRouteRef = useRef({ pathname: location.pathname, search: location.search, routeKey });
@@ -207,19 +211,15 @@ function PublicStoreShell({
   );
   const publicStoreName = activeExperience?.displayName?.trim() || branding?.storeName || '';
   const publicStoreLogoUrl = activeExperience?.logoUrl ?? branding?.logoUrl ?? null;
-  const theme = buildStorefrontTheme({
-    mode: activeExperience?.themeMode ?? branding?.themeMode,
-    primaryColor: activeExperience?.primaryColor ?? branding?.primaryColor,
-    secondaryColor: activeExperience?.secondaryColor ?? branding?.secondaryColor,
-    accentColor: activeExperience?.accentColor ?? branding?.accentColor,
-    backgroundColor: activeExperience?.backgroundColor ?? branding?.backgroundColor,
-    textColor: activeExperience?.textColor ?? branding?.textColor,
-    buttonRadius: activeExperience?.buttonRadius ?? branding?.buttonRadius,
-  });
+  const theme = buildThemeWithExperience(branding, activeExperience);
+  useExperienceHeadingFont(activeExperience?.headingFont);
+  // The gateway only makes sense with something to choose between.
+  const gateway = experiences.length >= 2 ? gatewaySettings : null;
   const hasHeroRoute = Boolean(matchPath('/s/:storeSlug', location.pathname)) ||
     (isStorefrontHostnameMode(domainMode) && location.pathname === '/');
-  const hasHero = hasHeroRoute && branding?.heroEnabled !== false;
-  const showCart = canUseWebOrders(commerceConfig);
+  const gatewayIsPortada = hasHeroRoute && !activeExperience && gateway?.placement === 'replace_hero';
+  const hasHero = hasHeroRoute && branding?.heroEnabled !== false && !gatewayIsPortada;
+  const showCart = !branding?.whatsappInquiryMode && canUseWebOrders(commerceConfig);
   const whatsappHref = branding?.whatsappNumber
     ? buildWhatsAppContactUrl(
         branding.whatsappNumber,
@@ -246,6 +246,13 @@ function PublicStoreShell({
       })
       .catch(() => {
         if (!cancelled) setExperiences([]);
+      });
+    void categoryExperiencesService.getPublicGateway(storeSlug)
+      .then((loadedGateway) => {
+        if (!cancelled) setGatewaySettings(loadedGateway);
+      })
+      .catch(() => {
+        if (!cancelled) setGatewaySettings(null);
       });
 
     // Categories and collections make the header useful immediately. A
@@ -424,9 +431,14 @@ function PublicStoreShell({
   }, [location.state, routeKey, routeReady]);
 
   return (
-    <PublicStoreExperienceProvider value={{ experiences, activeExperience }}>
+    <PublicStoreExperienceProvider value={{ experiences, activeExperience, gateway }}>
       <PublicRouteReadyProvider value={{ setRouteReady }}>
-        <div className="min-h-screen" style={{ backgroundColor: theme.background }}>
+        <div
+          className="relative isolate min-h-screen transition-colors duration-700"
+          data-storefront-heading-font={theme.headingFontFamily ? '' : undefined}
+          style={{ backgroundColor: theme.background, ...theme.cssVars }}
+        >
+        <ExperienceBackdrop experience={activeExperience} />
         {branding ? (
           <StorefrontHeader
             key={routeKey}

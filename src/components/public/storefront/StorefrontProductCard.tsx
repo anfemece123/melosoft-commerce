@@ -12,6 +12,13 @@ import { formatCurrency } from '@/utils/formatCurrency';
 import { hasActiveDiscount, getActivePrice, calculateDiscountPercentage } from '@/lib/pricing/pricing.utils';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 import { isLikelyPngAsset } from '@/lib/images/imageFormat';
+import { useWhatsappInquiryMode } from '@/lib/commerce/useWhatsappInquiryMode';
+import {
+  WHATSAPP_INQUIRY_CTA_LABEL,
+  buildAbsoluteProductUrl,
+  buildProductInquiryUrl,
+  openWhatsappInquiry,
+} from '@/lib/commerce/whatsappInquiry';
 
 interface StorefrontProductCardProps {
   item: CatalogItem;
@@ -77,12 +84,34 @@ export function StorefrontProductCard({
   // before, so nothing changes visually for it.
   const hasHoverSwap = Boolean(item.imageUrl) && Boolean(item.secondImageUrl) && item.secondImageUrl !== item.imageUrl;
 
+  // Catálogo con consulta por WhatsApp: no prices, no cart, and stock is
+  // confirmed in the chat — a card is only unavailable when the owner
+  // switched the product off or it isn't offered at the selected sede,
+  // never merely because an untracked stock is 0.
+  const inquiry = useWhatsappInquiryMode();
+  const isStockOnlyUnavailable = item.isOutOfStock && product.isAvailable;
+  const cardUnavailable = inquiry.enabled ? isUnavailable && !isStockOnlyUnavailable : isUnavailable;
+  const inquiryHref = inquiry.enabled
+    ? buildProductInquiryUrl(inquiry.whatsappNumber, {
+        storeName: inquiry.storeName,
+        productName: item.displayName,
+        productUrl: buildAbsoluteProductUrl(storeSlug, product.productSlug),
+      })
+    : null;
+
+  function handleInquiryClick(event: MouseEvent<HTMLElement>) {
+    // The whole card is a <Link>; the WhatsApp button must not navigate.
+    event.preventDefault();
+    event.stopPropagation();
+    if (inquiryHref) openWhatsappInquiry(inquiryHref);
+  }
+
   return (
     <Link
       to={cardHref}
       state={linkState}
       onClick={onLinkClick}
-      className={`group flex h-full flex-col overflow-hidden rounded-2xl border border-transparent transition-all duration-200 hover:border-[var(--sf-card-border)] hover:shadow-md ${isUnavailable ? 'opacity-60' : ''}`}
+      className={`group flex h-full flex-col overflow-hidden rounded-2xl border border-transparent transition-all duration-200 hover:border-[var(--sf-card-border)] hover:shadow-md ${cardUnavailable ? 'opacity-60' : ''}`}
       style={{ '--sf-card-border': theme.border } as CSSProperties}
     >
       <div className="relative">
@@ -124,14 +153,14 @@ export function StorefrontProductCard({
             }
           />
         )}
-        {isUnavailable && (
+        {cardUnavailable && (
           <div className="absolute inset-0 flex items-end pb-2 px-2">
             <span className="text-xs font-medium bg-black/60 text-white rounded-full px-2 py-0.5">
               {item.isOutOfStock && isMenu ? 'Agotado por el momento' : 'No disponible'}
             </span>
           </div>
         )}
-        {!isUnavailable && !product.hasVariants && hasActiveDiscount(product.regularPrice, product.salePrice) && (
+        {!cardUnavailable && !inquiry.enabled && !product.hasVariants && hasActiveDiscount(product.regularPrice, product.salePrice) && (
           <div className="absolute left-3 top-3">
             <DiscountBadge
               percentage={calculateDiscountPercentage(product.regularPrice, product.salePrice!)}
@@ -164,6 +193,7 @@ export function StorefrontProductCard({
             <StorefrontRatingStars theme={theme} rating={product.reviewAverage} count={product.reviewCount} />
           </div>
         )}
+        {inquiry.enabled ? null : (
         <div className={`mt-2 min-h-[2rem] ${isLarge ? 'min-h-[2.25rem]' : ''}`}>
           {product.hasVariants ? (
             <span className={`font-bold tracking-tight ${isLarge ? 'text-lg' : 'text-base'}`} style={{ color: theme.text }}>
@@ -186,8 +216,9 @@ export function StorefrontProductCard({
             </span>
           )}
         </div>
+        )}
 
-        {isUnavailable ? (
+        {cardUnavailable ? (
           <div
             className={`mt-3 flex items-center justify-center rounded-lg border text-xs font-medium ${isLarge ? 'h-11' : 'h-10'}`}
             style={{ borderColor: theme.border, color: theme.mutedText }}
@@ -196,6 +227,28 @@ export function StorefrontProductCard({
               ? (isMenu ? 'Agotado por el momento' : 'Agotado')
               : 'No disponible en esta sede'}
           </div>
+        ) : inquiryHref ? (
+          <StorefrontActionButton
+            as="button"
+            type="button"
+            theme={theme}
+            variant="outline"
+            fullWidth
+            className={`mt-3 gap-2 text-sm font-semibold ${isLarge ? 'h-11' : 'h-10'}`}
+            onClick={handleInquiryClick}
+          >
+            {WHATSAPP_INQUIRY_CTA_LABEL}
+          </StorefrontActionButton>
+        ) : inquiry.enabled ? (
+          <StorefrontActionButton
+            as="div"
+            theme={theme}
+            variant="outline"
+            fullWidth
+            className={`mt-3 text-sm font-semibold ${isLarge ? 'h-11' : 'h-10'}`}
+          >
+            Ver detalle
+          </StorefrontActionButton>
         ) : product.hasVariants || product.hasOptions ? (
           <StorefrontActionButton
             as="div"

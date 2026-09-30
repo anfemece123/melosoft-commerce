@@ -45,6 +45,7 @@ import { IntegerInput } from '@/components/forms/IntegerInput';
 import { getProductFormLabels } from '@/lib/products/productFormLabels';
 import { useAppSelector } from '@/app/hooks';
 import { selectCurrentStore, selectCurrentCommerceSettings, selectCurrentBusinessLimits } from '@/features/stores/stores.selectors';
+import { isWhatsappInquiryMode } from '@/features/stores/whatsappInquiryMode';
 import { productOptionsService, type ProductOptionGroupDraft } from '@/features/products/productOptionsService';
 import { productsService } from '@/features/products/productsService';
 import { productVariantsService } from '@/features/products/productVariantsService';
@@ -266,6 +267,7 @@ export function ProductFormPage() {
   const currentCommerceSettings = useAppSelector(selectCurrentCommerceSettings);
   const currentLimits = useAppSelector(selectCurrentBusinessLimits);
   const canUseCarta = currentLimits?.canUseCarta === true;
+  const inquiryModeEnabled = isWhatsappInquiryMode(currentLimits);
   const isMenu = currentCommerceSettings?.catalogType === 'menu';
 
   const labels = getProductFormLabels({
@@ -348,7 +350,9 @@ export function ProductFormPage() {
       description: '',
       shortDescription: '',
       category: '',
-      regularPrice: '',
+      // Catálogo con consulta por WhatsApp never shows prices: start at 0 so
+      // the owner isn't forced to invent one.
+      regularPrice: inquiryModeEnabled ? 0 : '',
       discountMode: 'none',
       discountValue: '',
       salePrice: '',
@@ -741,6 +745,15 @@ export function ProductFormPage() {
     // including the full Formik object would rerun after every field update.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditing, isMenu]);
+
+  // Store limits can arrive after the form mounted with regularPrice: ''.
+  useEffect(() => {
+    if (!isEditing && inquiryModeEnabled && formik.values.regularPrice === '') {
+      void formik.setFieldValue('regularPrice', 0);
+    }
+    // Only the mode transition matters, not every form update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing, inquiryModeEnabled]);
 
   // Compute discount preview from current form values
   const discountPreview = useMemo(() => {
@@ -1383,14 +1396,16 @@ export function ProductFormPage() {
           <CardBody>
             <SectionHeader
               title={labels.pricingTitle}
-              description="Define el precio y una promoción si aplica."
+              description={inquiryModeEnabled
+                ? 'Tu tienda no muestra precios: los clientes los consultan por WhatsApp. Puedes guardar un precio de referencia interno (opcional).'
+                : 'Define el precio y una promoción si aplica.'}
             />
             <div className="space-y-4">
               {/* Regular price */}
               <MoneyInput
                 id="regularPrice"
                 name="regularPrice"
-                label={`${labels.priceLabel} *`}
+                label={inquiryModeEnabled ? `${labels.priceLabel} de referencia` : `${labels.priceLabel} *`}
                 currency={currency}
                 value={formik.values.regularPrice}
                 onChange={(val) => void formik.setFieldValue('regularPrice', val)}
@@ -1399,6 +1414,7 @@ export function ProductFormPage() {
               />
 
               {/* Discount mode selector */}
+              {!inquiryModeEnabled && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Descuento
@@ -1421,6 +1437,7 @@ export function ProductFormPage() {
                   ))}
                 </div>
               </div>
+              )}
 
               {/* Opción 1 — Precio promocional directo */}
               {formik.values.discountMode === 'direct_price' && (

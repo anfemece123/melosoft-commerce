@@ -245,6 +245,8 @@ export interface PublicStorePage {
   cartaEnabled: boolean;
   cartaListed: boolean;
   partnerCodesEnabled: boolean;
+  /** Catálogo con consulta por WhatsApp: sin precios, carrito ni checkout. */
+  whatsappInquiryMode: boolean;
   customerCaptureEnabled: boolean;
   customerCaptureTitle: string | null;
   customerCaptureDescription: string | null;
@@ -663,7 +665,27 @@ export interface PublicCategoryExperience {
   backgroundColor: string;
   textColor: string;
   buttonRadius: string;
+  tagline: string | null;
+  backgroundStyle: ExperienceBackgroundStyle;
+  backgroundPattern: ExperienceBackgroundPattern;
+  backgroundImageUrl: string | null;
+  /** 0-100 strength of the decorative background. */
+  backgroundIntensity: number;
+  headingFont: ExperienceHeadingFont;
   sortOrder: number;
+}
+
+export type ExperienceBackgroundStyle = 'solid' | 'gradient' | 'pattern' | 'image';
+export type ExperienceBackgroundPattern = 'dots' | 'grid' | 'tablecloth' | 'diagonal' | 'waves' | 'terrazzo';
+export type ExperienceHeadingFont = 'default' | 'elegant' | 'classic' | 'modern' | 'bold' | 'rustic' | 'handwritten';
+export type ExperienceGatewayPlacement = 'replace_hero' | 'below_hero';
+
+/** Public "choose your experience" gateway shown on the storefront home. */
+export interface PublicExperienceGateway {
+  storeId: string;
+  placement: ExperienceGatewayPlacement;
+  title: string | null;
+  subtitle: string | null;
 }
 
 /** Minimal product projection used to build storefront navigation. It keeps

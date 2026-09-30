@@ -17,6 +17,7 @@ interface CatalogFilterDrawerProps {
   facets: PublicStoreFacet[];
   priceRange: { min: number; max: number };
   currency: string;
+  hidePricing?: boolean;
   resultCount: number;
 }
 
@@ -32,6 +33,7 @@ export function CatalogFilterDrawer({
   facets,
   priceRange,
   currency,
+  hidePricing = false,
   resultCount,
 }: CatalogFilterDrawerProps) {
   if (!open) return null;
@@ -86,6 +88,7 @@ export function CatalogFilterDrawer({
             facets={facets}
             priceRange={priceRange}
             currency={currency}
+            hidePricing={hidePricing}
             className="w-full"
           />
         </div>

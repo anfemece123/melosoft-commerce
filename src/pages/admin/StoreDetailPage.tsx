@@ -14,7 +14,9 @@ import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { useAppDispatch, useAppSelector } from '@/app/hooks';
-import { setCurrentLimits, setCurrentMembers } from '@/features/stores/storesSlice';
+import { setCurrentCommerceSettings, setCurrentLimits, setCurrentMembers } from '@/features/stores/storesSlice';
+import { storeCommerceService } from '@/features/stores/storeCommerceService';
+import { isAdminPathHiddenByInquiryMode } from '@/features/stores/whatsappInquiryMode';
 import { selectCurrentStore, selectCurrentCommerceSettings, selectCurrentBusinessLimits, selectMyMemberships } from '@/features/stores/stores.selectors';
 import { selectAuthProfile } from '@/features/auth/auth.selectors';
 import { storesService } from '@/features/stores/storesService';
@@ -67,6 +69,8 @@ export function StoreDetailPage() {
   const [updatingCartaModule, setUpdatingCartaModule] = useState(false);
   const [updatingCustomerModule, setUpdatingCustomerModule] = useState(false);
   const [updatingCustomerCaptureModule, setUpdatingCustomerCaptureModule] = useState(false);
+  const [inquiryModalOpen, setInquiryModalOpen] = useState(false);
+  const [updatingInquiryMode, setUpdatingInquiryMode] = useState(false);
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [planModalOpen, setPlanModalOpen] = useState(false);
   const [selectedPlanKey, setSelectedPlanKey] = useState('basic');
@@ -223,6 +227,27 @@ export function StoreDetailPage() {
     }
   }
 
+  async function toggleWhatsappInquiryMode() {
+    if (!storeId || !currentLimits || !isAdmin) return;
+    const nextEnabled = !currentLimits.whatsappInquiryMode;
+    setUpdatingInquiryMode(true);
+    try {
+      const updated = await storesService.updateStoreLimits(storeId, { whatsappInquiryMode: nextEnabled });
+      dispatch(setCurrentLimits(updated));
+      // Activating rewrites the selling configuration server-side (trigger
+      // in migration 160) — refresh it so Configuración shows the real state.
+      dispatch(setCurrentCommerceSettings(await storeCommerceService.fetchStoreCommerceSettings(storeId)));
+      setInquiryModalOpen(false);
+      notify.success(nextEnabled
+        ? 'Catálogo con consulta por WhatsApp activado.'
+        : 'Catálogo con consulta por WhatsApp desactivado. La empresa ya puede elegir su forma de venta en Configuración.');
+    } catch (error) {
+      notify.fromError(error, 'No pudimos actualizar el modo de consulta por WhatsApp.');
+    } finally {
+      setUpdatingInquiryMode(false);
+    }
+  }
+
   function openPlanModal() {
     setSelectedPlanKey(currentLimits?.planKey ?? 'basic');
     setPlanModalOpen(true);
@@ -315,7 +340,9 @@ export function StoreDetailPage() {
     },
   ];
 
-  const visibleSections = sections.filter((s) => !s.requiresManage || canManage);
+  const visibleSections = sections.filter((s) =>
+    (!s.requiresManage || canManage) && !isAdminPathHiddenByInquiryMode(currentLimits, s.to)
+  );
 
   const statusLabel: Record<string, string> = {
     active: 'Activa',
@@ -374,8 +401,10 @@ export function StoreDetailPage() {
             icon: <Package className="w-4 h-4 text-violet-500" />,
             value: productStats ? String(productStats.total) : '—',
           },
-          { label: 'Ofertas activas', icon: <Tag className="w-4 h-4 text-amber-500" />, value: '—' },
-          { label: 'Pedidos', icon: <ShoppingCart className="w-4 h-4 text-green-500" />, value: '—' },
+          ...(currentLimits?.whatsappInquiryMode ? [] : [
+            { label: 'Ofertas activas', icon: <Tag className="w-4 h-4 text-amber-500" />, value: '—' },
+            { label: 'Pedidos', icon: <ShoppingCart className="w-4 h-4 text-green-500" />, value: '—' },
+          ]),
           {
             label: 'Plan',
             icon: <BarChart2 className="w-4 h-4 text-indigo-500" />,
@@ -483,7 +512,9 @@ export function StoreDetailPage() {
                 <div>
                   <p className="text-gray-400 text-xs uppercase tracking-wide">Modo de venta</p>
                   <p className="font-semibold text-gray-800">
-                    {COMMERCE_MODE_LABELS[currentCommerceSettings.commerceMode] ?? currentCommerceSettings.commerceMode}
+                    {currentLimits?.whatsappInquiryMode
+                      ? 'Consulta por WhatsApp'
+                      : COMMERCE_MODE_LABELS[currentCommerceSettings.commerceMode] ?? currentCommerceSettings.commerceMode}
                   </p>
                 </div>
                 <div>
@@ -567,6 +598,7 @@ export function StoreDetailPage() {
                   { label: 'Carta digital', value: currentLimits.canUseCarta ? 'Habilitado' : 'No' },
                   { label: 'Clientes y contactos', value: currentLimits.canUseCustomerBook ? 'Habilitado' : 'No' },
                   { label: 'Captación pública', value: currentLimits.canUseCustomerCapture ? 'Habilitada' : 'No' },
+                  { label: 'Consulta por WhatsApp', value: currentLimits.whatsappInquiryMode ? 'Activo' : 'No' },
                 ].map(({ label, value }) => (
                   <div key={label}>
                     <p className="text-gray-400 text-xs uppercase tracking-wide">{label}</p>
@@ -587,6 +619,21 @@ export function StoreDetailPage() {
                     onClick={openPlanModal}
                   >
                     Cambiar plan
+                  </Button>
+                </div>
+              )}
+              {isAdmin && (
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-gray-800">Catálogo con consulta por WhatsApp</p>
+                    <p className="mt-1 text-xs text-gray-500">Para empresas sin precios fijos: la tienda muestra el catálogo sin precios, sin carrito ni pagos, y cada producto tiene un botón que abre WhatsApp con un mensaje listo para consultar precio y disponibilidad.</p>
+                  </div>
+                  <Button
+                    variant={currentLimits.whatsappInquiryMode ? 'outline' : 'primary'}
+                    size="sm"
+                    onClick={() => setInquiryModalOpen(true)}
+                  >
+                    {currentLimits.whatsappInquiryMode ? 'Desactivar modo' : 'Activar modo'}
                   </Button>
                 </div>
               )}
@@ -690,6 +737,41 @@ export function StoreDetailPage() {
           </Card>
         </div>
       )}
+      <Modal
+        open={inquiryModalOpen}
+        title={currentLimits?.whatsappInquiryMode
+          ? 'Desactivar catálogo con consulta por WhatsApp'
+          : 'Activar catálogo con consulta por WhatsApp'}
+        description={store.name}
+        onClose={() => setInquiryModalOpen(false)}
+        footer={(
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setInquiryModalOpen(false)}>Cancelar</Button>
+            <Button isLoading={updatingInquiryMode} onClick={() => void toggleWhatsappInquiryMode()}>
+              {currentLimits?.whatsappInquiryMode ? 'Desactivar' : 'Activar'}
+            </Button>
+          </div>
+        )}
+      >
+        {currentLimits?.whatsappInquiryMode ? (
+          <ul className="space-y-1.5 text-sm leading-5 text-gray-600">
+            <li>• La tienda vuelve a mostrar precios y los productos vuelven a ser comprables.</li>
+            <li>• Pedidos, Pagos, Ofertas y Partners reaparecen en el panel de la empresa.</li>
+            <li>• La forma de venta queda en "Solo WhatsApp": la empresa debe elegir en Configuración si activa carrito, contraentrega o pago en línea.</li>
+            <li>• Revisa que los productos tengan precio antes de desactivar: hoy pueden estar en $0.</li>
+          </ul>
+        ) : (
+          <ul className="space-y-1.5 text-sm leading-5 text-gray-600">
+            <li>• La tienda pública deja de mostrar precios, descuentos, stock y el carrito de compras.</li>
+            <li>• Cada producto muestra "Consultar precio", que abre el WhatsApp de la empresa con el nombre del producto y su enlace.</li>
+            <li>• Se desactivan pedidos web, contraentrega y pago en línea (también en el servidor).</li>
+            <li>• Pedidos, Pagos, Ofertas y Partners se ocultan del panel de la empresa. Los datos existentes se conservan.</li>
+            {!store.whatsappNumber && (
+              <li className="font-medium text-amber-700">• Esta empresa no tiene número de WhatsApp configurado: agrégalo en Configuración o los botones no aparecerán.</li>
+            )}
+          </ul>
+        )}
+      </Modal>
       <Modal
         open={planModalOpen}
         title="Cambiar plan de la empresa"

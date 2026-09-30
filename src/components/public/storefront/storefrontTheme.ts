@@ -18,6 +18,11 @@ interface StorefrontThemeInput {
   backgroundColor?: string | null;
   textColor?: string | null;
   buttonRadius?: string | null;
+  /** True when a decorative layer (experience ambience) is painted behind
+   * the pages, so page roots must stay transparent to let it show. */
+  decoratedBackground?: boolean;
+  /** CSS font-family for headings, or null to keep the default font. */
+  headingFontFamily?: string | null;
 }
 
 export interface StorefrontTheme {
@@ -26,6 +31,10 @@ export interface StorefrontTheme {
   secondary: string;
   accent: string;
   background: string;
+  /** Background for page roots: `background`, or transparent when a
+   * decorative experience backdrop is painted behind them. */
+  canvas: string;
+  headingFontFamily: string | null;
   text: string;
   radius: string;
   surface: string;
@@ -93,6 +102,8 @@ export function buildStorefrontTheme(input: StorefrontThemeInput): StorefrontThe
     secondary,
     accent,
     background,
+    canvas: input.decoratedBackground ? 'transparent' : background,
+    headingFontFamily: input.headingFontFamily ?? null,
     text,
     radius,
     surface,
@@ -116,6 +127,7 @@ export function buildStorefrontTheme(input: StorefrontThemeInput): StorefrontThe
       '--storefront-soft-primary': softPrimary,
       '--storefront-soft-accent': softAccent,
       '--storefront-shadow': shadow,
+      ...(input.headingFontFamily ? { '--storefront-heading-font': input.headingFontFamily } : {}),
     } as CSSProperties,
   };
 }

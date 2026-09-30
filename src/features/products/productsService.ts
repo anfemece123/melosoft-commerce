@@ -582,6 +582,23 @@ export const productsService = {
     return productsService.updateProduct(id, { status: 'active', isAvailable: true });
   },
 
+  /** Bulk version of publishProduct for a store's drafts. Chunked so the
+   * `id=in.(…)` filter stays well under URL length limits. */
+  async publishProducts(ids: string[]): Promise<Product[]> {
+    const CHUNK_SIZE = 100;
+    const published: Product[] = [];
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+      const { data, error } = await supabase
+        .from('products')
+        .update(mapProductUpdateToRow({ status: 'active', isAvailable: true }))
+        .in('id', ids.slice(i, i + CHUNK_SIZE))
+        .select();
+      if (error) throw new Error(error.message);
+      published.push(...(data ?? []).map(mapProductRowToProduct));
+    }
+    return published;
+  },
+
   async toggleAvailability(id: string, isAvailable: boolean): Promise<Product> {
     return productsService.updateProduct(id, { isAvailable });
   },

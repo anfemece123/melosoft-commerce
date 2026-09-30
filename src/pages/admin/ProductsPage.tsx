@@ -58,6 +58,8 @@ export function ProductsPage() {
   const [confirmDeleteProduct, setConfirmDeleteProduct] = useState<Product | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [adjustingStockProduct, setAdjustingStockProduct] = useState<Product | null>(null);
+  const [confirmPublishDrafts, setConfirmPublishDrafts] = useState(false);
+  const [publishingDrafts, setPublishingDrafts] = useState(false);
 
   const isMenu = currentCommerceSettings?.catalogType === 'menu';
   const entityLabel = isMenu ? 'platos' : 'productos';
@@ -108,6 +110,23 @@ export function ProductsPage() {
     { key: 'unavailable', label: 'No disponibles', count: products.filter((p) => p.status === 'active' && !p.isAvailable).length },
     { key: 'archived', label: 'Archivados', count: products.filter((p) => p.status === 'archived').length },
   ];
+
+  const draftProducts = products.filter((p) => p.status === 'draft');
+
+  async function handlePublishAllDrafts() {
+    setPublishingDrafts(true);
+    try {
+      const published = await productsService.publishProducts(draftProducts.map((p) => p.id));
+      const byId = new Map(published.map((p) => [p.id, p]));
+      setProducts((prev) => prev.map((p) => byId.get(p.id) ?? p));
+      notify.success(`${published.length} ${published.length === 1 ? 'producto publicado' : 'productos publicados'}.`);
+    } catch (err) {
+      notify.fromError(err, 'No se pudieron publicar los borradores.');
+    } finally {
+      setPublishingDrafts(false);
+      setConfirmPublishDrafts(false);
+    }
+  }
 
   async function handlePublish(product: Product) {
     setActionLoading(product.id);
@@ -239,6 +258,21 @@ export function ProductsPage() {
           </div>
         </div>
       ) : null}
+
+      {draftProducts.length > 1 && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm text-amber-900">
+            Tienes <strong>{draftProducts.length}</strong> {entityLabel} en borrador que no se ven en la tienda.
+          </p>
+          <Button
+            size="sm"
+            onClick={() => setConfirmPublishDrafts(true)}
+            leftIcon={<CheckCircle className="w-3.5 h-3.5" />}
+          >
+            Publicar todos los borradores
+          </Button>
+        </div>
+      )}
 
       {/* Filter tabs */}
       <AdminPanelTabs
@@ -451,6 +485,17 @@ export function ProductsPage() {
           {nonArchived.length} de {currentLimits.maxProducts} {entityLabel} usados en el plan {currentLimits.planKey.toUpperCase()}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmPublishDrafts}
+        title="Publicar borradores"
+        message={`Se publicarán ${draftProducts.length} ${entityLabel} y quedarán visibles en la tienda pública. Revisa que tengan nombre, imagen y precio correctos (salvo en catálogo con consulta por WhatsApp, donde el precio no se muestra).`}
+        confirmLabel="Publicar todos"
+        variant="warning"
+        isLoading={publishingDrafts}
+        onConfirm={() => void handlePublishAllDrafts()}
+        onCancel={() => setConfirmPublishDrafts(false)}
+      />
 
       <ConfirmDialog
         open={confirmArchiveProduct !== null}

@@ -31,6 +31,7 @@ import {
 } from '@/features/stores/storeCommerceProfiles';
 import { setCurrentCommerceSettings, setCurrentStore, updateStore as updateStoreAction } from '@/features/stores/storesSlice';
 import { storeCommerceService } from '@/features/stores/storeCommerceService';
+import { isWhatsappInquiryMode } from '@/features/stores/whatsappInquiryMode';
 import { storesService } from '@/features/stores/storesService';
 import { notify } from '@/lib/notifications';
 import { storeCommerceSchema } from '@/schemas/storeCommerce.schema';
@@ -368,6 +369,7 @@ export function StoreSettingsPage() {
 
   const currentStore = useAppSelector((s) => s.stores.current);
   const currentCommerceSettings = useAppSelector((s) => s.stores.currentCommerceSettings);
+  const inquiryModeEnabled = useAppSelector((s) => isWhatsappInquiryMode(s.stores.currentLimits));
   const derivedBusinessCategory = mapBusinessTypeToBusinessCategory(currentStore?.businessType);
 
   useEffect(() => {
@@ -842,7 +844,8 @@ export function StoreSettingsPage() {
     { key: 'theme', label: 'Tema y apariencia' },
     { key: 'header', label: 'Header público' },
     { key: 'policies', label: 'Políticas' },
-    { key: 'payments', label: 'Pagos' },
+    // Online payments don't exist in a Catálogo con consulta por WhatsApp.
+    ...(inquiryModeEnabled ? [] : [{ key: 'payments' as const, label: 'Pagos' }]),
     { key: 'whatsapp', label: 'WhatsApp' },
   ];
 
@@ -1394,6 +1397,23 @@ export function StoreSettingsPage() {
                 </p>
               </div>
 
+              {inquiryModeEnabled ? (
+                <div className="flex items-start gap-3 rounded-2xl border border-green-200 bg-green-50 px-4 py-4">
+                  <MessageCircle className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+                  <div className="text-sm leading-relaxed text-green-900">
+                    <p className="font-semibold">Catálogo con consulta por WhatsApp</p>
+                    <p className="mt-1">
+                      Tu tienda muestra el catálogo sin precios ni carrito. Cada producto tiene un botón
+                      "Consultar precio" que abre tu WhatsApp con el nombre del producto y su enlace.
+                    </p>
+                    <p className="mt-2 text-green-800">
+                      Este modo lo administra Melosoft. Si necesitas vender con carrito o pagos en línea,
+                      contáctanos para cambiarlo.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+              <>
               {/* Block 2: Canal de pedido */}
               <div>
                 <p className="text-sm font-semibold text-gray-900 mb-0.5">Canal de pedido</p>
@@ -1662,6 +1682,9 @@ export function StoreSettingsPage() {
                 </p>
               </div>
 
+              </>
+              )}
+
               {typeof formik.status === 'string' && (
                 <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                   {formik.status}
@@ -1914,7 +1937,7 @@ export function StoreSettingsPage() {
         </Card>
         )}
 
-        {activeSection === 'payments' && (
+        {activeSection === 'payments' && !inquiryModeEnabled && (
         <Card>
           <CardBody>
             <div className="flex items-center gap-3 mb-4">

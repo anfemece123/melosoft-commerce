@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import { Link, Navigate, useLocation, useParams } from 'react-router-dom';
 import { MessageCircle, Tag, Copy, Package, UtensilsCrossed, AlertCircle, Clock } from 'lucide-react';
 import { PublicStoreLogo } from '@/components/public/storefront/PublicStoreLogo';
 import { StorefrontBackButton } from '@/components/public/storefront/StorefrontBackButton';
@@ -26,7 +26,17 @@ interface OfferPageCachePayload {
   offer: PublicOfferPage | null;
 }
 
+/** Offers carry a price and a countdown — neither exists in a
+ * Catálogo con consulta por WhatsApp, so the link lands on the catalog. */
 export function OfferLandingPage() {
+  const { branding } = usePublicStoreBranding();
+  if (branding?.whatsappInquiryMode) {
+    return <Navigate to={buildStorefrontPath(branding.storeSlug, '/catalog')} replace />;
+  }
+  return <OfferLandingContent />;
+}
+
+function OfferLandingContent() {
   const { storeSlug: routeStoreSlug, offerSlug } = useParams<{ storeSlug: string; offerSlug: string }>();
   const storeSlug = useResolvedStoreSlug(routeStoreSlug);
   const location = useLocation();

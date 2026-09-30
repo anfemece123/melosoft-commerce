@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import type { PublicCategoryExperience } from '@/types/common.types';
 import { usePublicStoreExperience } from '@/components/layout/PublicStoreExperienceContext';
 import { buildStorefrontTheme, type StorefrontTheme } from '@/components/public/storefront/storefrontTheme';
+import { EXPERIENCE_HEADING_FONTS, experienceHasDecoratedBackground } from './experienceAmbience';
 
 interface StorefrontThemeSource {
   themeMode?: 'light' | 'dark' | null;
@@ -25,6 +26,8 @@ export function buildThemeWithExperience(
     backgroundColor: experience?.backgroundColor ?? source?.backgroundColor,
     textColor: experience?.textColor ?? source?.textColor,
     buttonRadius: experience?.buttonRadius ?? source?.buttonRadius,
+    decoratedBackground: experienceHasDecoratedBackground(experience),
+    headingFontFamily: experience ? EXPERIENCE_HEADING_FONTS[experience.headingFont].family : null,
   });
 }
 

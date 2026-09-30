@@ -1,14 +1,18 @@
 import { createContext, useContext } from 'react';
-import type { PublicCategoryExperience } from '@/types/common.types';
+import type { PublicCategoryExperience, PublicExperienceGateway } from '@/types/common.types';
 
 interface PublicStoreExperienceContextValue {
   experiences: PublicCategoryExperience[];
   activeExperience: PublicCategoryExperience | null;
+  /** Home gateway; only non-null when enabled AND there are 2+ experiences
+   * to choose from. Doubles as the "multi-brand storefront" signal. */
+  gateway: PublicExperienceGateway | null;
 }
 
 const PublicStoreExperienceContext = createContext<PublicStoreExperienceContextValue>({
   experiences: [],
   activeExperience: null,
+  gateway: null,
 });
 
 export function PublicStoreExperienceProvider({

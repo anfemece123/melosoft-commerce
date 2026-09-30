@@ -65,7 +65,7 @@ export function StorePoliciesPage() {
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: theme.background, color: theme.text }}>
+    <div className="min-h-screen" style={{ backgroundColor: theme.canvas, color: theme.text }}>
       <header className="border-b" style={{ backgroundColor: theme.background, borderColor: theme.border }}>
         <div className="max-w-3xl mx-auto px-4 py-4">
           <StorefrontBackButton

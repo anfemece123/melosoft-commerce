@@ -75,6 +75,13 @@ import { buildCatalogItems } from '@/lib/storefront/catalogItems';
 import { useResolvedStoreSlug } from '@/lib/storefront/storefrontDomainContext';
 import { buildStorefrontPath } from '@/lib/storefront/storefrontPaths';
 import { buildWhatsAppContactUrl, normalizePhoneForWhatsApp } from '@/lib/whatsapp/whatsappUrl';
+import { useWhatsappInquiryMode } from '@/lib/commerce/useWhatsappInquiryMode';
+import {
+  WHATSAPP_INQUIRY_PRODUCT_CTA_LABEL,
+  buildAbsoluteProductUrl,
+  buildProductInquiryUrl,
+  openWhatsappInquiry,
+} from '@/lib/commerce/whatsappInquiry';
 import { domainsService } from '@/features/domains/domainsService';
 import { useStorefrontPageDocumentMetadata } from '@/lib/storefront/useStorefrontDocumentMetadata';
 
@@ -248,6 +255,7 @@ function ProductLandingContent({
   const shellTheme = usePublicStorefrontTheme(storeBranding);
   const { setRouteReady } = usePublicRouteReady();
   const { addItem, replaceItem, items: cartItems } = useCart();
+  const inquiry = useWhatsappInquiryMode();
   const location = useLocation();
   const navigate = useNavigate();
   const editCartLineId = typeof (location.state as { editCartLineId?: unknown } | null)?.editCartLineId === 'string'
@@ -497,7 +505,7 @@ function ProductLandingContent({
     imageUrl: absoluteMetadataImage,
     siteName: product?.storeName || storeBranding?.storeName,
     type: 'product',
-    price: product ? getActivePrice(product.regularPrice, product.salePrice) : null,
+    price: product && !inquiry.enabled ? getActivePrice(product.regularPrice, product.salePrice) : null,
     currency: storeBranding?.currency || 'COP',
     ratingValue: product?.reviewCount ? product.reviewAverage : null,
     reviewCount: product?.reviewCount ?? null,
@@ -559,7 +567,7 @@ function ProductLandingContent({
     );
   }
 
-  const bgColor = theme.background;
+  const bgColor = theme.canvas;
   const currentProduct = product;
   const effectiveOptionGroups = applyLocationAvailabilityToProductOptions(
     currentProduct.optionGroups,
@@ -569,7 +577,9 @@ function ProductLandingContent({
   const variantSelectionComplete =
     !currentProduct.hasVariants || currentProduct.variantOptions.length === Object.keys(selectedValueIds).length;
   const variantReady = !currentProduct.hasVariants || (variantSelectionComplete && selectedVariant !== null);
-  const outOfStock = !currentProduct.isAvailable || (currentProduct.hasVariants
+  // Catálogo con consulta por WhatsApp confirms stock in the chat: only
+  // the owner's explicit "no disponible" switch hides the inquiry button.
+  const outOfStock = inquiry.enabled ? !currentProduct.isAvailable : !currentProduct.isAvailable || (currentProduct.hasVariants
     ? selectedVariant
       ? !isVariantAvailable(selectedVariant)
       : isProductFullyOutOfStock(currentProduct)
@@ -608,7 +618,15 @@ function ProductLandingContent({
   };
 
   const ctaConfig = getProductPageCtaConfig(commerceConfig, !!whatsappNumber);
-  const isWebOrderMode = canUseWebOrders(commerceConfig);
+  const isWebOrderMode = !inquiry.enabled && canUseWebOrders(commerceConfig);
+  const inquiryHref = inquiry.enabled
+    ? buildProductInquiryUrl(inquiry.whatsappNumber, {
+        storeName: inquiry.storeName,
+        productName: currentProduct.productName,
+        variantLabel: selectedVariant ? buildVariantLabel(selectedVariant) : null,
+        productUrl: buildAbsoluteProductUrl(storeSlug, currentProduct.productSlug),
+      })
+    : null;
 
   const activePrice = currentProduct.hasVariants
     ? resolveVariantPrice(currentProduct, selectedVariant)
@@ -953,7 +971,7 @@ function ProductLandingContent({
                 )}
               </div>
 
-              {currentProduct.hasVariants ? (
+              {inquiry.enabled ? null : currentProduct.hasVariants ? (
                 !variantSelectionComplete ? (() => {
                   const range = getVariantPriceRange(currentProduct);
                   return (
@@ -1094,13 +1112,13 @@ function ProductLandingContent({
               );
             })}
 
-            {!isMenu && !currentProduct.hasVariants && product.stock <= 0 && (
+            {!inquiry.enabled && !isMenu && !currentProduct.hasVariants && product.stock <= 0 && (
               <p className="text-sm font-medium" style={{ color: theme.primary }}>Sin stock disponible</p>
             )}
-            {!isMenu && !currentProduct.hasVariants && product.stock > 0 && product.stock <= 5 && (
+            {!inquiry.enabled && !isMenu && !currentProduct.hasVariants && product.stock > 0 && product.stock <= 5 && (
               <p className="text-sm" style={{ color: theme.mutedText }}>Últimas {product.stock} unidades</p>
             )}
-            {!isMenu && selectedVariant && selectedVariant.stockQuantity > 0 && selectedVariant.stockQuantity <= 5 && (
+            {!inquiry.enabled && !isMenu && selectedVariant && selectedVariant.stockQuantity > 0 && selectedVariant.stockQuantity <= 5 && (
               <p className="text-sm" style={{ color: theme.mutedText }}>Últimas {selectedVariant.stockQuantity} unidades</p>
             )}
 
@@ -1116,7 +1134,7 @@ function ProductLandingContent({
               />
             ) : null}
 
-            {(effectiveOptionGroups.length > 0 || product.allowsSpecialInstructions) && customizationTotal > 0 ? (
+            {!inquiry.enabled && (effectiveOptionGroups.length > 0 || product.allowsSpecialInstructions) && customizationTotal > 0 ? (
               <div className="space-y-2 text-sm" style={{ color: theme.mutedText }}>
                 <div className="flex items-center justify-between">
                   <span>Base</span>
@@ -1183,7 +1201,7 @@ function ProductLandingContent({
             )}
 
             {/* Variant selection required before any CTA is enabled */}
-            {currentProduct.hasVariants && !variantReady && !outOfStock && (
+            {!inquiry.enabled && currentProduct.hasVariants && !variantReady && !outOfStock && (
               <div
                 className="flex w-full items-center justify-center gap-2 rounded-full border px-4 py-3.5 text-sm font-medium opacity-70"
                 style={{ borderColor: theme.border, color: theme.mutedText }}
@@ -1208,8 +1226,34 @@ function ProductLandingContent({
               </StorefrontActionButton>
             )}
 
+            {/* CTA — Catálogo con consulta por WhatsApp (sin precio ni carrito) */}
+            {inquiry.enabled && !isUnavailableInLocation && !outOfStock && (
+              inquiryHref ? (
+                <div className="space-y-2">
+                  <StorefrontActionButton
+                    as="button"
+                    type="button"
+                    onClick={() => openWhatsappInquiry(inquiryHref)}
+                    variant="primary"
+                    theme={theme}
+                    fullWidth
+                    className="gap-2 rounded-full py-3.5 text-sm font-medium"
+                  >
+                    {WHATSAPP_INQUIRY_PRODUCT_CTA_LABEL}
+                  </StorefrontActionButton>
+                  <p className="text-center text-xs" style={{ color: theme.mutedText }}>
+                    Te respondemos por WhatsApp con el precio y la disponibilidad.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm" style={{ color: theme.mutedText }}>
+                  Contáctanos para conocer el precio y la disponibilidad de este producto.
+                </p>
+              )
+            )}
+
             {/* CTA — WhatsApp mode */}
-            {!isWebOrderMode && ctaConfig.show && ctaConfig.variant === 'whatsapp' && variantReady && (
+            {!inquiry.enabled && !isWebOrderMode && ctaConfig.show && ctaConfig.variant === 'whatsapp' && variantReady && (
               <StorefrontActionButton
                 as="button"
                 type="button"
@@ -1225,7 +1269,7 @@ function ProductLandingContent({
             )}
 
             {/* Coming soon placeholder */}
-            {ctaConfig.show && ctaConfig.isComingSoon && (
+            {!inquiry.enabled && ctaConfig.show && ctaConfig.isComingSoon && (
               <div
                 className="flex items-center justify-center gap-2 w-full rounded-full border px-4 py-3.5 text-sm font-medium opacity-60 cursor-not-allowed"
                 style={{ borderColor: theme.border, color: theme.mutedText }}
