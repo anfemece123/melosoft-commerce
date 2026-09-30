@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { useLocation, useParams, useSearchParams } from 'react-router-dom';
-import { Package, UtensilsCrossed, Search, AlertCircle, SlidersHorizontal, X } from 'lucide-react';
+import { ArrowUpDown, Package, UtensilsCrossed, Search, AlertCircle, SlidersHorizontal, X } from 'lucide-react';
 import { StorefrontBreadcrumbs } from '@/components/public/storefront/StorefrontBreadcrumbs';
 import { CategoryExperienceBanner } from '@/components/public/storefront/CategoryExperienceBanner';
 import { ExperienceIntro } from '@/components/public/storefront/experiences/ExperienceIntro';
@@ -137,6 +137,9 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
   const [totalProductCount, setTotalProductCount] = useState(0);
   const [serverPriceRange, setServerPriceRange] = useState({ min: 0, max: 0 });
   const [catalogSidebarTop, setCatalogSidebarTop] = useState(16);
+  const [mobileToolbarStuck, setMobileToolbarStuck] = useState(false);
+  const mobileToolbarSentinelRef = useRef<HTMLDivElement>(null);
+  const searchWhenFiltersOpenedRef = useRef('');
   const selectedCategoryIdForQuery = useMemo(
     () => categories.find((category) => category.slug === filters.categorySlug)?.id ?? null,
     [categories, filters.categorySlug]
@@ -198,6 +201,21 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
       window.removeEventListener('resize', updateSidebarOffset);
     };
   }, [activeExperience?.id, location.pathname, location.search, storeBranding?.storeId]);
+
+  // Sticky mobile toolbar sits right under the header (or at the top when
+  // the header scrolls away). A 1px sentinel just above it tells, via
+  // IntersectionObserver, when it is stuck so it can show its shadow.
+  const mobileToolbarTop = catalogSidebarTop - 16;
+  useEffect(() => {
+    const sentinel = mobileToolbarSentinelRef.current;
+    if (!sentinel || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setMobileToolbarStuck(!entry.isIntersecting && entry.boundingClientRect.top < mobileToolbarTop + 1),
+      { rootMargin: `-${mobileToolbarTop + 1}px 0px 0px 0px`, threshold: 0 },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [mobileToolbarTop]);
 
   // Sync local search box when URL query changes externally
   useEffect(() => {
@@ -620,6 +638,16 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
     filters.onlyFeatured ||
     filters.onlyOnSale;
 
+  const activeFilterCount =
+    (filters.categorySlug ? 1 : 0) +
+    (filters.subcategorySlug ? 1 : 0) +
+    (filters.collectionSlug ? 1 : 0) +
+    filters.facets.length +
+    (filters.priceMin !== null ? 1 : 0) +
+    (filters.priceMax !== null ? 1 : 0) +
+    (filters.onlyFeatured ? 1 : 0) +
+    (filters.onlyOnSale ? 1 : 0);
+
   const hasActiveSearch = !!filters.query;
   const shouldAutoPrefetchForFilters =
     (facetFilterActive && products.length < MAX_PRODUCTS_FOR_COMPLETE_FACET_FILTER)
@@ -793,66 +821,71 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
           </div>
         </div>
 
-        {/* Mobile: search + filter + sort */}
-        <div className="mb-4 flex items-center gap-2 lg:hidden">
-          <form onSubmit={handleSearchSubmit} className="relative flex-1">
-            <input
-              type="search"
-              value={localSearch}
-              onChange={(e) => setLocalSearch(e.target.value)}
-              placeholder={isMenu ? 'Buscar en el menú…' : 'Buscar productos…'}
-              className="h-10 w-full rounded-xl border pl-4 pr-10 text-sm outline-none"
-              style={{
-                borderColor: theme.border,
-                backgroundColor: theme.surfaceAlt,
-                color: theme.text,
-              }}
-            />
+        {/* Mobile: filter + sort. Sticky right under the public header so
+            both stay reachable at any scroll depth (pure CSS — no scroll
+            listeners). The header search box covers text search on mobile. */}
+        <div ref={mobileToolbarSentinelRef} className="h-px lg:hidden" aria-hidden="true" />
+        <div
+          className="sticky z-30 -mx-4 mb-4 px-4 py-2.5 transition-shadow sm:-mx-6 sm:px-6 lg:hidden"
+          style={{
+            top: mobileToolbarTop,
+            backgroundColor: theme.background,
+            boxShadow: mobileToolbarStuck ? `0 10px 18px -14px ${theme.shadow}` : 'none',
+            borderBottom: `1px solid ${mobileToolbarStuck ? theme.border : 'transparent'}`,
+          }}
+        >
+          <div className="flex items-center gap-2">
             <button
-              type="submit"
-              aria-label="Buscar"
-              className="absolute right-3 top-1/2 -translate-y-1/2"
+              type="button"
+              onClick={() => {
+                searchWhenFiltersOpenedRef.current = location.search;
+                setFilterDrawerOpen(true);
+              }}
+              aria-haspopup="dialog"
+              aria-expanded={filterDrawerOpen}
+              className="flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold transition-opacity active:opacity-70"
+              style={{
+                borderColor: activeFilterCount > 0 ? theme.primary : theme.border,
+                color: activeFilterCount > 0 ? theme.primary : theme.text,
+                backgroundColor: activeFilterCount > 0 ? `${theme.primary}10` : theme.surfaceAlt,
+              }}
             >
-              <Search className="h-4 w-4" style={{ color: theme.mutedText }} />
+              <SlidersHorizontal className="h-4 w-4 shrink-0" />
+              Filtrar
+              {activeFilterCount > 0 && (
+                <span
+                  className="flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold text-white"
+                  style={{ backgroundColor: theme.primary }}
+                >
+                  {activeFilterCount}
+                </span>
+              )}
             </button>
-          </form>
 
-          <button
-            type="button"
-            onClick={() => setFilterDrawerOpen(true)}
-            className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl border px-3 text-sm font-medium transition-opacity hover:opacity-80"
-            style={{
-              borderColor: hasAnyFilter ? theme.primary : theme.border,
-              color: hasAnyFilter ? theme.primary : theme.text,
-              backgroundColor: hasAnyFilter ? `${theme.primary}10` : theme.surfaceAlt,
-            }}
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            Filtrar
-            {hasAnyFilter && (
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: theme.primary }}
-              />
-            )}
-          </button>
-
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortKey)}
-            className="h-10 shrink-0 cursor-pointer rounded-xl border px-2 text-xs outline-none"
-            style={{
-              borderColor: theme.border,
-              backgroundColor: theme.surfaceAlt,
-              color: theme.text,
-            }}
-          >
-            {sortOptions.map((opt) => (
-              <option key={opt.key} value={opt.key}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+            {/* Native select laid over a styled button: the phone's own
+                picker, full accessibility, zero JS. */}
+            <label
+              className="relative flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-semibold"
+              style={{ borderColor: theme.border, backgroundColor: theme.surfaceAlt, color: theme.text }}
+            >
+              <ArrowUpDown className="h-4 w-4 shrink-0" />
+              <span className="truncate">
+                {sort === 'relevance' ? 'Ordenar' : sortOptions.find((opt) => opt.key === sort)?.label ?? 'Ordenar'}
+              </span>
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as SortKey)}
+                aria-label="Ordenar productos"
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              >
+                {sortOptions.map((opt) => (
+                  <option key={opt.key} value={opt.key}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
 
         {/* Active filter chips */}
@@ -1129,6 +1162,19 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
         currency={currency}
         hidePricing={inquiry.enabled}
         resultCount={hasAnyFilter || hasActiveSearch ? filteredAndSorted.length : totalProductCount}
+        resultCountIsPartial={(hasAnyFilter || hasActiveSearch) && hasMoreProducts}
+        loading={catalogLoading}
+        onExited={() => {
+          // Filters changed while the sheet was open: bring the shopper to
+          // the start of the new results instead of mid-list.
+          if (location.search === searchWhenFiltersOpenedRef.current) return;
+          // Toolbar start: the active-filter chips and the grid follow it.
+          const sentinel = mobileToolbarSentinelRef.current;
+          if (!sentinel) return;
+          const target = sentinel.getBoundingClientRect().top + window.scrollY - mobileToolbarTop;
+          if (window.scrollY > target) window.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+        }}
+        activeFilterCount={activeFilterCount}
       />
 
     </div>

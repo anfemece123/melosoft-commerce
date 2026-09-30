@@ -17,6 +17,8 @@ export interface CatalogFilterSidebarProps {
   currency: string;
   /** Catálogo con consulta por WhatsApp: no price range nor "En oferta". */
   hidePricing?: boolean;
+  /** The mobile sheet renders its own title. */
+  showTitle?: boolean;
   className?: string;
 }
 
@@ -207,6 +209,7 @@ export function CatalogFilterSidebar({
   priceRange,
   currency,
   hidePricing = false,
+  showTitle = true,
   className = '',
 }: CatalogFilterSidebarProps) {
   const [priceMinInput, setPriceMinInput] = useState(filters.priceMin?.toString() ?? '');
@@ -256,23 +259,25 @@ export function CatalogFilterSidebar({
 
   return (
     <aside className={`w-56 shrink-0 ${className}`}>
-      <div className="flex items-center justify-between mb-1">
-        <h2 className="text-sm font-bold" style={{ color: theme.text }}>Filtros</h2>
-        {hasAnyFilter && (
-          <button
-            type="button"
-            onClick={() => {
-              onChange({ ...filters, categorySlug: '', subcategorySlug: '', collectionSlug: '', facets: [], priceMin: null, priceMax: null, onlyFeatured: false, onlyOnSale: false });
-              setPriceMinInput('');
-              setPriceMaxInput('');
-            }}
-            className="text-xs font-medium transition-opacity hover:opacity-70"
-            style={{ color: theme.primary }}
-          >
-            Limpiar todo
-          </button>
-        )}
-      </div>
+      {showTitle && (
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-sm font-bold" style={{ color: theme.text }}>Filtros</h2>
+          {hasAnyFilter && (
+            <button
+              type="button"
+              onClick={() => {
+                onChange({ ...filters, categorySlug: '', subcategorySlug: '', collectionSlug: '', facets: [], priceMin: null, priceMax: null, onlyFeatured: false, onlyOnSale: false });
+                setPriceMinInput('');
+                setPriceMaxInput('');
+              }}
+              className="text-xs font-medium transition-opacity hover:opacity-70"
+              style={{ color: theme.primary }}
+            >
+              Limpiar todo
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Categories */}
       {categories.length > 0 && (
