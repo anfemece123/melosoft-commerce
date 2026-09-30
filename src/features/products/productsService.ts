@@ -68,64 +68,82 @@ function mapPublicImageRow(row: PublicProductImageRow): PublicProductImage {
   };
 }
 
+// PostgREST returns at most 1000 rows per request and `id=in.(…)` lives in
+// the URL, so id lists are chunked and every chunk is paged until empty.
+const ID_CHUNK_SIZE = 150;
+const ROWS_PER_PAGE = 1000;
+
+type PagedResult<Row> = PromiseLike<{ data: Row[] | null; error: { message: string } | null }>;
+
+async function selectAllByIds<Row>(
+  ids: string[],
+  query: (chunk: string[], from: number, to: number) => PagedResult<Row>,
+): Promise<Row[]> {
+  const rows: Row[] = [];
+  for (let i = 0; i < ids.length; i += ID_CHUNK_SIZE) {
+    const chunk = ids.slice(i, i + ID_CHUNK_SIZE);
+    for (let from = 0; ; from += ROWS_PER_PAGE) {
+      const { data, error } = await query(chunk, from, from + ROWS_PER_PAGE - 1);
+      if (error) throw new Error(error.message);
+      rows.push(...(data ?? []));
+      if (!data || data.length < ROWS_PER_PAGE) break;
+    }
+  }
+  return rows;
+}
+
 async function attachProductTaxonomy(products: Product[]): Promise<Product[]> {
   if (products.length === 0) return products;
 
   const productIds = products.map((product) => product.id);
 
-  const [productCollectionsResult, productFacetValuesResult] = await Promise.all([
-    supabase
-      .from('product_collections')
-      .select('product_id, collection_id')
-      .in('product_id', productIds),
-    supabase
-      .from('product_facet_values')
-      .select('product_id, facet_value_id')
-      .in('product_id', productIds),
+  // A 300-perfume catalog alone has ~2,700 facet assignments; a single
+  // request used to stop at 1000 and silently drop the rest.
+  const [productCollectionRows, productFacetValueRows] = await Promise.all([
+    selectAllByIds(productIds, (chunk, from, to) =>
+      supabase
+        .from('product_collections')
+        .select('product_id, collection_id')
+        .in('product_id', chunk)
+        .order('product_id')
+        .order('collection_id')
+        .range(from, to)),
+    selectAllByIds(productIds, (chunk, from, to) =>
+      supabase
+        .from('product_facet_values')
+        .select('product_id, facet_value_id')
+        .in('product_id', chunk)
+        .order('product_id')
+        .order('facet_value_id')
+        .range(from, to)),
   ]);
 
-  if (productCollectionsResult.error) throw new Error(productCollectionsResult.error.message);
-  if (productFacetValuesResult.error) throw new Error(productFacetValuesResult.error.message);
+  const collectionIds = Array.from(new Set(productCollectionRows.map((row) => row.collection_id)));
+  const facetValueIds = Array.from(new Set(productFacetValueRows.map((row) => row.facet_value_id)));
 
-  const collectionIds = Array.from(new Set((productCollectionsResult.data ?? []).map((row) => row.collection_id)));
-  const facetValueIds = Array.from(new Set((productFacetValuesResult.data ?? []).map((row) => row.facet_value_id)));
-
-  const [resolvedCollectionsResult, resolvedFacetValuesResult] = await Promise.all([
-    collectionIds.length > 0
-      ? supabase
-          .from('store_product_collections')
-          .select('id, name, slug')
-          .in('id', collectionIds)
-      : Promise.resolve({ data: [], error: null }),
-    facetValueIds.length > 0
-      ? supabase
-          .from('store_product_facet_values')
-          .select('id, facet_id, value, slug')
-          .in('id', facetValueIds)
-      : Promise.resolve({ data: [], error: null }),
+  const [resolvedCollections, resolvedFacetValues] = await Promise.all([
+    selectAllByIds(collectionIds, (chunk, from, to) =>
+      supabase.from('store_product_collections').select('id, name, slug').in('id', chunk).order('id').range(from, to)),
+    selectAllByIds(facetValueIds, (chunk, from, to) =>
+      supabase.from('store_product_facet_values').select('id, facet_id, value, slug').in('id', chunk).order('id').range(from, to)),
   ]);
 
-  if (resolvedCollectionsResult.error) throw new Error(resolvedCollectionsResult.error.message);
-  if (resolvedFacetValuesResult.error) throw new Error(resolvedFacetValuesResult.error.message);
-
-  const facetIds = Array.from(new Set((resolvedFacetValuesResult.data ?? []).map((row) => row.facet_id)));
-  const resolvedFacetsResult = facetIds.length > 0
-    ? await supabase.from('store_product_facets').select('id, name, slug, input_type').in('id', facetIds)
-    : { data: [], error: null };
-  if (resolvedFacetsResult.error) throw new Error(resolvedFacetsResult.error.message);
+  const facetIds = Array.from(new Set(resolvedFacetValues.map((row) => row.facet_id)));
+  const resolvedFacets = await selectAllByIds(facetIds, (chunk, from, to) =>
+    supabase.from('store_product_facets').select('id, name, slug, input_type').in('id', chunk).order('id').range(from, to));
 
   const collectionsById = new Map(
-    (resolvedCollectionsResult.data ?? []).map((row) => [row.id, row])
+    resolvedCollections.map((row) => [row.id, row])
   );
   const facetValuesById = new Map(
-    (resolvedFacetValuesResult.data ?? []).map((row) => [row.id, row])
+    resolvedFacetValues.map((row) => [row.id, row])
   );
   const facetsById = new Map(
-    (resolvedFacetsResult.data ?? []).map((row) => [row.id, row])
+    resolvedFacets.map((row) => [row.id, row])
   );
 
   const collectionsByProductId = new Map<string, ProductCollectionAssignment[]>();
-  for (const row of (productCollectionsResult.data ?? [])) {
+  for (const row of productCollectionRows) {
     const collection = collectionsById.get(row.collection_id);
     if (!collection) continue;
     const current = collectionsByProductId.get(row.product_id) ?? [];
@@ -138,7 +156,7 @@ async function attachProductTaxonomy(products: Product[]): Promise<Product[]> {
   }
 
   const facetsByProductId = new Map<string, ProductFacetValue[]>();
-  for (const row of (productFacetValuesResult.data ?? [])) {
+  for (const row of productFacetValueRows) {
     const facetValue = facetValuesById.get(row.facet_value_id);
     const facet = facetValue ? facetsById.get(facetValue.facet_id) : null;
     if (!facetValue || !facet) continue;
@@ -269,14 +287,17 @@ export const productsService = {
   },
 
   async getProductsByStore(storeId: string): Promise<Product[]> {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .eq('store_id', storeId)
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: false });
-    if (error) throw new Error(error.message);
-    return attachProductTaxonomy((data ?? []).map(mapProductRowToProduct));
+    // Paged: a store over 1000 products must not lose the tail silently.
+    const rows = await selectAllByIds([storeId], (chunk, from, to) =>
+      supabase
+        .from('products')
+        .select('*')
+        .in('store_id', chunk)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, to));
+    return attachProductTaxonomy(rows.map(mapProductRowToProduct));
   },
 
   /** Lightweight product load for Carta's editor. Carta only needs the
@@ -597,6 +618,24 @@ export const productsService = {
       published.push(...(data ?? []).map(mapProductRowToProduct));
     }
     return published;
+  },
+
+  /** Same change applied to many products in one request per 100 ids
+   * (bulk actions in the products panel). Returns the base rows only —
+   * callers keep each product's collections/attributes. */
+  async updateProductsBulk(ids: string[], payload: ProductUpdate): Promise<Product[]> {
+    const CHUNK_SIZE = 100;
+    const updated: Product[] = [];
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+      const { data, error } = await supabase
+        .from('products')
+        .update(mapProductUpdateToRow(payload))
+        .in('id', ids.slice(i, i + CHUNK_SIZE))
+        .select();
+      if (error) throw new Error(error.message);
+      updated.push(...(data ?? []).map(mapProductRowToProduct));
+    }
+    return updated;
   },
 
   async toggleAvailability(id: string, isAvailable: boolean): Promise<Product> {

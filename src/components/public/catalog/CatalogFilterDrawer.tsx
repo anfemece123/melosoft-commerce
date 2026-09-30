@@ -103,14 +103,14 @@ export function CatalogFilterDrawer({
   return createPortal(
     <div className="fixed inset-0 z-[80] lg:hidden">
       <div
-        className="storefront-scrim absolute inset-0 bg-black/45"
+        className="ui-scrim absolute inset-0 bg-black/45"
         data-state={state}
         onClick={onClose}
         aria-hidden="true"
       />
 
       <div
-        className="storefront-sheet absolute inset-y-0 right-0 flex w-full max-w-[420px] flex-col shadow-2xl will-change-transform"
+        className="ui-sheet absolute inset-y-0 right-0 flex w-full max-w-[420px] flex-col shadow-2xl will-change-transform"
         data-state={state}
         onAnimationEnd={() => {
           if (!open) setRendered(false);
