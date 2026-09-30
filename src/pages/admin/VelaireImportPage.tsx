@@ -17,6 +17,7 @@ import { FRAGRANCE_NOTE_FIELDS } from '@/lib/storefront/fragrancePyramid';
 import { notify } from '@/lib/notifications';
 import type { ImportRowResult, VelaireCatalogRow } from '@/features/products/velaireImport/velaireImport.types';
 import { VelaireImageUploadCard } from './VelaireImageUploadCard';
+import { VelaireGenderSyncCard } from './VelaireGenderSyncCard';
 import type { ProductDescriptionSection } from '@/types/common.types';
 
 // Dynamically imported (not a static top-level import) — this JSON is
@@ -347,6 +348,10 @@ export function VelaireImportPage() {
 
         {!wrongStore && catalog && storeId && (
           <VelaireImageUploadCard storeId={storeId} catalog={catalog} />
+        )}
+
+        {!wrongStore && catalog && storeId && (
+          <VelaireGenderSyncCard storeId={storeId} catalog={catalog} />
         )}
 
         {(running || finished) && (

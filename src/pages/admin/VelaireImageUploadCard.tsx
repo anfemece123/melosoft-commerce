@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { productsService } from '@/features/products/productsService';
-import { slugify } from '@/utils/slugify';
+import { buildVelaireCatalogSlugs } from '@/features/products/velaireImport/velaireCatalogSlugs';
 import { notify } from '@/lib/notifications';
 import type { VelaireCatalogRow } from '@/features/products/velaireImport/velaireImport.types';
 
@@ -20,27 +20,6 @@ interface UploadResult {
 interface VelaireImageUploadCardProps {
   storeId: string;
   catalog: VelaireCatalogRow[];
-}
-
-/** Rebuilds the exact slug each catalog row got in VelaireImportPage
- * (brand + name, `-2`, `-3`… for repeated names in catalog order) so a
- * photo can be matched to the product it belongs to even after the
- * owner renamed it. */
-function buildCatalogSlugs(catalog: VelaireCatalogRow[]): Map<number, string> {
-  const used = new Set<string>();
-  const slugs = new Map<number, string>();
-  for (const row of catalog) {
-    const baseSlug = slugify(`${row.brand} ${row.name}`);
-    let slug = baseSlug;
-    let suffix = 2;
-    while (used.has(slug)) {
-      slug = `${baseSlug}-${suffix}`;
-      suffix += 1;
-    }
-    used.add(slug);
-    slugs.set(row.id, slug);
-  }
-  return slugs;
 }
 
 /** Uploads the bottle photos extracted from Velaire's PDF catalog. Files
@@ -68,7 +47,7 @@ export function VelaireImageUploadCard({ storeId, catalog }: VelaireImageUploadC
 
     try {
       const catalogById = new Map(catalog.map((row) => [row.id, row]));
-      const slugByCatalogId = buildCatalogSlugs(catalog);
+      const slugByCatalogId = buildVelaireCatalogSlugs(catalog);
       const products = await productsService.getProductsByStore(storeId);
       const productBySlug = new Map(products.map((product) => [product.slug, product]));
       const existingImages = await productsService.getProductImagesByStore(storeId);

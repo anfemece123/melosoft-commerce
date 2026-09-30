@@ -51,6 +51,30 @@ function mapFacetValueRow(row: StoreFacetValueRow): StoreFacetValue {
   };
 }
 
+/** Page size for public_product_facet_values reads — must stay at or below
+ * the PostgREST max-rows cap (1000) so a full page means "maybe more". */
+const FACET_ASSIGNMENT_PAGE_SIZE = 1000;
+
+/** Distinct facet value ids assigned to at least one public product of the
+ * store. A store with a large catalog has thousands of assignments (e.g.
+ * 294 perfumes × ~8 attributes), so this pages until the last partial page
+ * instead of trusting a single capped response. */
+async function fetchAssignedFacetValueIds(storeId: string): Promise<Set<string>> {
+  const ids = new Set<string>();
+  for (let from = 0; ; from += FACET_ASSIGNMENT_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('public_product_facet_values')
+      .select('facet_value_id')
+      .eq('store_id', storeId)
+      .order('product_id', { ascending: true })
+      .order('facet_value_id', { ascending: true })
+      .range(from, from + FACET_ASSIGNMENT_PAGE_SIZE - 1);
+    if (error) throw new Error(error.message);
+    for (const row of data ?? []) ids.add(row.facet_value_id);
+    if (!data || data.length < FACET_ASSIGNMENT_PAGE_SIZE) return ids;
+  }
+}
+
 export const facetsService = {
   async getStoreFacets(storeId: string): Promise<StoreFacet[]> {
     const [facetsResult, valuesResult, categoriesResult] = await Promise.all([
@@ -276,7 +300,11 @@ export const facetsService = {
   },
 
   async getPublicFacets(storeSlug: string): Promise<PublicStoreFacet[]> {
-    const [{ data: storeFacetRow, error: storeFacetError }, facetsResult, valuesResult, productFacetValuesResult] = await Promise.all([
+    // Every query is scoped to this store. The value/assignment views used
+    // to be read platform-wide and PostgREST caps a response at 1000 rows,
+    // so once all stores together passed that limit whole values (e.g.
+    // "Mujer") silently disappeared from the public filters.
+    const [{ data: storeFacetRow, error: storeFacetError }, facetsResult, valuesResult] = await Promise.all([
       supabase.from('public_store_facets').select('store_id').eq('store_slug', storeSlug).limit(1).maybeSingle(),
       supabase
         .from('public_store_facets')
@@ -286,23 +314,15 @@ export const facetsService = {
       supabase
         .from('public_store_facet_values')
         .select('*')
+        .eq('store_slug', storeSlug)
         .order('sort_order', { ascending: true }),
-      supabase
-        .from('public_product_facet_values')
-        .select('store_id, facet_value_id')
-        .order('facet_value_id', { ascending: true }),
     ]);
     if (storeFacetError) throw new Error(storeFacetError.message);
     if (facetsResult.error) throw new Error(facetsResult.error.message);
     if (valuesResult.error) throw new Error(valuesResult.error.message);
-    if (productFacetValuesResult.error) throw new Error(productFacetValuesResult.error.message);
 
     const storeId = storeFacetRow?.store_id ?? null;
-    const activeFacetValueIds = new Set(
-      (productFacetValuesResult.data ?? [])
-        .filter((row) => row.store_id === storeId)
-        .map((row) => row.facet_value_id)
-    );
+    const activeFacetValueIds = storeId ? await fetchAssignedFacetValueIds(storeId) : new Set<string>();
 
     const valuesByFacetId = new Map<string, PublicStoreFacetValue[]>();
     for (const row of (valuesResult.data ?? [])) {

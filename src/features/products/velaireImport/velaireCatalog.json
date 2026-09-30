@@ -501,7 +501,7 @@
     "id": 20,
     "brand": "Benetton",
     "name": "Tribe",
-    "gender": "Hombre",
+    "gender": "Unisex",
     "concentration": "Eau de Toilette (EDT)",
     "accords": [
       "Fresco",
@@ -2501,7 +2501,7 @@
     "id": 96,
     "brand": "Lattafa",
     "name": "Mayar Cherry Intense",
-    "gender": "Unisex",
+    "gender": "Mujer",
     "concentration": "Eau de Parfum (EDP)",
     "accords": [
       "Fresco",
@@ -4056,7 +4056,7 @@
     "id": 155,
     "brand": "Lattafa",
     "name": "Asad Bourbon",
-    "gender": "Unisex",
+    "gender": "Hombre",
     "concentration": "Eau de Parfum (EDP)",
     "accords": [
       "Dulce",
@@ -5175,7 +5175,7 @@
     "id": 199,
     "brand": "Lattafa",
     "name": "Teriaq",
-    "gender": "Mujer",
+    "gender": "Unisex",
     "concentration": "Eau de Parfum (EDP)",
     "accords": [
       "Dulce",
@@ -5302,7 +5302,7 @@
     "id": 204,
     "brand": "Lattafa",
     "name": "Teriaq",
-    "gender": "Mujer",
+    "gender": "Unisex",
     "concentration": "Eau de Parfum (EDP)",
     "accords": [
       "Dulce",
@@ -5797,7 +5797,7 @@
     "id": 223,
     "brand": "Lattafa",
     "name": "Victoria",
-    "gender": "Unisex",
+    "gender": "Mujer",
     "concentration": "Eau de Parfum (EDP)",
     "accords": [
       "Cítrico",
@@ -6825,7 +6825,7 @@
     "id": 261,
     "brand": "Moschino",
     "name": "Toy 2 Pearl",
-    "gender": "Unisex",
+    "gender": "Mujer",
     "concentration": "Eau de Parfum (EDP)",
     "accords": [
       "Cítrico",
@@ -7607,7 +7607,7 @@
     "id": 291,
     "brand": "Tous",
     "name": "Tous Kids Girl",
-    "gender": "Mujer / Niña",
+    "gender": "Mujer",
     "concentration": "Eau de Toilette (EDT)",
     "accords": [
       "Cítrico",

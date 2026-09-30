@@ -466,10 +466,20 @@ function CatalogContent({ storeSlug }: { storeSlug: string }) {
   // Talla=40 is selected, Color only keeps values that actually co-occur
   // with 40 — not every color that exists on any size. Pure attribute
   // facets are untouched by this second pass, same as before.
+  //
+  // The catalog is paginated (CATALOG_PAGE_SIZE), so `products` is only the
+  // pages loaded so far. Pruning against a partial set hid real values —
+  // e.g. "Mujer" vanished whenever the first 24 perfumes were all Hombre/
+  // Unisex. Until every page is loaded, keep all the store's active values
+  // (public_store_facet_values already excludes inactive ones); selecting
+  // one keeps loading pages as usual. Once complete, prune exactly as before.
   const visibleFacets = useMemo(() => {
+    if (hasMoreProducts) {
+      return getContextualFacets(allFacets, activeCategoryNode, null, facetConcepts);
+    }
     const contextual = getContextualFacets(allFacets, activeCategoryNode, productsInFilterScope, facetConcepts);
     return pruneFacetValuesByCombination(contextual, productsInFilterScope, filters.facets, facetConcepts);
-  }, [allFacets, activeCategoryNode, productsInFilterScope, filters.facets, facetConcepts]);
+  }, [allFacets, activeCategoryNode, productsInFilterScope, filters.facets, facetConcepts, hasMoreProducts]);
 
   // ── Apply filters + sort ─────────────────────────────────────
   const filteredAndSorted = useMemo(() => {

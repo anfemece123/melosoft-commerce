@@ -23,7 +23,9 @@ interface CategoryContext {
 export function getContextualFacets(
   facets: PublicStoreFacet[],
   activeCategory: CategoryContext | null,
-  productsInScope: FacetMatchProduct[],
+  /** `null` = the caller doesn't hold the complete product set (paginated
+   * catalog), so values are kept instead of pruned against partial data. */
+  productsInScope: FacetMatchProduct[] | null,
   concepts: Map<string, string>
 ): PublicStoreFacet[] {
   return facets
@@ -38,9 +40,11 @@ export function getContextualFacets(
     })
     .map((facet) => ({
       ...facet,
-      values: facet.values.filter((value) =>
-        productsInScope.some((product) => productSatisfiesFacetValue(product, facet.slug, value.slug, concepts))
-      ),
+      values: productsInScope === null
+        ? facet.values
+        : facet.values.filter((value) =>
+            productsInScope.some((product) => productSatisfiesFacetValue(product, facet.slug, value.slug, concepts))
+          ),
     }))
     .filter((facet) => facet.values.length > 0);
 }

@@ -4075,6 +4075,7 @@ export interface Database {
         Row: {
           id: string;
           store_id: string;
+          store_slug: string;
           facet_id: string;
           value: string;
           slug: string;
